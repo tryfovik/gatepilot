@@ -52,10 +52,11 @@ platform:
 - 统一路由编译：启动时把配置编译为标准化路由定义，校验路径冲突、上游地址和超时配置。
 - 路由级认证策略：每条路由可声明 `auth.required` 与 `auth.public-paths`，不再用硬编码路径散落在过滤器里。
 - 路由级超时治理：支持 `connect-timeout-ms` 和 `response-timeout`，直接下沉为 Gateway route metadata。
+- 路由级流量治理：每条 API 路由可声明 `governance.flow-control.*`，启动时自动装载为 Sentinel Gateway API 分组和流控规则。
 - 平台上下文透传：默认向上游注入 `X-Platform-Project`、`X-Platform-Route`。
 - 内部入口隔离：运维入口统一收敛在 `/internal/**`，不对公网业务路径混放。
 - 上游健康聚合：`gatewayUpstreams` 会主动检查各路由的 actuator 健康状态。
-- 生效路由目录：新增 Actuator 端点 `/actuator/platformGatewayRoutes`，可直接查看当前生效的项目、路径、策略、超时和上游配置。
+- 生效路由目录：新增 Actuator 端点 `/actuator/platformGatewayRoutes`，可直接查看当前生效的项目、路径、认证策略、流控策略、超时和上游配置。
 
 ## 配置说明
 
@@ -77,6 +78,8 @@ platform:
   当前路由是否强制认证。
 - `projects.<project>.routes.<route>.auth.public-paths`
   当前路由下允许匿名访问的相对路径。
+- `projects.<project>.routes.<route>.governance.flow-control.*`
+  当前路由的 Sentinel 流控策略，包括 QPS、突发额度、控制行为和热点参数维度限流。
 - `projects.<project>.routes.<route>.connect-timeout-ms`
   路由连接超时。
 - `projects.<project>.routes.<route>.response-timeout`
@@ -102,6 +105,31 @@ getboot:
     enabled: true
     sentinel:
       enabled: true
+```
+
+路由级流控示例：
+
+```yaml
+platform:
+  gateway:
+    projects:
+      game:
+        routes:
+          admin:
+            governance:
+              flow-control:
+                enabled: true
+                count: 200
+                interval-sec: 1
+                burst: 50
+                control-behavior: rate-limiter
+                max-queueing-timeout-ms: 300
+                param:
+                  enabled: true
+                  parse-strategy: header
+                  field-name: X-Tenant-Id
+                  pattern: vip-.*
+                  match-strategy: regex
 ```
 
 ## 构建与测试

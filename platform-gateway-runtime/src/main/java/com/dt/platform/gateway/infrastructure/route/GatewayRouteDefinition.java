@@ -223,6 +223,15 @@ public final class GatewayRouteDefinition {
         return sanitize(projectKey) + "-" + sanitize(routeKey) + "-" + routeType + "-" + sanitize(routePathRoot);
     }
 
+    /**
+     * 构造当前路由在治理系统中的 API 分组资源名。
+     *
+     * @return 治理 API 分组资源名
+     */
+    public String buildGovernanceApiName() {
+        return "platform-gateway-api-" + sanitize(projectKey) + "-" + sanitize(routeKey);
+    }
+
     private boolean matchesPathRoot(String requestPath, String pathRoot) {
         return requestPath.equals(pathRoot) || requestPath.startsWith(pathRoot + "/");
     }

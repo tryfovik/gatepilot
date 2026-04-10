@@ -81,6 +81,37 @@ class GatewayValidationConfigurationTest {
                 .run(context -> assertThat(context).hasNotFailed());
     }
 
+    @Test
+    void shouldFailWhenFlowControlCountMissing() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.api-enabled=true",
+                        "platform.gateway.projects.game.routes.admin.governance.flow-control.enabled=true"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway flow control count must be positive");
+                });
+    }
+
+    @Test
+    void shouldFailWhenHeaderParamFlowFieldNameMissing() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.api-enabled=true",
+                        "platform.gateway.projects.game.routes.admin.governance.flow-control.enabled=true",
+                        "platform.gateway.projects.game.routes.admin.governance.flow-control.count=100",
+                        "platform.gateway.projects.game.routes.admin.governance.flow-control.param.enabled=true",
+                        "platform.gateway.projects.game.routes.admin.governance.flow-control.param.parse-strategy=header"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway flow control param field name must not be blank");
+                });
+    }
+
     @Configuration
     @EnableConfigurationProperties(GatewayProperties.class)
     static class TestGatewayValidationConfiguration extends GatewayValidationConfiguration {

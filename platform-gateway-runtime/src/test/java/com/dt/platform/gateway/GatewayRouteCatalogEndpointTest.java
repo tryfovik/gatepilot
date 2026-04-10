@@ -48,6 +48,12 @@ class GatewayRouteCatalogEndpointTest {
         assertThat(adminRoute.publicPaths()).containsExactly("/system/ping", "/auth/**");
         assertThat(adminRoute.connectTimeoutMs()).isEqualTo(2000);
         assertThat(adminRoute.responseTimeoutMs()).isEqualTo(5000L);
+        assertThat(adminRoute.flowControl().enabled()).isTrue();
+        assertThat(adminRoute.flowControl().resourceName()).isEqualTo("platform-gateway-api-game-admin");
+        assertThat(adminRoute.flowControl().count()).isEqualTo(120D);
+        assertThat(adminRoute.flowControl().controlBehavior()).isEqualTo("rate-limiter");
+        assertThat(adminRoute.flowControl().param().enabled()).isTrue();
+        assertThat(adminRoute.flowControl().param().fieldName()).isEqualTo("X-Tenant-Id");
     }
 
     private GatewayProperties createGatewayProperties() {
@@ -66,6 +72,16 @@ class GatewayRouteCatalogEndpointTest {
         adminRoute.setResponseTimeout(Duration.ofSeconds(5));
         adminRoute.getAuth().setRequired(true);
         adminRoute.getAuth().setPublicPaths(java.util.List.of("/system/ping", "/auth/**"));
+        adminRoute.getGovernance().getFlowControl().setEnabled(true);
+        adminRoute.getGovernance().getFlowControl().setCount(120D);
+        adminRoute.getGovernance().getFlowControl().setBurst(20);
+        adminRoute.getGovernance().getFlowControl().setControlBehavior("rate-limiter");
+        adminRoute.getGovernance().getFlowControl().setMaxQueueingTimeoutMs(300);
+        adminRoute.getGovernance().getFlowControl().getParam().setEnabled(true);
+        adminRoute.getGovernance().getFlowControl().getParam().setParseStrategy("header");
+        adminRoute.getGovernance().getFlowControl().getParam().setFieldName("X-Tenant-Id");
+        adminRoute.getGovernance().getFlowControl().getParam().setPattern("vip-.*");
+        adminRoute.getGovernance().getFlowControl().getParam().setMatchStrategy("regex");
 
         GatewayProperties.RouteProperties openRoute = new GatewayProperties.RouteProperties();
         openRoute.setPathSegment("open");

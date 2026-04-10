@@ -106,6 +106,20 @@ platform:
               public-paths:
                 - /system/ping
                 - /auth/**
+            # governance:
+            #   flow-control:
+            #     enabled: true
+            #     count: 200
+            #     interval-sec: 1
+            #     burst: 50
+            #     control-behavior: rate-limiter
+            #     max-queueing-timeout-ms: 300
+            #     param:
+            #       enabled: true
+            #       parse-strategy: header
+            #       field-name: X-Tenant-Id
+            #       pattern: vip-.*
+            #       match-strategy: regex
           open:
             enabled: true
             api-enabled: true

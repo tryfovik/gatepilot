@@ -353,6 +353,11 @@ public class GatewayProperties {
          */
         private AuthRuleProperties auth = new AuthRuleProperties();
 
+        /**
+         * 路由治理策略。
+         */
+        private GovernanceProperties governance = new GovernanceProperties();
+
         public boolean isEnabled() {
             return enabled;
         }
@@ -440,6 +445,14 @@ public class GatewayProperties {
         public void setAuth(AuthRuleProperties auth) {
             this.auth = auth;
         }
+
+        public GovernanceProperties getGovernance() {
+            return governance;
+        }
+
+        public void setGovernance(GovernanceProperties governance) {
+            this.governance = governance;
+        }
     }
 
     /**
@@ -471,6 +484,193 @@ public class GatewayProperties {
 
         public void setPublicPaths(List<String> publicPaths) {
             this.publicPaths = publicPaths;
+        }
+    }
+
+    /**
+     * 单条路由的治理规则。
+     */
+    public static class GovernanceProperties {
+
+        /**
+         * Sentinel 流控规则。
+         */
+        private FlowControlProperties flowControl = new FlowControlProperties();
+
+        public FlowControlProperties getFlowControl() {
+            return flowControl;
+        }
+
+        public void setFlowControl(FlowControlProperties flowControl) {
+            this.flowControl = flowControl;
+        }
+    }
+
+    /**
+     * 路由级流控配置。
+     */
+    public static class FlowControlProperties {
+
+        /**
+         * 是否启用当前路由的 Sentinel 流控。
+         */
+        private boolean enabled;
+
+        /**
+         * 允许通过的 QPS 阈值。
+         */
+        private Double count;
+
+        /**
+         * 统计窗口秒数。
+         */
+        private long intervalSec = 1;
+
+        /**
+         * 突发流量额度。
+         */
+        private int burst;
+
+        /**
+         * Sentinel 控制行为。
+         */
+        private String controlBehavior = "default";
+
+        /**
+         * 排队等待超时时间，单位毫秒。
+         */
+        private int maxQueueingTimeoutMs;
+
+        /**
+         * 参数热点限流配置。
+         */
+        private FlowControlParamProperties param = new FlowControlParamProperties();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public Double getCount() {
+            return count;
+        }
+
+        public void setCount(Double count) {
+            this.count = count;
+        }
+
+        public long getIntervalSec() {
+            return intervalSec;
+        }
+
+        public void setIntervalSec(long intervalSec) {
+            this.intervalSec = intervalSec;
+        }
+
+        public int getBurst() {
+            return burst;
+        }
+
+        public void setBurst(int burst) {
+            this.burst = burst;
+        }
+
+        public String getControlBehavior() {
+            return controlBehavior;
+        }
+
+        public void setControlBehavior(String controlBehavior) {
+            this.controlBehavior = controlBehavior;
+        }
+
+        public int getMaxQueueingTimeoutMs() {
+            return maxQueueingTimeoutMs;
+        }
+
+        public void setMaxQueueingTimeoutMs(int maxQueueingTimeoutMs) {
+            this.maxQueueingTimeoutMs = maxQueueingTimeoutMs;
+        }
+
+        public FlowControlParamProperties getParam() {
+            return param;
+        }
+
+        public void setParam(FlowControlParamProperties param) {
+            this.param = param;
+        }
+    }
+
+    /**
+     * 热点参数流控配置。
+     */
+    public static class FlowControlParamProperties {
+
+        /**
+         * 是否启用参数维度流控。
+         */
+        private boolean enabled;
+
+        /**
+         * 参数解析策略。
+         */
+        private String parseStrategy;
+
+        /**
+         * 头、Cookie 或 URL 参数名称。
+         */
+        private String fieldName;
+
+        /**
+         * 参数值匹配模式。
+         */
+        private String pattern;
+
+        /**
+         * 参数匹配策略。
+         */
+        private String matchStrategy = "exact";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getParseStrategy() {
+            return parseStrategy;
+        }
+
+        public void setParseStrategy(String parseStrategy) {
+            this.parseStrategy = parseStrategy;
+        }
+
+        public String getFieldName() {
+            return fieldName;
+        }
+
+        public void setFieldName(String fieldName) {
+            this.fieldName = fieldName;
+        }
+
+        public String getPattern() {
+            return pattern;
+        }
+
+        public void setPattern(String pattern) {
+            this.pattern = pattern;
+        }
+
+        public String getMatchStrategy() {
+            return matchStrategy;
+        }
+
+        public void setMatchStrategy(String matchStrategy) {
+            this.matchStrategy = matchStrategy;
         }
     }
 

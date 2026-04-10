@@ -42,6 +42,9 @@ public class GatewayRouteCatalogEndpoint {
         Map<String, ProjectAccumulator> projects = new LinkedHashMap<>();
         for (GatewayRouteDefinition definition : routeDefinitionLocator.getRouteDefinitions()) {
             GatewayProperties.ProjectProperties projectProperties = properties.getProjects().get(definition.getProjectKey());
+            GatewayProperties.RouteProperties routeProperties = projectProperties == null
+                    ? null
+                    : projectProperties.getRoutes().get(definition.getRouteKey());
             ProjectAccumulator accumulator = projects.computeIfAbsent(
                     definition.getProjectKey(),
                     ignored -> new ProjectAccumulator(
@@ -61,7 +64,8 @@ public class GatewayRouteCatalogEndpoint {
                     definition.isAuthRequired(),
                     definition.getPublicApiPaths(),
                     definition.getConnectTimeoutMs(),
-                    definition.getResponseTimeout() == null ? null : definition.getResponseTimeout().toMillis()
+                    definition.getResponseTimeout() == null ? null : definition.getResponseTimeout().toMillis(),
+                    buildFlowControlView(definition, routeProperties)
             ));
         }
         return new GatewayRouteCatalogView(
@@ -75,6 +79,30 @@ public class GatewayRouteCatalogEndpoint {
                 projects.values().stream()
                         .map(ProjectAccumulator::toView)
                         .toList()
+        );
+    }
+
+    private FlowControlView buildFlowControlView(GatewayRouteDefinition definition,
+                                                 GatewayProperties.RouteProperties routeProperties) {
+        GatewayProperties.FlowControlProperties flowControl = routeProperties == null
+                ? new GatewayProperties.FlowControlProperties()
+                : routeProperties.getGovernance().getFlowControl();
+        GatewayProperties.FlowControlParamProperties param = flowControl.getParam();
+        return new FlowControlView(
+                flowControl.isEnabled(),
+                definition.buildGovernanceApiName(),
+                flowControl.getCount(),
+                flowControl.getIntervalSec(),
+                flowControl.getBurst(),
+                flowControl.getControlBehavior(),
+                flowControl.getMaxQueueingTimeoutMs(),
+                new ParamFlowView(
+                        param.isEnabled(),
+                        param.getParseStrategy(),
+                        param.getFieldName(),
+                        param.getPattern(),
+                        param.getMatchStrategy()
+                )
         );
     }
 
@@ -146,6 +174,7 @@ public class GatewayRouteCatalogEndpoint {
      * @param publicPaths 匿名放行的相对路径
      * @param connectTimeoutMs 连接超时
      * @param responseTimeoutMs 响应超时
+     * @param flowControl 路由流控策略
      */
     public record RouteView(String routeKey,
                             String pathSegment,
@@ -157,6 +186,45 @@ public class GatewayRouteCatalogEndpoint {
                             boolean authRequired,
                             List<String> publicPaths,
                             Integer connectTimeoutMs,
-                            Long responseTimeoutMs) {
+                            Long responseTimeoutMs,
+                            FlowControlView flowControl) {
+    }
+
+    /**
+     * 路由流控策略视图。
+     *
+     * @param enabled 是否启用
+     * @param resourceName Sentinel API 资源名
+     * @param count QPS 阈值
+     * @param intervalSec 窗口秒数
+     * @param burst 突发额度
+     * @param controlBehavior 控制行为
+     * @param maxQueueingTimeoutMs 最大排队时长
+     * @param param 参数维度流控配置
+     */
+    public record FlowControlView(boolean enabled,
+                                  String resourceName,
+                                  Double count,
+                                  long intervalSec,
+                                  int burst,
+                                  String controlBehavior,
+                                  int maxQueueingTimeoutMs,
+                                  ParamFlowView param) {
+    }
+
+    /**
+     * 参数维度流控视图。
+     *
+     * @param enabled 是否启用
+     * @param parseStrategy 解析策略
+     * @param fieldName 字段名称
+     * @param pattern 匹配模式
+     * @param matchStrategy 匹配策略
+     */
+    public record ParamFlowView(boolean enabled,
+                                String parseStrategy,
+                                String fieldName,
+                                String pattern,
+                                String matchStrategy) {
     }
 }
