@@ -11,9 +11,9 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>platform-gateway-core</artifactId>
-    <name>platform-gateway-core</name>
-    <description>平台网关发布内核</description>
+    <artifactId>platform-gateway-runtime</artifactId>
+    <name>platform-gateway-runtime</name>
+    <description>平台网关运行时模块</description>
 
     <properties>
         <spring-boot.repackage.skip>true</spring-boot.repackage.skip>

@@ -12,13 +12,13 @@
     </parent>
 
     <artifactId>platform-gateway</artifactId>
-    <name>platform-gateway</name>
-    <description>平台统一网关</description>
+    <name>platform-gateway-server</name>
+    <description>平台网关服务启动模块</description>
 
     <dependencies>
         <dependency>
             <groupId>com.dt.gateway</groupId>
-            <artifactId>platform-gateway-core</artifactId>
+            <artifactId>platform-gateway-runtime</artifactId>
         </dependency>
         <dependency>
             <groupId>com.dt</groupId>

@@ -26,15 +26,15 @@
     </properties>
 
     <modules>
-        <module>platform-gateway-core</module>
-        <module>platform-gateway-assembly</module>
+        <module>platform-gateway-runtime</module>
+        <module>platform-gateway-server</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>com.dt.gateway</groupId>
-                <artifactId>platform-gateway-core</artifactId>
+                <artifactId>platform-gateway-runtime</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

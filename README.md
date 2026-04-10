@@ -6,10 +6,10 @@
 
 ## 目录结构
 
-- `platform-gateway-core`
-  平台网关内核，负责配置模型、路由编译、认证过滤、内部运维入口保护、健康检查和配置校验。
-- `platform-gateway-assembly`
-  可执行发布件，负责装配 `getboot-observability`、`getboot-governance`、默认配置与启动入口。
+- `platform-gateway-runtime`
+  平台网关运行时模块，承载配置模型、路由编译、认证过滤、内部运维入口保护、健康检查和配置校验。
+- `platform-gateway-server`
+  平台网关服务启动模块，负责装配观测、治理、默认配置和应用启动入口。
 
 ## 路由模型
 
@@ -84,8 +84,8 @@ platform:
 
 默认示例见：
 
-- `platform-gateway-assembly/src/main/resources/application.yml`
-- `platform-gateway-assembly/src/main/resources/application-local.example.yml`
+- `platform-gateway-server/src/main/resources/application.yml`
+- `platform-gateway-server/src/main/resources/application-local.example.yml`
 
 ## 治理与观测
 
