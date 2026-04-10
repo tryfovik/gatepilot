@@ -1,6 +1,8 @@
 package com.dt.platform.gateway.infrastructure.security;
 
 import com.dt.platform.gateway.infrastructure.config.GatewayProperties;
+import com.dt.platform.gateway.infrastructure.route.GatewayRouteDefinitionLocator;
+import com.getboot.auth.spi.SaTokenWebFluxAuthChecker;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,6 +33,23 @@ public class GatewaySecurityConfiguration {
     }
 
     /**
+     * 注册基于路由策略的认证过滤器。
+     *
+     * @param properties 网关配置
+     * @param routeDefinitionLocator 路由定义定位器
+     * @param authChecker Sa-Token 认证校验器
+     * @return 认证过滤器
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 20)
+    @ConditionalOnProperty(prefix = "platform.gateway.auth", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public WebFilter gatewayAuthenticationFilter(GatewayProperties properties,
+                                                 GatewayRouteDefinitionLocator routeDefinitionLocator,
+                                                 SaTokenWebFluxAuthChecker authChecker) {
+        return new GatewayAuthenticationFilter(properties.getAuth(), routeDefinitionLocator, authChecker);
+    }
+
+    /**
      * 注册网关统一跨域过滤器。
      *
      * @param properties 网关配置
@@ -55,12 +74,6 @@ public class GatewaySecurityConfiguration {
         return new CorsWebFilter(source);
     }
 
-    /**
-     * 清理列表中的空白配置项。
-     *
-     * @param values 原始列表
-     * @return 清理后的列表
-     */
     private List<String> sanitizeValues(List<String> values) {
         return values == null ? List.of() : values.stream()
                 .filter(org.springframework.util.StringUtils::hasText)

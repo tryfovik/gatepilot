@@ -21,7 +21,7 @@ getboot:
       endpoints:
         web:
           exposure:
-            include: health,info,prometheus
+            include: health,info,prometheus,platformGatewayRoutes
       endpoint:
         health:
           show-details: always
@@ -44,25 +44,27 @@ getboot:
       active-timeout: -1
       is-share: true
       is-log: false
-      webflux:
-        filter:
-          enabled: true
-          include-paths:
-            - /api/admin/**
-            - /api/*/admin/**
-          exclude-paths:
-            - /api/admin/system/ping
-            - /api/admin/auth/**
-            - /api/*/admin/system/ping
-            - /api/*/admin/auth/**
-          skip-options-request: true
-          unauthorized-message: Unauthorized
-          forbidden-message: Forbidden
+  governance:
+    enabled: false
+    sentinel:
+      enabled: false
+      # dashboard: 127.0.0.1:8858
+      gateway:
+        fallback:
+          mode: response
+          response-status: 429
+          response-body: '{"status":"fail","code":429,"message":"Too many requests"}'
+          content-type: application/json;charset=UTF-8
 
 platform:
   gateway:
     api-prefix: /api
     internal-prefix: /internal
+    auth:
+      enabled: true
+      skip-options-request: true
+      unauthorized-message: Unauthorized
+      forbidden-message: Forbidden
     cors:
       enabled: true
       allowed-origin-patterns:
@@ -82,32 +84,65 @@ platform:
         - Authorization
       allow-credentials: true
       max-age: 1h
-    upstreams:
-      game-admin:
+    context-headers:
+      enabled: true
+      project-header-name: X-Platform-Project
+      route-header-name: X-Platform-Route
+    projects:
+      game:
         enabled: true
-        api-enabled: true
-        actuator-enabled: true
-        route-segment: admin
-        service-uri: http://127.0.0.1:18080
-        service-path-prefix: /admin
-        actuator-uri: http://127.0.0.1:18080
-      game-open:
-        enabled: true
-        api-enabled: true
-        actuator-enabled: true
-        route-segment: open
-        service-uri: http://127.0.0.1:18080
-        service-path-prefix: /open
-        actuator-uri: http://127.0.0.1:18080
-      # 未来项目直接在这里追加上游，不再单独维护项目 gateway。
-      # village-care-admin:
+        path-segment: game
+        display-name: Game Platform
+        routes:
+          admin:
+            enabled: true
+            api-enabled: true
+            actuator-enabled: true
+            path-segment: admin
+            legacy-path-segments:
+              - admin
+            service-uri: http://127.0.0.1:18080
+            service-path-prefix: /admin
+            actuator-uri: http://127.0.0.1:18080
+            connect-timeout-ms: 2000
+            response-timeout: 5s
+            auth:
+              required: true
+              public-paths:
+                - /system/ping
+                - /auth/**
+          open:
+            enabled: true
+            api-enabled: true
+            actuator-enabled: true
+            path-segment: open
+            legacy-path-segments:
+              - open
+            service-uri: http://127.0.0.1:18080
+            service-path-prefix: /open
+            actuator-uri: http://127.0.0.1:18080
+            connect-timeout-ms: 2000
+            response-timeout: 5s
+            auth:
+              required: false
+      # 新项目直接在 projects 下扩展标准入口；兼容旧入口时，再为指定 route 增加 legacy-path-segments。
+      # village-care:
       #   enabled: true
-      #   api-enabled: true
-      #   actuator-enabled: true
-      #   route-segment: village-care/admin
-      #   service-uri: http://127.0.0.1:19080
-      #   service-path-prefix: /admin
-      #   actuator-uri: http://127.0.0.1:19080
+      #   path-segment: village-care
+      #   display-name: Village Care
+      #   routes:
+      #     admin:
+      #       enabled: true
+      #       api-enabled: true
+      #       actuator-enabled: true
+      #       path-segment: admin
+      #       service-uri: http://127.0.0.1:19080
+      #       service-path-prefix: /admin
+      #       actuator-uri: http://127.0.0.1:19080
+      #       auth:
+      #         required: true
+      #         public-paths:
+      #           - /system/ping
     health:
       path: /actuator/health
       timeout: 3s

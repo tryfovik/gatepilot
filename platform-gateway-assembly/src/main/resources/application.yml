@@ -20,7 +20,7 @@ getboot:
       endpoints:
         web:
           exposure:
-            include: health,info,prometheus
+            include: health,info,prometheus,platformGatewayRoutes
       endpoint:
         health:
           show-details: always
@@ -40,25 +40,26 @@ getboot:
     satoken:
       is-log: false
       token-name: Authorization
-      webflux:
-        filter:
-          enabled: true
-          include-paths:
-            - /api/admin/**
-            - /api/*/admin/**
-          exclude-paths:
-            - /api/admin/system/ping
-            - /api/admin/auth/**
-            - /api/*/admin/system/ping
-            - /api/*/admin/auth/**
-          skip-options-request: true
-          unauthorized-message: Unauthorized
-          forbidden-message: Forbidden
+  governance:
+    enabled: false
+    sentinel:
+      enabled: false
+      gateway:
+        fallback:
+          mode: response
+          response-status: 429
+          response-body: '{"status":"fail","code":429,"message":"Too many requests"}'
+          content-type: application/json;charset=UTF-8
 
 platform:
   gateway:
     api-prefix: /api
     internal-prefix: /internal
+    auth:
+      enabled: true
+      skip-options-request: true
+      unauthorized-message: Unauthorized
+      forbidden-message: Forbidden
     cors:
       enabled: true
       allowed-origin-patterns:
@@ -78,17 +79,65 @@ platform:
         - Authorization
       allow-credentials: true
       max-age: 1h
-    upstreams:
-      game-admin:
-        route-segment: admin
-        service-uri: http://127.0.0.1:18080
-        service-path-prefix: /admin
-        actuator-uri: http://127.0.0.1:18080
-      game-open:
-        route-segment: open
-        service-uri: http://127.0.0.1:18080
-        service-path-prefix: /open
-        actuator-uri: http://127.0.0.1:18080
+    context-headers:
+      enabled: true
+      project-header-name: X-Platform-Project
+      route-header-name: X-Platform-Route
+    projects:
+      game:
+        enabled: true
+        path-segment: game
+        display-name: Game Platform
+        routes:
+          admin:
+            enabled: true
+            api-enabled: true
+            actuator-enabled: true
+            path-segment: admin
+            legacy-path-segments:
+              - admin
+            service-uri: http://127.0.0.1:18080
+            service-path-prefix: /admin
+            actuator-uri: http://127.0.0.1:18080
+            connect-timeout-ms: 2000
+            response-timeout: 5s
+            auth:
+              required: true
+              public-paths:
+                - /system/ping
+                - /auth/**
+          open:
+            enabled: true
+            api-enabled: true
+            actuator-enabled: true
+            path-segment: open
+            legacy-path-segments:
+              - open
+            service-uri: http://127.0.0.1:18080
+            service-path-prefix: /open
+            actuator-uri: http://127.0.0.1:18080
+            connect-timeout-ms: 2000
+            response-timeout: 5s
+            auth:
+              required: false
+      # 未来新增项目时，直接在 projects 下追加，不再各自维护单独 gateway。
+      # village-care:
+      #   enabled: true
+      #   path-segment: village-care
+      #   display-name: Village Care
+      #   routes:
+      #     admin:
+      #       enabled: true
+      #       api-enabled: true
+      #       actuator-enabled: true
+      #       path-segment: admin
+      #       service-uri: http://127.0.0.1:19080
+      #       service-path-prefix: /admin
+      #       actuator-uri: http://127.0.0.1:19080
+      #       auth:
+      #         required: true
+      #         public-paths:
+      #           - /system/ping
     health:
       path: /actuator/health
       timeout: 3s

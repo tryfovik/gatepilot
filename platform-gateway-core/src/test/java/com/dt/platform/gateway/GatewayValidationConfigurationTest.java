@@ -19,12 +19,8 @@ class GatewayValidationConfigurationTest {
             .withPropertyValues(
                     "platform.gateway.api-prefix=/api",
                     "platform.gateway.internal-prefix=/internal",
-                    "platform.gateway.upstreams.game-admin.route-segment=admin",
-                    "platform.gateway.upstreams.game-admin.service-uri=http://127.0.0.1:18080",
-                    "platform.gateway.upstreams.game-admin.actuator-uri=http://127.0.0.1:18080",
-                    "platform.gateway.upstreams.game-open.route-segment=open",
-                    "platform.gateway.upstreams.game-open.service-uri=http://127.0.0.1:18081",
-                    "platform.gateway.upstreams.game-open.actuator-uri=http://127.0.0.1:18081"
+                    "platform.gateway.context-headers.project-header-name=X-Platform-Project",
+                    "platform.gateway.context-headers.route-header-name=X-Platform-Route"
             );
 
     @Test
@@ -47,24 +43,24 @@ class GatewayValidationConfigurationTest {
     }
 
     @Test
-    void shouldFailWhenEnabledUpstreamsReuseRouteSegment() {
-        contextRunner.withPropertyValues("platform.gateway.upstreams.game-open.route-segment=admin")
+    void shouldFailWhenContextHeaderNameMissing() {
+        contextRunner.withPropertyValues("platform.gateway.context-headers.project-header-name=")
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
                     assertThat(context.getStartupFailure().getMessage())
-                            .contains("gateway route segment must be unique among enabled upstreams");
+                            .contains("gateway project header name must not be blank");
                 });
     }
 
     @Test
-    void shouldFailWhenInternalPrefixMissingWhileActuatorEnabled() {
-        contextRunner.withPropertyValues("platform.gateway.internal-prefix=")
+    void shouldFailWhenContextHeaderNamesConflict() {
+        contextRunner.withPropertyValues("platform.gateway.context-headers.route-header-name=X-Platform-Project")
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
                     assertThat(context.getStartupFailure().getMessage())
-                            .contains("gateway internal prefix must not be blank when actuator route is enabled");
+                            .contains("gateway project header name and route header name must be different");
                 });
     }
 
@@ -80,11 +76,8 @@ class GatewayValidationConfigurationTest {
     }
 
     @Test
-    void shouldAllowDuplicateSegmentWhenUpstreamDisabled() {
-        contextRunner.withPropertyValues(
-                        "platform.gateway.upstreams.game-open.enabled=false",
-                        "platform.gateway.upstreams.game-open.route-segment=admin"
-                )
+    void shouldAllowContextHeadersToBeDisabled() {
+        contextRunner.withPropertyValues("platform.gateway.context-headers.enabled=false")
                 .run(context -> assertThat(context).hasNotFailed());
     }
 

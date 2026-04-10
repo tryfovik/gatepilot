@@ -2,9 +2,14 @@ package com.dt.platform.gateway.infrastructure.route;
 
 import com.dt.platform.gateway.infrastructure.config.GatewayProperties;
 import org.springframework.cloud.gateway.route.RouteLocator;
+import org.springframework.cloud.gateway.route.builder.GatewayFilterSpec;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
+import org.springframework.cloud.gateway.route.builder.UriSpec;
+import org.springframework.cloud.gateway.support.RouteMetadataUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.regex.Pattern;
 
 /**
  * 网关路由装配配置。
@@ -13,119 +18,125 @@ import org.springframework.context.annotation.Configuration;
 public class GatewayRouteConfiguration {
 
     /**
+     * 注册标准化路由定义定位器。
+     *
+     * @param properties 网关配置
+     * @return 路由定义定位器
+     */
+    @Bean
+    public GatewayRouteDefinitionLocator gatewayRouteDefinitionLocator(GatewayProperties properties) {
+        return new GatewayRouteDefinitionLocator(properties);
+    }
+
+    /**
+     * 注册生效路由目录端点。
+     *
+     * @param properties 网关配置
+     * @param routeDefinitionLocator 路由定义定位器
+     * @return 路由目录端点
+     */
+    @Bean
+    public GatewayRouteCatalogEndpoint gatewayRouteCatalogEndpoint(GatewayProperties properties,
+                                                                   GatewayRouteDefinitionLocator routeDefinitionLocator) {
+        return new GatewayRouteCatalogEndpoint(properties, routeDefinitionLocator);
+    }
+
+    /**
      * 注册平台网关路由。
      *
      * @param builder 路由构建器
      * @param properties 网关配置
+     * @param routeDefinitionLocator 路由定义定位器
      * @return 路由定位器
      */
     @Bean
     public RouteLocator gatewayRouteLocator(RouteLocatorBuilder builder,
-                                            GatewayProperties properties) {
+                                            GatewayProperties properties,
+                                            GatewayRouteDefinitionLocator routeDefinitionLocator) {
         RouteLocatorBuilder.Builder routes = builder.routes();
-        properties.getUpstreams().forEach((upstreamKey, upstream) -> {
-            registerApiRoute(routes, buildRouteId(upstreamKey, "api"), properties.getApiPrefix(), upstream);
-            registerActuatorRoute(routes, buildRouteId(upstreamKey, "actuator"), properties.getInternalPrefix(), upstream);
-        });
+        for (GatewayRouteDefinition definition : routeDefinitionLocator.getRouteDefinitions()) {
+            registerApiRoutes(routes, definition, properties);
+            registerActuatorRoutes(routes, definition, properties);
+        }
         return routes.build();
     }
 
-    /**
-     * 构建稳定的网关路由标识。
-     *
-     * @param upstreamKey 上游配置键
-     * @param routeType 路由类型
-     * @return 路由标识
-     */
-    private String buildRouteId(String upstreamKey, String routeType) {
-        String normalized = upstreamKey == null ? "upstream" : upstreamKey.trim().replaceAll("[^a-zA-Z0-9-]", "-");
-        return normalized + "-" + routeType;
-    }
-
-    /**
-     * 注册对外业务路由。
-     *
-     * @param routes 路由构建器
-     * @param routeId 路由标识
-     * @param routePrefix 对外前缀
-     * @param upstream 上游配置
-     */
-    private void registerApiRoute(RouteLocatorBuilder.Builder routes,
-                                  String routeId,
-                                  String routePrefix,
-                                  GatewayProperties.UpstreamProperties upstream) {
-        if (!upstream.isEnabled() || !upstream.isApiEnabled()) {
-            return;
+    private void registerApiRoutes(RouteLocatorBuilder.Builder routes,
+                                   GatewayRouteDefinition definition,
+                                   GatewayProperties properties) {
+        for (String apiPathRoot : definition.getApiPathRoots()) {
+            String routeId = definition.buildRouteId("api", apiPathRoot);
+            routes.route(routeId, route -> route.path(apiPathRoot, apiPathRoot + "/**")
+                    .filters(filter -> applyApiFilters(filter, definition, apiPathRoot, properties))
+                    .uri(definition.getServiceUri().toString()));
         }
-        String normalizedPrefix = normalizePrefix(routePrefix);
-        String routeSegment = normalizeRouteSegment(upstream.getRouteSegment());
-        String pathPattern = normalizedPrefix + "/" + routeSegment + "/**";
-        String rewritePattern = normalizedPrefix + "/" + routeSegment + "/(?<segment>.*)";
-        String rewriteTarget = normalizeServiceTarget(upstream.getServicePathPrefix());
-        routes.route(routeId, route -> route.path(pathPattern)
-                .filters(filter -> filter.rewritePath(rewritePattern, rewriteTarget))
-                .uri(upstream.getServiceUri().toString()));
     }
 
-    /**
-     * 注册内部运维路由。
-     *
-     * @param routes 路由构建器
-     * @param routeId 路由标识
-     * @param routePrefix 内部前缀
-     * @param upstream 上游配置
-     */
-    private void registerActuatorRoute(RouteLocatorBuilder.Builder routes,
-                                       String routeId,
-                                       String routePrefix,
-                                       GatewayProperties.UpstreamProperties upstream) {
-        if (!upstream.isEnabled() || !upstream.isActuatorEnabled()) {
-            return;
+    private void registerActuatorRoutes(RouteLocatorBuilder.Builder routes,
+                                        GatewayRouteDefinition definition,
+                                        GatewayProperties properties) {
+        for (String internalPathRoot : definition.getInternalPathRoots()) {
+            String routeId = definition.buildRouteId("actuator", internalPathRoot);
+            routes.route(routeId, route -> route.path(internalPathRoot, internalPathRoot + "/**")
+                    .filters(filter -> applyActuatorFilters(filter, definition, internalPathRoot, properties))
+                    .uri(definition.getActuatorUri().toString()));
         }
-        String normalizedPrefix = normalizePrefix(routePrefix);
-        String routeSegment = normalizeRouteSegment(upstream.getRouteSegment());
-        String pathPattern = normalizedPrefix + "/" + routeSegment + "/**";
-        String rewritePattern = normalizedPrefix + "/" + routeSegment + "/(?<segment>.*)";
-        routes.route(routeId, route -> route.path(pathPattern)
-                .filters(filter -> filter.rewritePath(rewritePattern, "/${segment}"))
-                .uri(upstream.getActuatorUri().toString()));
     }
 
-    /**
-     * 规范化前缀路径。
-     *
-     * @param prefix 原始前缀
-     * @return 规范化后的前缀
-     */
-    private String normalizePrefix(String prefix) {
-        if (prefix == null || prefix.isBlank()) {
-            return "";
+    private UriSpec applyApiFilters(GatewayFilterSpec filter,
+                                    GatewayRouteDefinition definition,
+                                    String apiPathRoot,
+                                    GatewayProperties properties) {
+        GatewayFilterSpec gatewayFilterSpec = filter.rewritePath(buildRewritePattern(apiPathRoot),
+                buildServiceTarget(definition.getServicePathPrefix()));
+        gatewayFilterSpec = applyContextHeaders(gatewayFilterSpec, definition, properties);
+        UriSpec uriSpec = gatewayFilterSpec;
+        return applyRouteMetadata(uriSpec, definition);
+    }
+
+    private UriSpec applyActuatorFilters(GatewayFilterSpec filter,
+                                         GatewayRouteDefinition definition,
+                                         String internalPathRoot,
+                                         GatewayProperties properties) {
+        GatewayFilterSpec gatewayFilterSpec = filter.rewritePath(buildRewritePattern(internalPathRoot), "/${segment}");
+        gatewayFilterSpec = applyContextHeaders(gatewayFilterSpec, definition, properties);
+        UriSpec uriSpec = gatewayFilterSpec;
+        return applyRouteMetadata(uriSpec, definition);
+    }
+
+    private GatewayFilterSpec applyContextHeaders(GatewayFilterSpec filterSpec,
+                                                  GatewayRouteDefinition definition,
+                                                  GatewayProperties properties) {
+        GatewayProperties.ContextHeadersProperties contextHeaders = properties.getContextHeaders();
+        if (!contextHeaders.isEnabled()) {
+            return filterSpec;
         }
-        String normalized = prefix.startsWith("/") ? prefix : "/" + prefix;
-        return normalized.endsWith("/") ? normalized.substring(0, normalized.length() - 1) : normalized;
-    }
-
-    /**
-     * 规范化路由分段。
-     *
-     * @param routeSegment 原始路由分段
-     * @return 规范化后的分段
-     */
-    private String normalizeRouteSegment(String routeSegment) {
-        if (routeSegment == null || routeSegment.isBlank()) {
-            throw new IllegalArgumentException("gateway route segment must not be blank");
+        GatewayFilterSpec updated = filterSpec;
+        for (var entry : definition.buildContextHeaders(
+                contextHeaders.getProjectHeaderName(),
+                contextHeaders.getRouteHeaderName()
+        ).entrySet()) {
+            updated = updated.addRequestHeader(entry.getKey(), entry.getValue());
         }
-        String normalized = routeSegment.startsWith("/") ? routeSegment.substring(1) : routeSegment;
-        return normalized.endsWith("/") ? normalized.substring(0, normalized.length() - 1) : normalized;
+        return updated;
     }
 
-    /**
-     * 规范化服务目标路径。
-     *
-     * @param servicePathPrefix 原始服务路径前缀
-     * @return 重写目标表达式
-     */
-    private String normalizeServiceTarget(String servicePathPrefix) {
+    private UriSpec applyRouteMetadata(UriSpec uriSpec, GatewayRouteDefinition definition) {
+        UriSpec updated = uriSpec;
+        if (definition.getConnectTimeoutMs() != null) {
+            updated = updated.metadata(RouteMetadataUtils.CONNECT_TIMEOUT_ATTR, definition.getConnectTimeoutMs());
+        }
+        if (definition.getResponseTimeout() != null) {
+            updated = updated.metadata(RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR, definition.getResponseTimeout().toMillis());
+        }
+        return updated;
+    }
+
+    private String buildRewritePattern(String pathRoot) {
+        return Pattern.quote(pathRoot) + "(?:/(?<segment>.*))?";
+    }
+
+    private String buildServiceTarget(String servicePathPrefix) {
         if (servicePathPrefix == null || servicePathPrefix.isBlank() || "/".equals(servicePathPrefix)) {
             return "/${segment}";
         }
