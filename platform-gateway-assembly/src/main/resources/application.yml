@@ -1,0 +1,94 @@
+spring:
+  profiles:
+    active: @profileActive@
+  application:
+    name: platform-gateway
+
+server:
+  port: 18082
+
+getboot:
+  observability:
+    trace:
+      enabled: true
+    metrics:
+      enabled: true
+      common-tags:
+        app: platform-gateway
+        env: local
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,prometheus
+      endpoint:
+        health:
+          show-details: always
+          show-components: always
+          probes:
+            enabled: true
+      health:
+        livenessstate:
+          enabled: true
+        readinessstate:
+          enabled: true
+        ping:
+          enabled: true
+        redis:
+          enabled: false
+  auth:
+    satoken:
+      is-log: false
+      token-name: Authorization
+      webflux:
+        filter:
+          enabled: true
+          include-paths:
+            - /api/admin/**
+            - /api/*/admin/**
+          exclude-paths:
+            - /api/admin/system/ping
+            - /api/admin/auth/**
+            - /api/*/admin/system/ping
+            - /api/*/admin/auth/**
+          skip-options-request: true
+          unauthorized-message: Unauthorized
+          forbidden-message: Forbidden
+
+platform:
+  gateway:
+    api-prefix: /api
+    internal-prefix: /internal
+    cors:
+      enabled: true
+      allowed-origin-patterns:
+        - http://127.0.0.1:*
+        - http://localhost:*
+      allowed-methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      allowed-headers:
+        - "*"
+      exposed-headers:
+        - X-Trace-Id
+        - Authorization
+      allow-credentials: true
+      max-age: 1h
+    upstreams:
+      game-admin:
+        route-segment: admin
+        service-uri: http://127.0.0.1:18080
+        service-path-prefix: /admin
+        actuator-uri: http://127.0.0.1:18080
+      game-open:
+        route-segment: open
+        service-uri: http://127.0.0.1:18080
+        service-path-prefix: /open
+        actuator-uri: http://127.0.0.1:18080
+    health:
+      path: /actuator/health
+      timeout: 3s

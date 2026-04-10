@@ -1,0 +1,113 @@
+# 复制为 application-local.yml 后，通过 -Dspring.profiles.active=local 启动。
+spring:
+  application:
+    name: platform-gateway
+
+server:
+  port: 18082
+
+getboot:
+  observability:
+    trace:
+      enabled: true
+      header-name: X-Trace-Id
+      response-header-enabled: true
+    metrics:
+      enabled: true
+      common-tags:
+        app: platform-gateway
+        env: local
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,prometheus
+      endpoint:
+        health:
+          show-details: always
+          show-components: always
+          probes:
+            enabled: true
+      health:
+        livenessstate:
+          enabled: true
+        readinessstate:
+          enabled: true
+        ping:
+          enabled: true
+        redis:
+          enabled: false
+  auth:
+    satoken:
+      token-name: Authorization
+      timeout: 2592000
+      active-timeout: -1
+      is-share: true
+      is-log: false
+      webflux:
+        filter:
+          enabled: true
+          include-paths:
+            - /api/admin/**
+            - /api/*/admin/**
+          exclude-paths:
+            - /api/admin/system/ping
+            - /api/admin/auth/**
+            - /api/*/admin/system/ping
+            - /api/*/admin/auth/**
+          skip-options-request: true
+          unauthorized-message: Unauthorized
+          forbidden-message: Forbidden
+
+platform:
+  gateway:
+    api-prefix: /api
+    internal-prefix: /internal
+    cors:
+      enabled: true
+      allowed-origin-patterns:
+        - http://127.0.0.1:*
+        - http://localhost:*
+      allowed-methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      allowed-headers:
+        - "*"
+      exposed-headers:
+        - X-Trace-Id
+        - Authorization
+      allow-credentials: true
+      max-age: 1h
+    upstreams:
+      game-admin:
+        enabled: true
+        api-enabled: true
+        actuator-enabled: true
+        route-segment: admin
+        service-uri: http://127.0.0.1:18080
+        service-path-prefix: /admin
+        actuator-uri: http://127.0.0.1:18080
+      game-open:
+        enabled: true
+        api-enabled: true
+        actuator-enabled: true
+        route-segment: open
+        service-uri: http://127.0.0.1:18080
+        service-path-prefix: /open
+        actuator-uri: http://127.0.0.1:18080
+      # 未来项目直接在这里追加上游，不再单独维护项目 gateway。
+      # village-care-admin:
+      #   enabled: true
+      #   api-enabled: true
+      #   actuator-enabled: true
+      #   route-segment: village-care/admin
+      #   service-uri: http://127.0.0.1:19080
+      #   service-path-prefix: /admin
+      #   actuator-uri: http://127.0.0.1:19080
+    health:
+      path: /actuator/health
+      timeout: 3s
