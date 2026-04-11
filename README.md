@@ -11,6 +11,12 @@
 
 当前代码在工作区里开发，但仓库本身按独立发布件设计，可以直接整理后开源到 GitHub。
 
+## 文档导航
+
+- [接入手册](docs/integration-guide.md)
+- `platform-gateway-server/src/main/resources/application.yml`
+- `platform-gateway-server/src/main/resources/application-local.example.yml`
+
 ## 目录结构
 
 - `platform-gateway-runtime`
@@ -96,6 +102,68 @@ platform:
 - `platform-gateway-server/src/main/resources/application.yml`
 - `platform-gateway-server/src/main/resources/application-local.example.yml`
 
+## 快速接入
+
+如果是新项目首次接入，至少需要明确四件事：
+
+- 这个项目在网关里的标准入口名，例如 `game`
+- 这个项目下要暴露的路由入口，例如 `admin`、`open`
+- 每条路由对应的业务上游地址和上游路径前缀
+- 每条路由是否强制认证、哪些相对路径允许匿名访问
+
+最小配置示例：
+
+```yaml
+platform:
+  gateway:
+    projects:
+      village-care:
+        enabled: true
+        path-segment: village-care
+        display-name: Village Care
+        routes:
+          admin:
+            enabled: true
+            api-enabled: true
+            actuator-enabled: true
+            path-segment: admin
+            service-uri: http://127.0.0.1:19080
+            service-path-prefix: /admin
+            actuator-uri: http://127.0.0.1:19080
+            connect-timeout-ms: 2000
+            response-timeout: 5s
+            auth:
+              required: true
+              public-paths:
+                - /system/ping
+          open:
+            enabled: true
+            api-enabled: true
+            actuator-enabled: true
+            path-segment: open
+            service-uri: http://127.0.0.1:19080
+            service-path-prefix: /open
+            actuator-uri: http://127.0.0.1:19080
+            auth:
+              required: false
+```
+
+配置完成后，标准访问地址就是：
+
+- 对外 API：`/api/village-care/admin/**`
+- 对外 API：`/api/village-care/open/**`
+- 内部运维：`/internal/village-care/admin/**`
+- 内部运维：`/internal/village-care/open/**`
+
+接入后的首轮联调建议直接验证：
+
+- `GET /api/village-care/open/system/ping`
+- `GET /api/village-care/admin/system/ping`
+- `GET /internal/village-care/admin/actuator/health`
+- `GET /actuator/platformGatewayRoutes`
+
+完整接入步骤、联调命令和排障说明见 [接入手册](docs/integration-guide.md)。
+
 ## 治理与观测
 
 发布件已经引入：
@@ -112,6 +180,15 @@ getboot:
     sentinel:
       enabled: true
 ```
+
+运行期可以直接通过以下 Actuator 端点观察网关状态：
+
+- `/actuator/health`
+- `/actuator/health/liveness`
+- `/actuator/health/readiness`
+- `/actuator/platformGatewayRoutes`
+
+其中 `/actuator/platformGatewayRoutes` 会返回当前生效的项目、路由、路径根、认证策略、超时和流控策略，适合在联调和变更发布后做快速核对。
 
 路由级流控示例：
 
