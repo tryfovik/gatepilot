@@ -1,8 +1,11 @@
 package com.dt.platform.gateway.infrastructure.validation;
 
 import com.dt.platform.gateway.infrastructure.config.GatewayProperties;
+import org.springframework.http.HttpMethod;
 import org.springframework.util.StringUtils;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -32,6 +35,17 @@ public class GatewayPropertiesValidator {
             "contains"
     );
 
+    private static final Set<String> SUPPORTED_HTTP_METHODS = Set.of(
+            HttpMethod.GET.name(),
+            HttpMethod.HEAD.name(),
+            HttpMethod.POST.name(),
+            HttpMethod.PUT.name(),
+            HttpMethod.PATCH.name(),
+            HttpMethod.DELETE.name(),
+            HttpMethod.OPTIONS.name(),
+            HttpMethod.TRACE.name()
+    );
+
     /**
      * 创建网关配置校验器。
      *
@@ -41,6 +55,7 @@ public class GatewayPropertiesValidator {
         validatePrefixes(properties);
         validateCors(properties);
         validateContextHeaders(properties);
+        validateRouteMethods(properties);
         validateRouteGovernance(properties);
     }
 
@@ -98,6 +113,25 @@ public class GatewayPropertiesValidator {
         }
     }
 
+    private void validateRouteMethods(GatewayProperties properties) {
+        for (var projectEntry : properties.getProjects().entrySet()) {
+            String projectKey = projectEntry.getKey();
+            GatewayProperties.ProjectProperties project = projectEntry.getValue();
+            if (!project.isEnabled()) {
+                continue;
+            }
+            for (var routeEntry : project.getRoutes().entrySet()) {
+                String routeKey = routeEntry.getKey();
+                GatewayProperties.RouteProperties route = routeEntry.getValue();
+                if (!route.isEnabled()) {
+                    continue;
+                }
+                validateMethods(projectKey, routeKey, "api", route.getApiMethods(), route.isApiEnabled());
+                validateMethods(projectKey, routeKey, "internal", route.getInternalMethods(), route.isActuatorEnabled());
+            }
+        }
+    }
+
     private void validateFlowControl(String projectKey,
                                      String routeKey,
                                      GatewayProperties.RouteProperties route) {
@@ -131,6 +165,27 @@ public class GatewayPropertiesValidator {
                     + projectKey + "/" + routeKey + " -> " + flowControl.getControlBehavior());
         }
         validateFlowParam(projectKey, routeKey, flowControl.getParam());
+    }
+
+    private void validateMethods(String projectKey,
+                                 String routeKey,
+                                 String routeType,
+                                 List<String> methods,
+                                 boolean routeEnabled) {
+        if (methods == null || methods.isEmpty()) {
+            return;
+        }
+        if (!routeEnabled) {
+            throw new IllegalArgumentException("gateway " + routeType + " methods require route to be enabled: "
+                    + projectKey + "/" + routeKey);
+        }
+        for (String method : methods) {
+            String normalizedMethod = normalizeHttpMethod(method);
+            if (!SUPPORTED_HTTP_METHODS.contains(normalizedMethod)) {
+                throw new IllegalArgumentException("gateway " + routeType + " method is unsupported: "
+                        + projectKey + "/" + routeKey + " -> " + method);
+            }
+        }
     }
 
     private void validateFlowParam(String projectKey,
@@ -181,6 +236,10 @@ public class GatewayPropertiesValidator {
 
     private String normalizeLiteral(String value) {
         return value == null ? "" : value.trim().toLowerCase();
+    }
+
+    private String normalizeHttpMethod(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
     private String normalizePrefix(String prefix) {

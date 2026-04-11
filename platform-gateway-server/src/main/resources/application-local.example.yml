@@ -100,8 +100,13 @@ platform:
             actuator-enabled: true
             path-segment: admin
             service-uri: http://127.0.0.1:18080
+            # api-methods:
+            #   - GET
+            #   - POST
             service-path-prefix: /admin
             actuator-uri: http://127.0.0.1:18080
+            # internal-methods:
+            #   - GET
             connect-timeout-ms: 2000
             response-timeout: 5s
             auth:
@@ -129,6 +134,8 @@ platform:
             actuator-enabled: true
             path-segment: open
             service-uri: http://127.0.0.1:18080
+            # api-methods:
+            #   - GET
             service-path-prefix: /open
             actuator-uri: http://127.0.0.1:18080
             connect-timeout-ms: 2000

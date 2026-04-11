@@ -324,6 +324,11 @@ public class GatewayProperties {
         private URI serviceUri;
 
         /**
+         * API 允许的方法列表。
+         */
+        private List<String> apiMethods = new ArrayList<>();
+
+        /**
          * API 上游路径前缀。
          */
         private String servicePathPrefix;
@@ -332,6 +337,11 @@ public class GatewayProperties {
          * Actuator 上游地址。
          */
         private URI actuatorUri;
+
+        /**
+         * 内部运维入口允许的方法列表。
+         */
+        private List<String> internalMethods = new ArrayList<>();
 
         /**
          * 响应超时时间。
@@ -393,6 +403,14 @@ public class GatewayProperties {
             this.serviceUri = serviceUri;
         }
 
+        public List<String> getApiMethods() {
+            return apiMethods;
+        }
+
+        public void setApiMethods(List<String> apiMethods) {
+            this.apiMethods = apiMethods == null ? new ArrayList<>() : new ArrayList<>(apiMethods);
+        }
+
         public String getServicePathPrefix() {
             return servicePathPrefix;
         }
@@ -407,6 +425,14 @@ public class GatewayProperties {
 
         public void setActuatorUri(URI actuatorUri) {
             this.actuatorUri = actuatorUri;
+        }
+
+        public List<String> getInternalMethods() {
+            return internalMethods;
+        }
+
+        public void setInternalMethods(List<String> internalMethods) {
+            this.internalMethods = internalMethods == null ? new ArrayList<>() : new ArrayList<>(internalMethods);
         }
 
         public Duration getResponseTimeout() {

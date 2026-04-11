@@ -42,8 +42,10 @@ class GatewayRouteCatalogEndpointTest {
         assertThat(adminRoute.apiPathRoots()).containsExactly("/api/game/admin");
         assertThat(adminRoute.internalPathRoots()).containsExactly("/internal/game/admin");
         assertThat(adminRoute.serviceUri()).isEqualTo(URI.create("http://127.0.0.1:18080"));
+        assertThat(adminRoute.apiMethods()).containsExactly("GET", "POST");
         assertThat(adminRoute.servicePathPrefix()).isEqualTo("/admin");
         assertThat(adminRoute.actuatorUri()).isEqualTo(URI.create("http://127.0.0.1:18080"));
+        assertThat(adminRoute.internalMethods()).containsExactly("GET");
         assertThat(adminRoute.authRequired()).isTrue();
         assertThat(adminRoute.publicPaths()).containsExactly("/system/ping", "/auth/**");
         assertThat(adminRoute.connectTimeoutMs()).isEqualTo(2000);
@@ -65,8 +67,10 @@ class GatewayRouteCatalogEndpointTest {
         GatewayProperties.RouteProperties adminRoute = new GatewayProperties.RouteProperties();
         adminRoute.setPathSegment("admin");
         adminRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
+        adminRoute.setApiMethods(java.util.List.of("get", "post"));
         adminRoute.setServicePathPrefix("/admin");
         adminRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));
+        adminRoute.setInternalMethods(java.util.List.of("GET"));
         adminRoute.setConnectTimeoutMs(2000);
         adminRoute.setResponseTimeout(Duration.ofSeconds(5));
         adminRoute.getAuth().setRequired(true);

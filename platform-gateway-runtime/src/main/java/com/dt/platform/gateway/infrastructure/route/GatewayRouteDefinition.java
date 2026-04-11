@@ -6,9 +6,12 @@ import org.springframework.web.util.pattern.PathPatternParser;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 运行期标准化后的网关路由定义。
@@ -31,9 +34,17 @@ public final class GatewayRouteDefinition {
 
     private final URI serviceUri;
 
+    private final List<String> apiMethods;
+
+    private final Set<String> apiMethodSet;
+
     private final String servicePathPrefix;
 
     private final URI actuatorUri;
+
+    private final List<String> internalMethods;
+
+    private final Set<String> internalMethodSet;
 
     private final boolean authRequired;
 
@@ -52,8 +63,10 @@ public final class GatewayRouteDefinition {
                            List<String> apiPathRoots,
                            List<String> internalPathRoots,
                            URI serviceUri,
+                           List<String> apiMethods,
                            String servicePathPrefix,
                            URI actuatorUri,
+                           List<String> internalMethods,
                            boolean authRequired,
                            List<String> publicApiPatterns,
                            Integer connectTimeoutMs,
@@ -65,8 +78,12 @@ public final class GatewayRouteDefinition {
         this.apiPathRoots = List.copyOf(apiPathRoots);
         this.internalPathRoots = List.copyOf(internalPathRoots);
         this.serviceUri = serviceUri;
+        this.apiMethods = sanitizeHttpMethods(apiMethods);
+        this.apiMethodSet = Set.copyOf(this.apiMethods);
         this.servicePathPrefix = servicePathPrefix;
         this.actuatorUri = actuatorUri;
+        this.internalMethods = sanitizeHttpMethods(internalMethods);
+        this.internalMethodSet = Set.copyOf(this.internalMethods);
         this.authRequired = authRequired;
         this.publicApiPaths = List.copyOf(publicApiPatterns);
         this.publicApiPatterns = this.publicApiPaths.stream()
@@ -105,12 +122,20 @@ public final class GatewayRouteDefinition {
         return serviceUri;
     }
 
+    public List<String> getApiMethods() {
+        return apiMethods;
+    }
+
     public String getServicePathPrefix() {
         return servicePathPrefix;
     }
 
     public URI getActuatorUri() {
         return actuatorUri;
+    }
+
+    public List<String> getInternalMethods() {
+        return internalMethods;
     }
 
     public boolean isAuthRequired() {
@@ -127,6 +152,26 @@ public final class GatewayRouteDefinition {
 
     public Duration getResponseTimeout() {
         return responseTimeout;
+    }
+
+    /**
+     * 判断当前请求方法是否允许访问 API 路由。
+     *
+     * @param requestMethod 请求方法
+     * @return 是否允许
+     */
+    public boolean isApiMethodAllowed(String requestMethod) {
+        return isMethodAllowed(apiMethods, apiMethodSet, requestMethod);
+    }
+
+    /**
+     * 判断当前请求方法是否允许访问内部运维路由。
+     *
+     * @param requestMethod 请求方法
+     * @return 是否允许
+     */
+    public boolean isInternalMethodAllowed(String requestMethod) {
+        return isMethodAllowed(internalMethods, internalMethodSet, requestMethod);
     }
 
     /**
@@ -248,6 +293,37 @@ public final class GatewayRouteDefinition {
             return "/";
         }
         return pathPattern.startsWith("/") ? pathPattern : "/" + pathPattern;
+    }
+
+    private List<String> sanitizeHttpMethods(List<String> methods) {
+        if (methods == null || methods.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> sanitized = new LinkedHashSet<>();
+        for (String method : methods) {
+            String normalized = normalizeHttpMethod(method);
+            if (normalized != null) {
+                sanitized.add(normalized);
+            }
+        }
+        return List.copyOf(sanitized);
+    }
+
+    private boolean isMethodAllowed(List<String> allowedMethods,
+                                    Set<String> allowedMethodSet,
+                                    String requestMethod) {
+        if (allowedMethods.isEmpty()) {
+            return true;
+        }
+        String normalizedMethod = normalizeHttpMethod(requestMethod);
+        return normalizedMethod != null && allowedMethodSet.contains(normalizedMethod);
+    }
+
+    private String normalizeHttpMethod(String requestMethod) {
+        if (requestMethod == null || requestMethod.isBlank()) {
+            return null;
+        }
+        return requestMethod.trim().toUpperCase(Locale.ROOT);
     }
 
     private String sanitize(String value) {

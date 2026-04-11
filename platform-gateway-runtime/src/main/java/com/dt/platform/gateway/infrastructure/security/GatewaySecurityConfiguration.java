@@ -28,8 +28,21 @@ public class GatewaySecurityConfiguration {
      * @return WebFlux 过滤器
      */
     @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 5)
     public WebFilter internalRouteAccessFilter(GatewayProperties properties) {
         return new InternalRouteAccessFilter(properties);
+    }
+
+    /**
+     * 注册基于路由策略的方法过滤器。
+     *
+     * @param routeDefinitionLocator 路由定义定位器
+     * @return 方法过滤器
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 10)
+    public WebFilter gatewayMethodAccessFilter(GatewayRouteDefinitionLocator routeDefinitionLocator) {
+        return new GatewayMethodAccessFilter(routeDefinitionLocator);
     }
 
     /**

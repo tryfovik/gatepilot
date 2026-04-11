@@ -112,6 +112,31 @@ class GatewayValidationConfigurationTest {
                 });
     }
 
+    @Test
+    void shouldFailWhenApiMethodIsUnsupported() {
+        contextRunner.withPropertyValues("platform.gateway.projects.game.routes.admin.api-methods[0]=fetch")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway api method is unsupported");
+                });
+    }
+
+    @Test
+    void shouldFailWhenInternalMethodsConfiguredButActuatorRouteDisabled() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.actuator-enabled=false",
+                        "platform.gateway.projects.game.routes.admin.internal-methods[0]=GET"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway internal methods require route to be enabled");
+                });
+    }
+
     @Configuration
     @EnableConfigurationProperties(GatewayProperties.class)
     static class TestGatewayValidationConfiguration extends GatewayValidationConfiguration {

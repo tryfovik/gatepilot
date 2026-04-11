@@ -64,6 +64,7 @@ platform:
 
 - 统一路由编译：启动时把配置编译为标准化路由定义，校验路径冲突、上游地址和超时配置。
 - 运行期路由索引：启动阶段预编译 API / internal 根路径索引，运行时命中不再按全部路由线性扫描。
+- 路由级方法约束：每条路由可声明 `api-methods` 与 `internal-methods`，不允许的方法返回 `405 Method Not Allowed` 并带 `Allow` 响应头。
 - 路由级认证策略：每条路由可声明 `auth.required` 与 `auth.public-paths`，不再用硬编码路径散落在过滤器里。
 - 路由级超时治理：支持 `connect-timeout-ms` 和 `response-timeout`，直接下沉为 Gateway route metadata。
 - 路由级流量治理：每条 API 路由可声明 `governance.flow-control.*`，启动时自动装载为 Sentinel Gateway API 分组和流控规则。
@@ -82,10 +83,14 @@ platform:
   项目在平台网关中的标准路径段。
 - `projects.<project>.routes.<route>.service-uri`
   API 请求的上游地址。
+- `projects.<project>.routes.<route>.api-methods`
+  当前 API 路由允许的 HTTP 方法列表；为空时表示不限制。
 - `projects.<project>.routes.<route>.service-path-prefix`
   API 转发时改写到上游的路径前缀。
 - `projects.<project>.routes.<route>.actuator-uri`
   运维请求和健康检查的上游地址。
+- `projects.<project>.routes.<route>.internal-methods`
+  当前内部运维路由允许的 HTTP 方法列表；为空时表示不限制。
 - `projects.<project>.routes.<route>.auth.required`
   当前路由是否强制认证。
 - `projects.<project>.routes.<route>.auth.public-paths`
@@ -128,8 +133,13 @@ platform:
             actuator-enabled: true
             path-segment: admin
             service-uri: http://127.0.0.1:19080
+            api-methods:
+              - GET
+              - POST
             service-path-prefix: /admin
             actuator-uri: http://127.0.0.1:19080
+            internal-methods:
+              - GET
             connect-timeout-ms: 2000
             response-timeout: 5s
             auth:
@@ -159,6 +169,7 @@ platform:
 
 - `GET /api/village-care/open/system/ping`
 - `GET /api/village-care/admin/system/ping`
+- 对一个未放行的方法执行请求，确认返回 `405` 且响应头带 `Allow`
 - `GET /internal/village-care/admin/actuator/health`
 - `GET /actuator/platformGatewayRoutes`
 
