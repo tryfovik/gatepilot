@@ -32,7 +32,7 @@ class GatewaySentinelRuleRegistrarTest {
         assertThat(apiDefinitions).hasSize(1);
         ApiDefinition apiDefinition = apiDefinitions.iterator().next();
         assertThat(apiDefinition.getApiName()).isEqualTo("platform-gateway-api-game-admin");
-        assertThat(apiDefinition.getPredicateItems()).hasSize(2);
+        assertThat(apiDefinition.getPredicateItems()).hasSize(1);
 
         assertThat(flowRules).hasSize(1);
         GatewayFlowRule flowRule = flowRules.iterator().next();
@@ -71,7 +71,6 @@ class GatewaySentinelRuleRegistrarTest {
 
         GatewayProperties.RouteProperties adminRoute = new GatewayProperties.RouteProperties();
         adminRoute.setPathSegment("admin");
-        adminRoute.setLegacyPathSegments(java.util.List.of("admin"));
         adminRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
         adminRoute.setServicePathPrefix("/admin");
         adminRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));
@@ -88,7 +87,6 @@ class GatewaySentinelRuleRegistrarTest {
 
         GatewayProperties.RouteProperties openRoute = new GatewayProperties.RouteProperties();
         openRoute.setPathSegment("open");
-        openRoute.setLegacyPathSegments(java.util.List.of("open"));
         openRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
         openRoute.setServicePathPrefix("/open");
         openRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));

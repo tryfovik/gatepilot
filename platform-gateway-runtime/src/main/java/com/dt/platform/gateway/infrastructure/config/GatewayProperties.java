@@ -319,11 +319,6 @@ public class GatewayProperties {
         private String pathSegment;
 
         /**
-         * 兼容历史入口的别名路径分段。
-         */
-        private List<String> legacyPathSegments = new ArrayList<>();
-
-        /**
          * API 上游地址。
          */
         private URI serviceUri;
@@ -388,14 +383,6 @@ public class GatewayProperties {
 
         public void setPathSegment(String pathSegment) {
             this.pathSegment = pathSegment;
-        }
-
-        public List<String> getLegacyPathSegments() {
-            return legacyPathSegments;
-        }
-
-        public void setLegacyPathSegments(List<String> legacyPathSegments) {
-            this.legacyPathSegments = legacyPathSegments;
         }
 
         public URI getServiceUri() {

@@ -17,25 +17,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class GatewayRouteDefinitionLocatorTest {
 
     @Test
-    void shouldBuildCanonicalAndLegacyPathsForProjectRoute() {
+    void shouldBuildCanonicalPathsForProjectRoute() {
         GatewayRouteDefinitionLocator locator = new GatewayRouteDefinitionLocator(createGatewayProperties());
 
         GatewayRouteDefinition definition = locator.findApiRoute("/api/game/admin/system/ping").orElseThrow();
         assertThat(definition.getProjectKey()).isEqualTo("game");
         assertThat(definition.getRouteKey()).isEqualTo("admin");
-        assertThat(definition.getApiPathRoots()).containsExactly("/api/game/admin", "/api/admin");
-        assertThat(definition.matchesApiPath("/api/admin/system/ping")).isTrue();
+        assertThat(definition.getApiPathRoots()).containsExactly("/api/game/admin");
+        assertThat(locator.findApiRoute("/api/admin/system/ping")).isEmpty();
         assertThat(definition.matchesInternalPath("/internal/game/admin/actuator/health")).isTrue();
-        assertThat(definition.isPublicApiPath("/api/admin/system/ping")).isTrue();
-        assertThat(definition.isPublicApiPath("/api/admin/games/catalog")).isFalse();
+        assertThat(definition.isPublicApiPath("/api/game/admin/system/ping")).isTrue();
+        assertThat(definition.isPublicApiPath("/api/game/admin/games/catalog")).isFalse();
         assertThat(definition.getConnectTimeoutMs()).isEqualTo(2000);
         assertThat(definition.getResponseTimeout()).isEqualTo(Duration.ofSeconds(5));
     }
 
     @Test
-    void shouldRejectDuplicateLegacyPathSegmentsAcrossRoutes() {
+    void shouldRejectDuplicateCanonicalPathSegmentsAcrossRoutes() {
         GatewayProperties properties = createGatewayProperties();
-        properties.getProjects().get("game").getRoutes().get("open").setLegacyPathSegments(java.util.List.of("admin"));
+        properties.getProjects().get("game").getRoutes().get("open").setPathSegment("admin");
 
         assertThatThrownBy(() -> new GatewayRouteDefinitionLocator(properties))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -59,7 +59,6 @@ class GatewayRouteDefinitionLocatorTest {
 
         GatewayProperties.RouteProperties adminRoute = new GatewayProperties.RouteProperties();
         adminRoute.setPathSegment("admin");
-        adminRoute.setLegacyPathSegments(java.util.List.of("admin"));
         adminRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
         adminRoute.setServicePathPrefix("/admin");
         adminRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));
@@ -70,7 +69,6 @@ class GatewayRouteDefinitionLocatorTest {
 
         GatewayProperties.RouteProperties openRoute = new GatewayProperties.RouteProperties();
         openRoute.setPathSegment("open");
-        openRoute.setLegacyPathSegments(java.util.List.of("open"));
         openRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
         openRoute.setServicePathPrefix("/open");
         openRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));

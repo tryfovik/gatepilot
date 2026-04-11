@@ -99,8 +99,6 @@ platform:
             api-enabled: true
             actuator-enabled: true
             path-segment: admin
-            legacy-path-segments:
-              - admin
             service-uri: http://127.0.0.1:18080
             service-path-prefix: /admin
             actuator-uri: http://127.0.0.1:18080
@@ -130,8 +128,6 @@ platform:
             api-enabled: true
             actuator-enabled: true
             path-segment: open
-            legacy-path-segments:
-              - open
             service-uri: http://127.0.0.1:18080
             service-path-prefix: /open
             actuator-uri: http://127.0.0.1:18080
@@ -139,7 +135,7 @@ platform:
             response-timeout: 5s
             auth:
               required: false
-      # 新项目直接在 projects 下扩展标准入口；兼容旧入口时，再为指定 route 增加 legacy-path-segments。
+      # 新项目直接在 projects 下扩展标准入口，不再为历史路径保留别名入口。
       # village-care:
       #   enabled: true
       #   path-segment: village-care

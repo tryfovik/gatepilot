@@ -24,7 +24,7 @@ class InternalRouteAccessFilterTest {
         GatewayProperties properties = new GatewayProperties();
         InternalRouteAccessFilter filter = new InternalRouteAccessFilter(properties);
         MockServerWebExchange exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/internal/admin/actuator/health")
+                MockServerHttpRequest.get("/internal/game/admin/actuator/health")
                         .remoteAddress(new InetSocketAddress("192.168.10.8", 5000))
         );
 
@@ -38,7 +38,7 @@ class InternalRouteAccessFilterTest {
         GatewayProperties properties = new GatewayProperties();
         InternalRouteAccessFilter filter = new InternalRouteAccessFilter(properties);
         MockServerWebExchange exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/internal/admin/actuator/health")
+                MockServerHttpRequest.get("/internal/game/admin/actuator/health")
                         .remoteAddress(new InetSocketAddress("127.0.0.1", 5000))
         );
         AtomicBoolean chainInvoked = new AtomicBoolean(false);
@@ -54,7 +54,7 @@ class InternalRouteAccessFilterTest {
         GatewayProperties properties = new GatewayProperties();
         InternalRouteAccessFilter filter = new InternalRouteAccessFilter(properties);
         MockServerWebExchange exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/api/open/system/ping")
+                MockServerHttpRequest.get("/api/game/open/system/ping")
                         .remoteAddress(new InetSocketAddress("192.168.10.8", 5000))
         );
         AtomicBoolean chainInvoked = new AtomicBoolean(false);

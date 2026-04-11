@@ -25,10 +25,8 @@ import reactor.netty.http.server.HttpServer;
                 "platform.gateway.internal-prefix=/internal",
                 "platform.gateway.projects.game.path-segment=game",
                 "platform.gateway.projects.game.routes.admin.path-segment=admin",
-                "platform.gateway.projects.game.routes.admin.legacy-path-segments[0]=admin",
                 "platform.gateway.projects.game.routes.admin.service-path-prefix=/admin",
                 "platform.gateway.projects.game.routes.open.path-segment=open",
-                "platform.gateway.projects.game.routes.open.legacy-path-segments[0]=open",
                 "platform.gateway.projects.game.routes.open.service-path-prefix=/open",
                 "management.endpoints.web.exposure.include=health,info"
         }
@@ -81,7 +79,7 @@ class GatewayApplicationTest {
     @Test
     void shouldRouteAdminApiToAdminUpstream() {
         webTestClient.get()
-                .uri("http://127.0.0.1:" + port + "/api/admin/system/ping")
+                .uri("http://127.0.0.1:" + port + "/api/game/admin/system/ping")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -92,7 +90,7 @@ class GatewayApplicationTest {
     @Test
     void shouldRouteOpenApiToOpenUpstream() {
         webTestClient.get()
-                .uri("http://127.0.0.1:" + port + "/api/open/system/ping")
+                .uri("http://127.0.0.1:" + port + "/api/game/open/system/ping")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -103,7 +101,7 @@ class GatewayApplicationTest {
     @Test
     void shouldRouteInternalAdminActuatorRequest() {
         webTestClient.get()
-                .uri("http://127.0.0.1:" + port + "/internal/admin/actuator/health")
+                .uri("http://127.0.0.1:" + port + "/internal/game/admin/actuator/health")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()

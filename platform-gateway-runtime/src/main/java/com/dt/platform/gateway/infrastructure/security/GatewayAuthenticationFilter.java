@@ -27,6 +27,12 @@ public class GatewayAuthenticationFilter implements WebFilter {
 
     private final SaTokenWebFluxAuthChecker authChecker;
 
+    private final MediaType responseContentType;
+
+    private final byte[] unauthorizedResponseBody;
+
+    private final byte[] forbiddenResponseBody;
+
     /**
      * 创建认证过滤器。
      *
@@ -40,6 +46,15 @@ public class GatewayAuthenticationFilter implements WebFilter {
         this.authProperties = authProperties;
         this.routeDefinitionLocator = routeDefinitionLocator;
         this.authChecker = authChecker;
+        this.responseContentType = MediaType.parseMediaType(authProperties.getContentType());
+        this.unauthorizedResponseBody = buildFailureBody(
+                authProperties.getUnauthorizedCode(),
+                authProperties.getUnauthorizedMessage()
+        );
+        this.forbiddenResponseBody = buildFailureBody(
+                authProperties.getForbiddenCode(),
+                authProperties.getForbiddenMessage()
+        );
     }
 
     @Override
@@ -61,16 +76,10 @@ public class GatewayAuthenticationFilter implements WebFilter {
             return chain.filter(exchange);
         }
         catch (NotLoginException exception) {
-            return writeFailure(exchange,
-                    authProperties.getUnauthorizedStatus(),
-                    authProperties.getUnauthorizedCode(),
-                    authProperties.getUnauthorizedMessage());
+            return writeFailure(exchange, authProperties.getUnauthorizedStatus(), unauthorizedResponseBody);
         }
         catch (NotPermissionException exception) {
-            return writeFailure(exchange,
-                    authProperties.getForbiddenStatus(),
-                    authProperties.getForbiddenCode(),
-                    authProperties.getForbiddenMessage());
+            return writeFailure(exchange, authProperties.getForbiddenStatus(), forbiddenResponseBody);
         }
     }
 
@@ -81,12 +90,43 @@ public class GatewayAuthenticationFilter implements WebFilter {
 
     private Mono<Void> writeFailure(ServerWebExchange exchange,
                                     int httpStatus,
-                                    int businessCode,
-                                    String message) {
+                                    byte[] responseBody) {
         exchange.getResponse().setStatusCode(HttpStatus.valueOf(httpStatus));
-        exchange.getResponse().getHeaders().setContentType(MediaType.parseMediaType(authProperties.getContentType()));
-        String body = "{\"status\":\"fail\",\"code\":" + businessCode + ",\"message\":\"" + message + "\"}";
+        exchange.getResponse().getHeaders().setContentType(responseContentType);
         return exchange.getResponse()
-                .writeWith(Mono.just(exchange.getResponse().bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8))));
+                .writeWith(Mono.just(exchange.getResponse().bufferFactory().wrap(responseBody)));
+    }
+
+    private byte[] buildFailureBody(int businessCode, String message) {
+        String body = "{\"status\":\"fail\",\"code\":" + businessCode + ",\"message\":\"" + escapeJson(message) + "\"}";
+        return body.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder(value.length() + 8);
+        for (int index = 0; index < value.length(); index++) {
+            char current = value.charAt(index);
+            switch (current) {
+                case '"' -> builder.append("\\\"");
+                case '\\' -> builder.append("\\\\");
+                case '\b' -> builder.append("\\b");
+                case '\f' -> builder.append("\\f");
+                case '\n' -> builder.append("\\n");
+                case '\r' -> builder.append("\\r");
+                case '\t' -> builder.append("\\t");
+                default -> {
+                    if (current < 0x20) {
+                        builder.append(String.format("\\u%04x", (int) current));
+                    }
+                    else {
+                        builder.append(current);
+                    }
+                }
+            }
+        }
+        return builder.toString();
     }
 }

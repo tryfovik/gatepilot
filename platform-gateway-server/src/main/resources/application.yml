@@ -94,8 +94,6 @@ platform:
             api-enabled: true
             actuator-enabled: true
             path-segment: admin
-            legacy-path-segments:
-              - admin
             service-uri: http://127.0.0.1:18080
             service-path-prefix: /admin
             actuator-uri: http://127.0.0.1:18080
@@ -125,8 +123,6 @@ platform:
             api-enabled: true
             actuator-enabled: true
             path-segment: open
-            legacy-path-segments:
-              - open
             service-uri: http://127.0.0.1:18080
             service-path-prefix: /open
             actuator-uri: http://127.0.0.1:18080

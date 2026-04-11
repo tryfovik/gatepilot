@@ -39,8 +39,8 @@ class GatewayRouteCatalogEndpointTest {
 
         GatewayRouteCatalogEndpoint.RouteView adminRoute = project.routes().get(0);
         assertThat(adminRoute.routeKey()).isEqualTo("admin");
-        assertThat(adminRoute.apiPathRoots()).containsExactly("/api/game/admin", "/api/admin");
-        assertThat(adminRoute.internalPathRoots()).containsExactly("/internal/game/admin", "/internal/admin");
+        assertThat(adminRoute.apiPathRoots()).containsExactly("/api/game/admin");
+        assertThat(adminRoute.internalPathRoots()).containsExactly("/internal/game/admin");
         assertThat(adminRoute.serviceUri()).isEqualTo(URI.create("http://127.0.0.1:18080"));
         assertThat(adminRoute.servicePathPrefix()).isEqualTo("/admin");
         assertThat(adminRoute.actuatorUri()).isEqualTo(URI.create("http://127.0.0.1:18080"));
@@ -64,7 +64,6 @@ class GatewayRouteCatalogEndpointTest {
 
         GatewayProperties.RouteProperties adminRoute = new GatewayProperties.RouteProperties();
         adminRoute.setPathSegment("admin");
-        adminRoute.setLegacyPathSegments(java.util.List.of("admin"));
         adminRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
         adminRoute.setServicePathPrefix("/admin");
         adminRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));
@@ -85,7 +84,6 @@ class GatewayRouteCatalogEndpointTest {
 
         GatewayProperties.RouteProperties openRoute = new GatewayProperties.RouteProperties();
         openRoute.setPathSegment("open");
-        openRoute.setLegacyPathSegments(java.util.List.of("open"));
         openRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
         openRoute.setServicePathPrefix("/open");
         openRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));

@@ -31,13 +31,11 @@ import reactor.netty.http.server.HttpServer;
                 "platform.gateway.internal-prefix=/internal",
                 "platform.gateway.projects.game.path-segment=game",
                 "platform.gateway.projects.game.routes.admin.path-segment=admin",
-                "platform.gateway.projects.game.routes.admin.legacy-path-segments[0]=admin",
                 "platform.gateway.projects.game.routes.admin.service-path-prefix=/admin",
                 "platform.gateway.projects.game.routes.admin.auth.required=true",
                 "platform.gateway.projects.game.routes.admin.auth.public-paths[0]=/system/ping",
                 "platform.gateway.projects.game.routes.admin.auth.public-paths[1]=/auth/**",
                 "platform.gateway.projects.game.routes.open.path-segment=open",
-                "platform.gateway.projects.game.routes.open.legacy-path-segments[0]=open",
                 "platform.gateway.projects.game.routes.open.service-path-prefix=/open",
                 "getboot.auth.satoken.token-name=Authorization",
                 "getboot.auth.satoken.is-log=false"
@@ -95,7 +93,7 @@ class GatewayAuthenticationTest {
     @Test
     void shouldRejectAdminApiWhenAuthenticationMissing() {
         webTestClient.get()
-                .uri("http://127.0.0.1:" + port + "/api/admin/games/catalog")
+                .uri("http://127.0.0.1:" + port + "/api/game/admin/games/catalog")
                 .exchange()
                 .expectStatus().isUnauthorized()
                 .expectBody()
@@ -107,7 +105,7 @@ class GatewayAuthenticationTest {
     @Test
     void shouldAllowAdminApiWhenAuthenticationPasses() {
         webTestClient.get()
-                .uri("http://127.0.0.1:" + port + "/api/admin/games/catalog")
+                .uri("http://127.0.0.1:" + port + "/api/game/admin/games/catalog")
                 .header("X-Admin-Login", "ok")
                 .exchange()
                 .expectStatus().isOk()
@@ -119,7 +117,7 @@ class GatewayAuthenticationTest {
     @Test
     void shouldKeepAdminPingPublicForSmokeChecks() {
         webTestClient.get()
-                .uri("http://127.0.0.1:" + port + "/api/admin/system/ping")
+                .uri("http://127.0.0.1:" + port + "/api/game/admin/system/ping")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -130,7 +128,7 @@ class GatewayAuthenticationTest {
     @Test
     void shouldHandleCorsPreflightForAdminRoute() {
         webTestClient.options()
-                .uri("http://127.0.0.1:" + port + "/api/admin/games/catalog")
+                .uri("http://127.0.0.1:" + port + "/api/game/admin/games/catalog")
                 .header("Origin", "http://127.0.0.1:3100")
                 .header("Access-Control-Request-Method", "GET")
                 .header("Access-Control-Request-Headers", "Authorization")
@@ -143,7 +141,7 @@ class GatewayAuthenticationTest {
     @Test
     void shouldExposeTraceHeaderForCorsResponse() {
         webTestClient.get()
-                .uri("http://127.0.0.1:" + port + "/api/open/system/ping")
+                .uri("http://127.0.0.1:" + port + "/api/game/open/system/ping")
                 .header("Origin", "http://127.0.0.1:3101")
                 .exchange()
                 .expectStatus().isOk()

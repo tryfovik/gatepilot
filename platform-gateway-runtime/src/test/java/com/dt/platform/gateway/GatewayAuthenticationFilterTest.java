@@ -28,7 +28,7 @@ class GatewayAuthenticationFilterTest {
         GatewayAuthenticationFilter filter = createFilter(() -> {
             throw new NotLoginException(NotLoginException.NOT_TOKEN, "gateway", "Unauthorized");
         });
-        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/admin/system/ping"));
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/game/admin/system/ping"));
         AtomicBoolean chainInvoked = new AtomicBoolean(false);
 
         filter.filter(exchange, markInvoked(chainInvoked)).block();
@@ -42,7 +42,7 @@ class GatewayAuthenticationFilterTest {
         GatewayAuthenticationFilter filter = createFilter(() -> {
             throw new NotLoginException(NotLoginException.NOT_TOKEN, "gateway", "Unauthorized");
         });
-        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/admin/games/catalog"));
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/game/admin/games/catalog"));
 
         filter.filter(exchange, ignored -> Mono.empty()).block();
 
@@ -54,7 +54,9 @@ class GatewayAuthenticationFilterTest {
         GatewayAuthenticationFilter filter = createFilter(() -> {
             throw new AssertionError("auth checker should not be invoked");
         });
-        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.method(HttpMethod.OPTIONS, "/api/admin/games/catalog"));
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.method(HttpMethod.OPTIONS, "/api/game/admin/games/catalog")
+        );
         AtomicBoolean chainInvoked = new AtomicBoolean(false);
 
         filter.filter(exchange, markInvoked(chainInvoked)).block();
@@ -69,7 +71,6 @@ class GatewayAuthenticationFilterTest {
 
         GatewayProperties.RouteProperties adminRoute = new GatewayProperties.RouteProperties();
         adminRoute.setPathSegment("admin");
-        adminRoute.setLegacyPathSegments(java.util.List.of("admin"));
         adminRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
         adminRoute.setServicePathPrefix("/admin");
         adminRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));

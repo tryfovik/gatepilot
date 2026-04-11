@@ -2,7 +2,14 @@
 
 独立发布的平台统一网关工程。
 
-这个仓库放在外层工作区 `gateway/` 目录下，但内部 `platform-gateway/` 是独立 Git 仓库，不并入当前 `getboot` 主仓 reactor，也不和 `game`、`village-care` 这类业务项目混在一起。
+目标不是给某个业务项目临时补一层转发壳，而是沉淀一盒能直接对外发布的基础网关：
+
+- 入口模型统一
+- 默认治理能力完整
+- 接入边界清晰
+- 运行期路由命中不靠全量线性扫描
+
+当前代码在工作区里开发，但仓库本身按独立发布件设计，可以直接整理后开源到 GitHub。
 
 ## 目录结构
 
@@ -38,10 +45,10 @@ platform:
 - 对外 API：`/api/{project}/{route}/**`
 - 内部运维：`/internal/{project}/{route}/**`
 
-为了平滑替换存量项目网关，每条路由还支持 `legacy-path-segments`，用于兼容历史入口。例如：
+这套网关只接受标准入口，不再为历史路径保留别名。例如：
 
 - 标准入口：`/api/game/admin/system/ping`
-- 历史兼容入口：`/api/admin/system/ping`
+- 标准入口：`/api/game/open/system/ping`
 
 新增项目时只需要在 `projects` 下追加配置，不需要再单独建设一个新网关仓库。
 
@@ -50,6 +57,7 @@ platform:
 当前这版已经内建以下基础能力：
 
 - 统一路由编译：启动时把配置编译为标准化路由定义，校验路径冲突、上游地址和超时配置。
+- 运行期路由索引：启动阶段预编译 API / internal 根路径索引，运行时命中不再按全部路由线性扫描。
 - 路由级认证策略：每条路由可声明 `auth.required` 与 `auth.public-paths`，不再用硬编码路径散落在过滤器里。
 - 路由级超时治理：支持 `connect-timeout-ms` 和 `response-timeout`，直接下沉为 Gateway route metadata。
 - 路由级流量治理：每条 API 路由可声明 `governance.flow-control.*`，启动时自动装载为 Sentinel Gateway API 分组和流控规则。
@@ -66,8 +74,6 @@ platform:
   统一约束外部业务入口与内部运维入口。
 - `projects.<project>.path-segment`
   项目在平台网关中的标准路径段。
-- `projects.<project>.routes.<route>.legacy-path-segments`
-  存量入口兼容别名。
 - `projects.<project>.routes.<route>.service-uri`
   API 请求的上游地址。
 - `projects.<project>.routes.<route>.service-path-prefix`

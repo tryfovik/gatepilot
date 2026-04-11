@@ -6,11 +6,9 @@ import org.springframework.util.StringUtils;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * 负责把配置属性编译成标准化路由定义。
@@ -19,6 +17,10 @@ public class GatewayRouteDefinitionLocator {
 
     private final List<GatewayRouteDefinition> routeDefinitions;
 
+    private final Map<String, GatewayRouteDefinition> apiRoutesByRoot;
+
+    private final Map<String, GatewayRouteDefinition> internalRoutesByRoot;
+
     /**
      * 创建路由定义定位器。
      *
@@ -26,6 +28,8 @@ public class GatewayRouteDefinitionLocator {
      */
     public GatewayRouteDefinitionLocator(GatewayProperties properties) {
         this.routeDefinitions = List.copyOf(buildRouteDefinitions(properties));
+        this.apiRoutesByRoot = buildRouteIndex(routeDefinitions, true);
+        this.internalRoutesByRoot = buildRouteIndex(routeDefinitions, false);
     }
 
     /**
@@ -44,9 +48,17 @@ public class GatewayRouteDefinitionLocator {
      * @return 命中的路由定义
      */
     public Optional<GatewayRouteDefinition> findApiRoute(String requestPath) {
-        return routeDefinitions.stream()
-                .filter(definition -> definition.matchesApiPath(requestPath))
-                .findFirst();
+        return findRoute(apiRoutesByRoot, requestPath);
+    }
+
+    /**
+     * 解析当前请求命中的内部运维路由定义。
+     *
+     * @param requestPath 请求路径
+     * @return 命中的路由定义
+     */
+    public Optional<GatewayRouteDefinition> findInternalRoute(String requestPath) {
+        return findRoute(internalRoutesByRoot, requestPath);
     }
 
     /**
@@ -99,11 +111,9 @@ public class GatewayRouteDefinitionLocator {
                 String canonicalRouteSegment = projectSegment + "/" + routeSegment;
                 if (route.isApiEnabled()) {
                     registerPathRoot(apiRoots, apiPathRootsForRoute, apiPrefix, canonicalRouteSegment, projectKey, routeKey);
-                    registerLegacyPathRoots(apiRoots, apiPathRootsForRoute, apiPrefix, route.getLegacyPathSegments(), projectKey, routeKey);
                 }
                 if (route.isActuatorEnabled()) {
                     registerPathRoot(internalRoots, internalPathRootsForRoute, internalPrefix, canonicalRouteSegment, projectKey, routeKey);
-                    registerLegacyPathRoots(internalRoots, internalPathRootsForRoute, internalPrefix, route.getLegacyPathSegments(), projectKey, routeKey);
                 }
                 definitions.add(new GatewayRouteDefinition(
                         projectKey,
@@ -126,6 +136,38 @@ public class GatewayRouteDefinitionLocator {
             throw new IllegalArgumentException("at least one gateway route must be enabled");
         }
         return definitions;
+    }
+
+    private Map<String, GatewayRouteDefinition> buildRouteIndex(List<GatewayRouteDefinition> definitions,
+                                                                boolean apiRoute) {
+        Map<String, GatewayRouteDefinition> routeIndex = new LinkedHashMap<>();
+        for (GatewayRouteDefinition definition : definitions) {
+            List<String> pathRoots = apiRoute ? definition.getApiPathRoots() : definition.getInternalPathRoots();
+            for (String pathRoot : pathRoots) {
+                routeIndex.put(pathRoot, definition);
+            }
+        }
+        return Map.copyOf(routeIndex);
+    }
+
+    private Optional<GatewayRouteDefinition> findRoute(Map<String, GatewayRouteDefinition> routeIndex,
+                                                       String requestPath) {
+        String candidate = normalizeRequestPath(requestPath);
+        if (!StringUtils.hasText(candidate)) {
+            return Optional.empty();
+        }
+        while (StringUtils.hasText(candidate)) {
+            GatewayRouteDefinition definition = routeIndex.get(candidate);
+            if (definition != null) {
+                return Optional.of(definition);
+            }
+            int lastSlash = candidate.lastIndexOf('/');
+            if (lastSlash <= 0) {
+                return Optional.empty();
+            }
+            candidate = candidate.substring(0, lastSlash);
+        }
+        return Optional.empty();
     }
 
     private void validateUpstream(String projectKey,
@@ -157,18 +199,6 @@ public class GatewayRouteDefinitionLocator {
         registerRoot(registeredRoots, routeRoots, normalizedRoot, projectKey, routeKey);
     }
 
-    private void registerLegacyPathRoots(Map<String, String> registeredRoots,
-                                         List<String> routeRoots,
-                                         String prefix,
-                                         List<String> legacyPathSegments,
-                                         String projectKey,
-                                         String routeKey) {
-        Set<String> distinctLegacySegments = new LinkedHashSet<>(sanitizeSegments(legacyPathSegments));
-        for (String legacySegment : distinctLegacySegments) {
-            registerRoot(registeredRoots, routeRoots, prefix + "/" + legacySegment, projectKey, routeKey);
-        }
-    }
-
     private void registerRoot(Map<String, String> registeredRoots,
                               List<String> routeRoots,
                               String rootPath,
@@ -191,16 +221,6 @@ public class GatewayRouteDefinitionLocator {
                 .filter(StringUtils::hasText)
                 .map(this::normalizeRelativePath)
                 .distinct()
-                .toList();
-    }
-
-    private List<String> sanitizeSegments(List<String> values) {
-        if (values == null) {
-            return List.of();
-        }
-        return values.stream()
-                .filter(StringUtils::hasText)
-                .map(this::normalizeSegment)
                 .toList();
     }
 
@@ -228,6 +248,17 @@ public class GatewayRouteDefinitionLocator {
         }
         String normalized = value.trim();
         return normalized.startsWith("/") ? normalized : "/" + normalized;
+    }
+
+    private String normalizeRequestPath(String requestPath) {
+        if (!StringUtils.hasText(requestPath)) {
+            return "";
+        }
+        String normalized = requestPath.trim();
+        while (normalized.length() > 1 && normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 
     private void requireUri(URI value, String message) {
