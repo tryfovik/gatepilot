@@ -128,6 +128,8 @@ public class GatewayPropertiesValidator {
                 }
                 validateMethods(projectKey, routeKey, "api", route.getApiMethods(), route.isApiEnabled());
                 validateMethods(projectKey, routeKey, "internal", route.getInternalMethods(), route.isActuatorEnabled());
+                validateRequestSize(projectKey, routeKey, "api", route.getApiMaxRequestSize(), route.isApiEnabled());
+                validateRequestSize(projectKey, routeKey, "internal", route.getInternalMaxRequestSize(), route.isActuatorEnabled());
             }
         }
     }
@@ -185,6 +187,24 @@ public class GatewayPropertiesValidator {
                 throw new IllegalArgumentException("gateway " + routeType + " method is unsupported: "
                         + projectKey + "/" + routeKey + " -> " + method);
             }
+        }
+    }
+
+    private void validateRequestSize(String projectKey,
+                                     String routeKey,
+                                     String routeType,
+                                     org.springframework.util.unit.DataSize maxRequestSize,
+                                     boolean routeEnabled) {
+        if (maxRequestSize == null) {
+            return;
+        }
+        if (!routeEnabled) {
+            throw new IllegalArgumentException("gateway " + routeType + " max request size requires route to be enabled: "
+                    + projectKey + "/" + routeKey);
+        }
+        if (maxRequestSize.toBytes() <= 0) {
+            throw new IllegalArgumentException("gateway " + routeType + " max request size must be positive: "
+                    + projectKey + "/" + routeKey);
         }
     }
 

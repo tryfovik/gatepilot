@@ -4,6 +4,7 @@ import com.dt.platform.gateway.infrastructure.config.GatewayProperties;
 import com.dt.platform.gateway.infrastructure.route.GatewayRouteDefinition;
 import com.dt.platform.gateway.infrastructure.route.GatewayRouteDefinitionLocator;
 import org.junit.jupiter.api.Test;
+import org.springframework.util.unit.DataSize;
 
 import java.net.URI;
 import java.time.Duration;
@@ -29,7 +30,9 @@ class GatewayRouteDefinitionLocatorTest {
         assertThat(definition.isPublicApiPath("/api/game/admin/system/ping")).isTrue();
         assertThat(definition.isPublicApiPath("/api/game/admin/games/catalog")).isFalse();
         assertThat(definition.getApiMethods()).containsExactly("GET", "POST");
+        assertThat(definition.getApiMaxRequestSize()).isEqualTo(DataSize.ofMegabytes(10));
         assertThat(definition.getInternalMethods()).containsExactly("GET");
+        assertThat(definition.getInternalMaxRequestSize()).isEqualTo(DataSize.ofMegabytes(1));
         assertThat(definition.isApiMethodAllowed("get")).isTrue();
         assertThat(definition.isApiMethodAllowed("delete")).isFalse();
         assertThat(definition.isInternalMethodAllowed("GET")).isTrue();
@@ -67,9 +70,11 @@ class GatewayRouteDefinitionLocatorTest {
         adminRoute.setPathSegment("admin");
         adminRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
         adminRoute.setApiMethods(java.util.List.of("get", "post", "GET"));
+        adminRoute.setApiMaxRequestSize(DataSize.ofMegabytes(10));
         adminRoute.setServicePathPrefix("/admin");
         adminRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));
         adminRoute.setInternalMethods(java.util.List.of("GET"));
+        adminRoute.setInternalMaxRequestSize(DataSize.ofMegabytes(1));
         adminRoute.setConnectTimeoutMs(2000);
         adminRoute.setResponseTimeout(Duration.ofSeconds(5));
         adminRoute.getAuth().setRequired(true);

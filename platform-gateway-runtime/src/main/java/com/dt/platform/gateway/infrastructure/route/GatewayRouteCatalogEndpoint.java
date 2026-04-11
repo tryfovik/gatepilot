@@ -60,9 +60,11 @@ public class GatewayRouteCatalogEndpoint {
                     definition.getInternalPathRoots(),
                     definition.getServiceUri(),
                     definition.getApiMethods(),
+                    definition.getApiMaxRequestSize() == null ? null : definition.getApiMaxRequestSize().toBytes(),
                     definition.getServicePathPrefix(),
                     definition.getActuatorUri(),
                     definition.getInternalMethods(),
+                    definition.getInternalMaxRequestSize() == null ? null : definition.getInternalMaxRequestSize().toBytes(),
                     definition.isAuthRequired(),
                     definition.getPublicApiPaths(),
                     definition.getConnectTimeoutMs(),
@@ -171,9 +173,11 @@ public class GatewayRouteCatalogEndpoint {
      * @param internalPathRoots 生效的内部根路径
      * @param serviceUri API 上游地址
      * @param apiMethods API 允许的方法
+     * @param apiMaxRequestSizeBytes API 最大请求体，单位字节
      * @param servicePathPrefix API 上游路径前缀
      * @param actuatorUri 运维上游地址
      * @param internalMethods 内部运维允许的方法
+     * @param internalMaxRequestSizeBytes 内部运维最大请求体，单位字节
      * @param authRequired 是否要求认证
      * @param publicPaths 匿名放行的相对路径
      * @param connectTimeoutMs 连接超时
@@ -186,9 +190,11 @@ public class GatewayRouteCatalogEndpoint {
                             List<String> internalPathRoots,
                             URI serviceUri,
                             List<String> apiMethods,
+                            Long apiMaxRequestSizeBytes,
                             String servicePathPrefix,
                             URI actuatorUri,
                             List<String> internalMethods,
+                            Long internalMaxRequestSizeBytes,
                             boolean authRequired,
                             List<String> publicPaths,
                             Integer connectTimeoutMs,

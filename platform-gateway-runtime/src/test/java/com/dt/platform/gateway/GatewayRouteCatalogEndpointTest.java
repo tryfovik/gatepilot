@@ -43,9 +43,11 @@ class GatewayRouteCatalogEndpointTest {
         assertThat(adminRoute.internalPathRoots()).containsExactly("/internal/game/admin");
         assertThat(adminRoute.serviceUri()).isEqualTo(URI.create("http://127.0.0.1:18080"));
         assertThat(adminRoute.apiMethods()).containsExactly("GET", "POST");
+        assertThat(adminRoute.apiMaxRequestSizeBytes()).isEqualTo(10L * 1024 * 1024);
         assertThat(adminRoute.servicePathPrefix()).isEqualTo("/admin");
         assertThat(adminRoute.actuatorUri()).isEqualTo(URI.create("http://127.0.0.1:18080"));
         assertThat(adminRoute.internalMethods()).containsExactly("GET");
+        assertThat(adminRoute.internalMaxRequestSizeBytes()).isEqualTo(1024L * 1024);
         assertThat(adminRoute.authRequired()).isTrue();
         assertThat(adminRoute.publicPaths()).containsExactly("/system/ping", "/auth/**");
         assertThat(adminRoute.connectTimeoutMs()).isEqualTo(2000);
@@ -68,9 +70,11 @@ class GatewayRouteCatalogEndpointTest {
         adminRoute.setPathSegment("admin");
         adminRoute.setServiceUri(URI.create("http://127.0.0.1:18080"));
         adminRoute.setApiMethods(java.util.List.of("get", "post"));
+        adminRoute.setApiMaxRequestSize(org.springframework.util.unit.DataSize.ofMegabytes(10));
         adminRoute.setServicePathPrefix("/admin");
         adminRoute.setActuatorUri(URI.create("http://127.0.0.1:18080"));
         adminRoute.setInternalMethods(java.util.List.of("GET"));
+        adminRoute.setInternalMaxRequestSize(org.springframework.util.unit.DataSize.ofMegabytes(1));
         adminRoute.setConnectTimeoutMs(2000);
         adminRoute.setResponseTimeout(Duration.ofSeconds(5));
         adminRoute.getAuth().setRequired(true);

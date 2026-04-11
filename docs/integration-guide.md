@@ -28,9 +28,11 @@
 - 路由路径段 `path-segment`
 - 业务服务地址 `service-uri`
 - API 允许的方法列表 `api-methods`
+- API 最大请求体大小 `api-max-request-size`
 - 上游业务路径前缀 `service-path-prefix`
 - 上游运维地址 `actuator-uri`
 - 内部运维允许的方法列表 `internal-methods`
+- 内部运维最大请求体大小 `internal-max-request-size`
 - 认证要求 `auth.required`
 - 允许匿名访问的相对路径 `auth.public-paths`
 
@@ -65,10 +67,12 @@ platform:
             api-methods:
               - GET
               - POST
+            api-max-request-size: 10MB
             service-path-prefix: /admin
             actuator-uri: http://127.0.0.1:19080
             internal-methods:
               - GET
+            internal-max-request-size: 1MB
             connect-timeout-ms: 2000
             response-timeout: 5s
             auth:
@@ -96,12 +100,16 @@ platform:
   API 请求要转发到的上游地址。
 - `api-methods`
   当前 API 路由允许的方法列表；为空时表示不限制。
+- `api-max-request-size`
+  当前 API 路由允许的最大请求体大小，支持 `10MB`、`2MB`、`512KB` 等写法。
 - `service-path-prefix`
   网关转发到上游时，重写后的路径前缀。
 - `actuator-uri`
   `/internal/**` 和健康检查访问的上游地址。
 - `internal-methods`
   当前内部运维入口允许的方法列表；为空时表示不限制。
+- `internal-max-request-size`
+  当前内部运维入口允许的最大请求体大小。
 - `auth.required`
   是否要求登录态或认证上下文。
 - `auth.public-paths`
@@ -112,6 +120,12 @@ platform:
 - 命中允许的方法，继续转发到上游
 - 命中不允许的方法，直接返回 `405 Method Not Allowed`
 - 响应头会带 `Allow`，方便调用方修正请求
+
+如果配置了请求体上限，网关还会在转发前校验请求体大小：
+
+- 未超过上限，继续转发
+- 超过上限，直接返回 `413 Payload Too Large`
+- 这种限制适合用于登录、上传、导入、批量写入等接口的边界保护
 
 ## 4. 标准接入步骤
 
@@ -189,8 +203,9 @@ java -jar platform-gateway-server/target/platform-gateway-1.0.0-SNAPSHOT.jar \
 1. 公开路由能通。
 2. 受保护路由的认证结果符合预期。
 3. 方法白名单在不符合约束时返回 `405` 和 `Allow`。
-4. 内部运维入口只能走 `/internal/**`。
-5. Actuator 路由目录和实际配置一致。
+4. 请求体超限时返回 `413`。
+5. 内部运维入口只能走 `/internal/**`。
+6. Actuator 路由目录和实际配置一致。
 
 示例命令：
 
@@ -198,6 +213,7 @@ java -jar platform-gateway-server/target/platform-gateway-1.0.0-SNAPSHOT.jar \
 curl -i http://127.0.0.1:18082/api/game/open/system/ping
 curl -i http://127.0.0.1:18082/api/game/admin/system/ping
 curl -i -X DELETE http://127.0.0.1:18082/api/game/admin/games/catalog
+curl -i -X POST http://127.0.0.1:18082/api/game/admin/import/jobs --data-binary @large-payload.json
 curl -i http://127.0.0.1:18082/internal/game/admin/actuator/health
 curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 ```
@@ -210,7 +226,9 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - `projects[].routes[].apiPathRoots`
 - `projects[].routes[].internalPathRoots`
 - `projects[].routes[].apiMethods`
+- `projects[].routes[].apiMaxRequestSizeBytes`
 - `projects[].routes[].internalMethods`
+- `projects[].routes[].internalMaxRequestSizeBytes`
 - `projects[].routes[].authRequired`
 - `projects[].routes[].publicPaths`
 - `projects[].routes[].connectTimeoutMs`
@@ -252,7 +270,18 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - 响应头里的 `Allow` 是不是和配置一致
 - `/actuator/platformGatewayRoutes` 暴露出来的方法列表是否正确
 
-### 4) `/internal/**` 调不通
+### 4) 返回了 413
+
+这通常表示请求已经命中 route，但请求体超过了当前 route 配置的上限。
+
+优先检查：
+
+- `api-max-request-size` 或 `internal-max-request-size` 是否设置过小
+- 当前接口是不是上传、导入、批量写入这类大报文接口
+- 调用方传输的真实体积是否和预估一致
+- `/actuator/platformGatewayRoutes` 暴露出来的字节上限是否正确
+
+### 5) `/internal/**` 调不通
 
 优先检查：
 
@@ -261,7 +290,7 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - 上游服务是否真的暴露了 actuator 端点
 - 上游健康检查路径是否与 `platform.gateway.health.path` 对齐
 
-### 5) 前端跨域失败
+### 6) 前端跨域失败
 
 优先检查：
 
@@ -296,6 +325,7 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - 每条 route 的 `service-uri`、`service-path-prefix`、`actuator-uri` 已核对
 - `admin` 和 `open` 的认证策略已拆清楚
 - 需要受限的方法已经写入 `api-methods` / `internal-methods`
+- 大报文接口已经写入合适的 `api-max-request-size` / `internal-max-request-size`
 - `auth.public-paths` 使用的是相对路径
 - `connect-timeout-ms` 和 `response-timeout` 已按上游实际延迟设置
 - `/actuator/platformGatewayRoutes` 返回内容和配置一致

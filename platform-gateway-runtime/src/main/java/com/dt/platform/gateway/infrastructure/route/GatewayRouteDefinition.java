@@ -1,6 +1,7 @@
 package com.dt.platform.gateway.infrastructure.route;
 
 import org.springframework.http.server.PathContainer;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 
@@ -38,6 +39,8 @@ public final class GatewayRouteDefinition {
 
     private final Set<String> apiMethodSet;
 
+    private final DataSize apiMaxRequestSize;
+
     private final String servicePathPrefix;
 
     private final URI actuatorUri;
@@ -45,6 +48,8 @@ public final class GatewayRouteDefinition {
     private final List<String> internalMethods;
 
     private final Set<String> internalMethodSet;
+
+    private final DataSize internalMaxRequestSize;
 
     private final boolean authRequired;
 
@@ -64,9 +69,11 @@ public final class GatewayRouteDefinition {
                            List<String> internalPathRoots,
                            URI serviceUri,
                            List<String> apiMethods,
+                           DataSize apiMaxRequestSize,
                            String servicePathPrefix,
                            URI actuatorUri,
                            List<String> internalMethods,
+                           DataSize internalMaxRequestSize,
                            boolean authRequired,
                            List<String> publicApiPatterns,
                            Integer connectTimeoutMs,
@@ -80,10 +87,12 @@ public final class GatewayRouteDefinition {
         this.serviceUri = serviceUri;
         this.apiMethods = sanitizeHttpMethods(apiMethods);
         this.apiMethodSet = Set.copyOf(this.apiMethods);
+        this.apiMaxRequestSize = apiMaxRequestSize;
         this.servicePathPrefix = servicePathPrefix;
         this.actuatorUri = actuatorUri;
         this.internalMethods = sanitizeHttpMethods(internalMethods);
         this.internalMethodSet = Set.copyOf(this.internalMethods);
+        this.internalMaxRequestSize = internalMaxRequestSize;
         this.authRequired = authRequired;
         this.publicApiPaths = List.copyOf(publicApiPatterns);
         this.publicApiPatterns = this.publicApiPaths.stream()
@@ -126,6 +135,10 @@ public final class GatewayRouteDefinition {
         return apiMethods;
     }
 
+    public DataSize getApiMaxRequestSize() {
+        return apiMaxRequestSize;
+    }
+
     public String getServicePathPrefix() {
         return servicePathPrefix;
     }
@@ -136,6 +149,10 @@ public final class GatewayRouteDefinition {
 
     public List<String> getInternalMethods() {
         return internalMethods;
+    }
+
+    public DataSize getInternalMaxRequestSize() {
+        return internalMaxRequestSize;
     }
 
     public boolean isAuthRequired() {

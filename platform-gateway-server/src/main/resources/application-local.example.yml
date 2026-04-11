@@ -103,10 +103,12 @@ platform:
             # api-methods:
             #   - GET
             #   - POST
+            # api-max-request-size: 10MB
             service-path-prefix: /admin
             actuator-uri: http://127.0.0.1:18080
             # internal-methods:
             #   - GET
+            # internal-max-request-size: 1MB
             connect-timeout-ms: 2000
             response-timeout: 5s
             auth:
@@ -136,6 +138,7 @@ platform:
             service-uri: http://127.0.0.1:18080
             # api-methods:
             #   - GET
+            # api-max-request-size: 2MB
             service-path-prefix: /open
             actuator-uri: http://127.0.0.1:18080
             connect-timeout-ms: 2000

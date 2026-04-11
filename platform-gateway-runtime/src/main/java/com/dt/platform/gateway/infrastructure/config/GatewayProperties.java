@@ -1,6 +1,7 @@
 package com.dt.platform.gateway.infrastructure.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.unit.DataSize;
 
 import java.net.URI;
 import java.time.Duration;
@@ -329,6 +330,11 @@ public class GatewayProperties {
         private List<String> apiMethods = new ArrayList<>();
 
         /**
+         * API 最大请求体大小。
+         */
+        private DataSize apiMaxRequestSize;
+
+        /**
          * API 上游路径前缀。
          */
         private String servicePathPrefix;
@@ -342,6 +348,11 @@ public class GatewayProperties {
          * 内部运维入口允许的方法列表。
          */
         private List<String> internalMethods = new ArrayList<>();
+
+        /**
+         * 内部运维最大请求体大小。
+         */
+        private DataSize internalMaxRequestSize;
 
         /**
          * 响应超时时间。
@@ -411,6 +422,14 @@ public class GatewayProperties {
             this.apiMethods = apiMethods == null ? new ArrayList<>() : new ArrayList<>(apiMethods);
         }
 
+        public DataSize getApiMaxRequestSize() {
+            return apiMaxRequestSize;
+        }
+
+        public void setApiMaxRequestSize(DataSize apiMaxRequestSize) {
+            this.apiMaxRequestSize = apiMaxRequestSize;
+        }
+
         public String getServicePathPrefix() {
             return servicePathPrefix;
         }
@@ -433,6 +452,14 @@ public class GatewayProperties {
 
         public void setInternalMethods(List<String> internalMethods) {
             this.internalMethods = internalMethods == null ? new ArrayList<>() : new ArrayList<>(internalMethods);
+        }
+
+        public DataSize getInternalMaxRequestSize() {
+            return internalMaxRequestSize;
+        }
+
+        public void setInternalMaxRequestSize(DataSize internalMaxRequestSize) {
+            this.internalMaxRequestSize = internalMaxRequestSize;
         }
 
         public Duration getResponseTimeout() {

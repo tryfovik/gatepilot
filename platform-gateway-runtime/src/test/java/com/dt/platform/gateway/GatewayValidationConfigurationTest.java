@@ -137,6 +137,31 @@ class GatewayValidationConfigurationTest {
                 });
     }
 
+    @Test
+    void shouldFailWhenApiMaxRequestSizeConfiguredButApiRouteDisabled() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.api-enabled=false",
+                        "platform.gateway.projects.game.routes.admin.api-max-request-size=1MB"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway api max request size requires route to be enabled");
+                });
+    }
+
+    @Test
+    void shouldFailWhenInternalMaxRequestSizeIsNonPositive() {
+        contextRunner.withPropertyValues("platform.gateway.projects.game.routes.admin.internal-max-request-size=0B")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway internal max request size must be positive");
+                });
+    }
+
     @Configuration
     @EnableConfigurationProperties(GatewayProperties.class)
     static class TestGatewayValidationConfiguration extends GatewayValidationConfiguration {

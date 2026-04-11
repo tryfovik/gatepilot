@@ -8,6 +8,7 @@ import org.springframework.cloud.gateway.route.builder.UriSpec;
 import org.springframework.cloud.gateway.support.RouteMetadataUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.unit.DataSize;
 
 import java.util.regex.Pattern;
 
@@ -87,7 +88,8 @@ public class GatewayRouteConfiguration {
                                     GatewayRouteDefinition definition,
                                     String apiPathRoot,
                                     GatewayProperties properties) {
-        GatewayFilterSpec gatewayFilterSpec = filter.rewritePath(buildRewritePattern(apiPathRoot),
+        GatewayFilterSpec gatewayFilterSpec = applyRequestSizeLimit(filter, definition.getApiMaxRequestSize());
+        gatewayFilterSpec = gatewayFilterSpec.rewritePath(buildRewritePattern(apiPathRoot),
                 buildServiceTarget(definition.getServicePathPrefix()));
         gatewayFilterSpec = applyContextHeaders(gatewayFilterSpec, definition, properties);
         UriSpec uriSpec = gatewayFilterSpec;
@@ -98,7 +100,8 @@ public class GatewayRouteConfiguration {
                                          GatewayRouteDefinition definition,
                                          String internalPathRoot,
                                          GatewayProperties properties) {
-        GatewayFilterSpec gatewayFilterSpec = filter.rewritePath(buildRewritePattern(internalPathRoot), "/${segment}");
+        GatewayFilterSpec gatewayFilterSpec = applyRequestSizeLimit(filter, definition.getInternalMaxRequestSize());
+        gatewayFilterSpec = gatewayFilterSpec.rewritePath(buildRewritePattern(internalPathRoot), "/${segment}");
         gatewayFilterSpec = applyContextHeaders(gatewayFilterSpec, definition, properties);
         UriSpec uriSpec = gatewayFilterSpec;
         return applyRouteMetadata(uriSpec, definition);
@@ -119,6 +122,14 @@ public class GatewayRouteConfiguration {
             updated = updated.addRequestHeader(entry.getKey(), entry.getValue());
         }
         return updated;
+    }
+
+    private GatewayFilterSpec applyRequestSizeLimit(GatewayFilterSpec filterSpec,
+                                                    DataSize maxRequestSize) {
+        if (maxRequestSize == null) {
+            return filterSpec;
+        }
+        return filterSpec.setRequestSize(maxRequestSize);
     }
 
     private UriSpec applyRouteMetadata(UriSpec uriSpec, GatewayRouteDefinition definition) {
