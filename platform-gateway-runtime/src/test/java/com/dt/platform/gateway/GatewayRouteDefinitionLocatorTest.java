@@ -33,6 +33,15 @@ class GatewayRouteDefinitionLocatorTest {
         assertThat(definition.getApiMaxRequestSize()).isEqualTo(DataSize.ofMegabytes(10));
         assertThat(definition.getInternalMethods()).containsExactly("GET");
         assertThat(definition.getInternalMaxRequestSize()).isEqualTo(DataSize.ofMegabytes(1));
+        assertThat(definition.getRetryPolicy()).isNotNull();
+        assertThat(definition.getRetryPolicy().retries()).isEqualTo(2);
+        assertThat(definition.getRetryPolicy().methods()).containsExactly("GET");
+        assertThat(definition.getRetryPolicy().statuses()).containsExactly(502, 503, 504);
+        assertThat(definition.getRetryPolicy().series()).containsExactly("server-error");
+        assertThat(definition.getRetryPolicy().exceptions()).containsExactly("io", "timeout");
+        assertThat(definition.getRetryPolicy().backoff()).isNotNull();
+        assertThat(definition.getRetryPolicy().backoff().firstBackoff()).isEqualTo(Duration.ofMillis(20));
+        assertThat(definition.getRetryPolicy().backoff().maxBackoff()).isEqualTo(Duration.ofMillis(200));
         assertThat(definition.isApiMethodAllowed("get")).isTrue();
         assertThat(definition.isApiMethodAllowed("delete")).isFalse();
         assertThat(definition.isInternalMethodAllowed("GET")).isTrue();
@@ -79,6 +88,15 @@ class GatewayRouteDefinitionLocatorTest {
         adminRoute.setResponseTimeout(Duration.ofSeconds(5));
         adminRoute.getAuth().setRequired(true);
         adminRoute.getAuth().setPublicPaths(java.util.List.of("/system/ping", "/auth/**"));
+        adminRoute.getGovernance().getRetry().setEnabled(true);
+        adminRoute.getGovernance().getRetry().setRetries(2);
+        adminRoute.getGovernance().getRetry().setMethods(java.util.List.of("get"));
+        adminRoute.getGovernance().getRetry().setStatuses(java.util.List.of(502, 503, 504));
+        adminRoute.getGovernance().getRetry().setBackoff(new GatewayProperties.RetryBackoffProperties());
+        adminRoute.getGovernance().getRetry().getBackoff().setFirstBackoff(Duration.ofMillis(20));
+        adminRoute.getGovernance().getRetry().getBackoff().setMaxBackoff(Duration.ofMillis(200));
+        adminRoute.getGovernance().getRetry().getBackoff().setFactor(2);
+        adminRoute.getGovernance().getRetry().getBackoff().setBasedOnPreviousValue(true);
 
         GatewayProperties.RouteProperties openRoute = new GatewayProperties.RouteProperties();
         openRoute.setPathSegment("open");

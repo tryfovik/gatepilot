@@ -58,6 +58,15 @@ class GatewayRouteCatalogEndpointTest {
         assertThat(adminRoute.flowControl().controlBehavior()).isEqualTo("rate-limiter");
         assertThat(adminRoute.flowControl().param().enabled()).isTrue();
         assertThat(adminRoute.flowControl().param().fieldName()).isEqualTo("X-Tenant-Id");
+        assertThat(adminRoute.retry().enabled()).isTrue();
+        assertThat(adminRoute.retry().retries()).isEqualTo(2);
+        assertThat(adminRoute.retry().methods()).containsExactly("GET");
+        assertThat(adminRoute.retry().statuses()).containsExactly(502, 503, 504);
+        assertThat(adminRoute.retry().series()).containsExactly("server-error");
+        assertThat(adminRoute.retry().exceptions()).containsExactly("io", "timeout");
+        assertThat(adminRoute.retry().backoff()).isNotNull();
+        assertThat(adminRoute.retry().backoff().firstBackoffMs()).isEqualTo(20L);
+        assertThat(adminRoute.retry().backoff().maxBackoffMs()).isEqualTo(200L);
     }
 
     private GatewayProperties createGatewayProperties() {
@@ -89,6 +98,15 @@ class GatewayRouteCatalogEndpointTest {
         adminRoute.getGovernance().getFlowControl().getParam().setFieldName("X-Tenant-Id");
         adminRoute.getGovernance().getFlowControl().getParam().setPattern("vip-.*");
         adminRoute.getGovernance().getFlowControl().getParam().setMatchStrategy("regex");
+        adminRoute.getGovernance().getRetry().setEnabled(true);
+        adminRoute.getGovernance().getRetry().setRetries(2);
+        adminRoute.getGovernance().getRetry().setMethods(java.util.List.of("GET"));
+        adminRoute.getGovernance().getRetry().setStatuses(java.util.List.of(502, 503, 504));
+        adminRoute.getGovernance().getRetry().setBackoff(new GatewayProperties.RetryBackoffProperties());
+        adminRoute.getGovernance().getRetry().getBackoff().setFirstBackoff(Duration.ofMillis(20));
+        adminRoute.getGovernance().getRetry().getBackoff().setMaxBackoff(Duration.ofMillis(200));
+        adminRoute.getGovernance().getRetry().getBackoff().setFactor(2);
+        adminRoute.getGovernance().getRetry().getBackoff().setBasedOnPreviousValue(true);
 
         GatewayProperties.RouteProperties openRoute = new GatewayProperties.RouteProperties();
         openRoute.setPathSegment("open");

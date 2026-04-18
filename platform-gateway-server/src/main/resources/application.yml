@@ -11,6 +11,9 @@ getboot:
   observability:
     trace:
       enabled: true
+      header-name: X-Trace-Id
+      request-header-propagation-enabled: true
+      response-header-enabled: true
     metrics:
       enabled: true
       common-tags:
@@ -112,6 +115,23 @@ platform:
                 - /system/ping
                 - /auth/**
             # governance:
+            #   retry:
+            #     enabled: true
+            #     retries: 2
+            #     methods:
+            #       - GET
+            #     statuses:
+            #       - 502
+            #       - 503
+            #       - 504
+            #     exceptions:
+            #       - io
+            #       - timeout
+            #     backoff:
+            #       first-backoff: 20ms
+            #       max-backoff: 200ms
+            #       factor: 2
+            #       based-on-previous-value: true
             #   flow-control:
             #     enabled: true
             #     count: 200

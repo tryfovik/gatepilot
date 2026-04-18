@@ -66,6 +66,7 @@ platform:
 - 运行期路由索引：启动阶段预编译 API / internal 根路径索引，运行时命中不再按全部路由线性扫描。
 - 路由级方法约束：每条路由可声明 `api-methods` 与 `internal-methods`，不允许的方法返回 `405 Method Not Allowed` 并带 `Allow` 响应头。
 - 路由级请求体限制：每条路由可声明 `api-max-request-size` 与 `internal-max-request-size`，超限请求直接在网关层返回 `413 Payload Too Large`。
+- 路由级重试退避：每条 API 路由可声明 `governance.retry.*`，只对显式允许的方法做瞬时失败重试与退避。
 - 路由级认证策略：每条路由可声明 `auth.required` 与 `auth.public-paths`，不再用硬编码路径散落在过滤器里。
 - 路由级超时治理：支持 `connect-timeout-ms` 和 `response-timeout`，直接下沉为 Gateway route metadata。
 - 路由级流量治理：每条 API 路由可声明 `governance.flow-control.*`，启动时自动装载为 Sentinel Gateway API 分组和流控规则。
@@ -102,6 +103,8 @@ platform:
   当前路由下允许匿名访问的相对路径。
 - `projects.<project>.routes.<route>.governance.flow-control.*`
   当前路由的 Sentinel 流控策略，包括 QPS、突发额度、控制行为和热点参数维度限流。
+- `projects.<project>.routes.<route>.governance.retry.*`
+  当前 API 路由的重试与退避策略，包括次数、方法、状态码、异常和退避参数。
 - `projects.<project>.routes.<route>.connect-timeout-ms`
   路由连接超时。
 - `projects.<project>.routes.<route>.response-timeout`
@@ -184,6 +187,17 @@ platform:
 
 完整接入步骤、联调命令和排障说明见 [接入手册](docs/integration-guide.md)。
 
+## Trace 联动
+
+平台网关不自造另一套 Trace 体系，直接复用 `getboot-observability` 的入口 Trace 约定。
+
+- 客户端已带 `X-Trace-Id` 时，网关直接复用并透传到上游。
+- 客户端没带 `X-Trace-Id` 时，网关生成新的 TraceId，并同时补齐到请求头和响应头。
+- 下游项目如果也接了 `getboot-observability`，会自动沿用同一个 TraceId。
+- 下游项目如果没接 `getboot-observability`，也应该至少读取并继续透传配置的 Trace 头，默认就是 `X-Trace-Id`。
+
+网关负责把第一跳 Trace 链建好，但不会替下游服务补内部日志、RPC、MQ 的透传逻辑。
+
 ## 治理与观测
 
 发布件已经引入：
@@ -233,6 +247,35 @@ platform:
                   field-name: X-Tenant-Id
                   pattern: vip-.*
                   match-strategy: regex
+```
+
+路由级重试示例：
+
+```yaml
+platform:
+  gateway:
+    projects:
+      game:
+        routes:
+          open:
+            governance:
+              retry:
+                enabled: true
+                retries: 2
+                methods:
+                  - GET
+                statuses:
+                  - 502
+                  - 503
+                  - 504
+                exceptions:
+                  - io
+                  - timeout
+                backoff:
+                  first-backoff: 20ms
+                  max-backoff: 200ms
+                  factor: 2
+                  based-on-previous-value: true
 ```
 
 ## 构建与测试

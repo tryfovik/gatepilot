@@ -1,8 +1,10 @@
 package com.dt.platform.gateway.infrastructure.validation;
 
 import com.dt.platform.gateway.infrastructure.config.GatewayProperties;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
 import org.springframework.util.StringUtils;
+import org.springframework.util.unit.DataSize;
 
 import java.util.List;
 import java.util.Locale;
@@ -44,6 +46,25 @@ public class GatewayPropertiesValidator {
             HttpMethod.DELETE.name(),
             HttpMethod.OPTIONS.name(),
             HttpMethod.TRACE.name()
+    );
+
+    private static final List<String> DEFAULT_RETRY_METHODS = List.of(HttpMethod.GET.name());
+
+    private static final List<String> DEFAULT_RETRY_SERIES = List.of("server-error");
+
+    private static final List<String> DEFAULT_RETRY_EXCEPTIONS = List.of("io", "timeout");
+
+    private static final Set<String> SUPPORTED_RETRY_SERIES = Set.of(
+            "informational",
+            "successful",
+            "redirection",
+            "client-error",
+            "server-error"
+    );
+
+    private static final Set<String> SUPPORTED_RETRY_EXCEPTIONS = Set.of(
+            "io",
+            "timeout"
     );
 
     /**
@@ -108,6 +129,7 @@ public class GatewayPropertiesValidator {
                 if (!route.isEnabled()) {
                     continue;
                 }
+                validateRetryPolicy(projectKey, routeKey, route);
                 validateFlowControl(projectKey, routeKey, route);
             }
         }
@@ -193,7 +215,7 @@ public class GatewayPropertiesValidator {
     private void validateRequestSize(String projectKey,
                                      String routeKey,
                                      String routeType,
-                                     org.springframework.util.unit.DataSize maxRequestSize,
+                                     DataSize maxRequestSize,
                                      boolean routeEnabled) {
         if (maxRequestSize == null) {
             return;
@@ -204,6 +226,91 @@ public class GatewayPropertiesValidator {
         }
         if (maxRequestSize.toBytes() <= 0) {
             throw new IllegalArgumentException("gateway " + routeType + " max request size must be positive: "
+                    + projectKey + "/" + routeKey);
+        }
+    }
+
+    private void validateRetryPolicy(String projectKey,
+                                     String routeKey,
+                                     GatewayProperties.RouteProperties route) {
+        GatewayProperties.RetryProperties retry = route.getGovernance().getRetry();
+        if (!retry.isEnabled()) {
+            return;
+        }
+        if (!route.isApiEnabled()) {
+            throw new IllegalArgumentException("gateway retry requires api route to be enabled: "
+                    + projectKey + "/" + routeKey);
+        }
+        if (retry.getRetries() <= 0) {
+            throw new IllegalArgumentException("gateway retry count must be positive: "
+                    + projectKey + "/" + routeKey);
+        }
+        List<String> methods = retry.getMethods() == null
+                ? DEFAULT_RETRY_METHODS
+                : sanitizeStringLiterals(retry.getMethods(), true);
+        if (methods.isEmpty()) {
+            throw new IllegalArgumentException("gateway retry methods must not be empty: "
+                    + projectKey + "/" + routeKey);
+        }
+        for (String method : methods) {
+            if (!SUPPORTED_HTTP_METHODS.contains(method)) {
+                throw new IllegalArgumentException("gateway retry method is unsupported: "
+                        + projectKey + "/" + routeKey + " -> " + method);
+            }
+        }
+        List<Integer> statuses = sanitizeStatusCodes(retry.getStatuses());
+        for (Integer status : statuses) {
+            if (HttpStatus.resolve(status) == null) {
+                throw new IllegalArgumentException("gateway retry status is unsupported: "
+                        + projectKey + "/" + routeKey + " -> " + status);
+            }
+        }
+        List<String> series = retry.getSeries() == null
+                ? DEFAULT_RETRY_SERIES
+                : sanitizeStringLiterals(retry.getSeries(), false);
+        for (String seriesLiteral : series) {
+            if (!SUPPORTED_RETRY_SERIES.contains(seriesLiteral)) {
+                throw new IllegalArgumentException("gateway retry status series is unsupported: "
+                        + projectKey + "/" + routeKey + " -> " + seriesLiteral);
+            }
+        }
+        List<String> exceptions = retry.getExceptions() == null
+                ? DEFAULT_RETRY_EXCEPTIONS
+                : sanitizeStringLiterals(retry.getExceptions(), false);
+        for (String exceptionLiteral : exceptions) {
+            if (!SUPPORTED_RETRY_EXCEPTIONS.contains(exceptionLiteral)) {
+                throw new IllegalArgumentException("gateway retry exception is unsupported: "
+                        + projectKey + "/" + routeKey + " -> " + exceptionLiteral);
+            }
+        }
+        if (statuses.isEmpty() && series.isEmpty() && exceptions.isEmpty()) {
+            throw new IllegalArgumentException("gateway retry series, statuses and exceptions must not all be empty: "
+                    + projectKey + "/" + routeKey);
+        }
+        validateRetryBackoff(projectKey, routeKey, retry.getBackoff());
+    }
+
+    private void validateRetryBackoff(String projectKey,
+                                      String routeKey,
+                                      GatewayProperties.RetryBackoffProperties backoff) {
+        if (backoff == null) {
+            return;
+        }
+        if (backoff.getFirstBackoff() == null || backoff.getFirstBackoff().isZero() || backoff.getFirstBackoff().isNegative()) {
+            throw new IllegalArgumentException("gateway retry first backoff must be positive: "
+                    + projectKey + "/" + routeKey);
+        }
+        if (backoff.getMaxBackoff() != null
+                && (backoff.getMaxBackoff().isZero() || backoff.getMaxBackoff().isNegative())) {
+            throw new IllegalArgumentException("gateway retry max backoff must be positive: "
+                    + projectKey + "/" + routeKey);
+        }
+        if (backoff.getMaxBackoff() != null && backoff.getMaxBackoff().compareTo(backoff.getFirstBackoff()) < 0) {
+            throw new IllegalArgumentException("gateway retry max backoff must not be less than first backoff: "
+                    + projectKey + "/" + routeKey);
+        }
+        if (backoff.getFactor() <= 0) {
+            throw new IllegalArgumentException("gateway retry backoff factor must be positive: "
                     + projectKey + "/" + routeKey);
         }
     }
@@ -260,6 +367,28 @@ public class GatewayPropertiesValidator {
 
     private String normalizeHttpMethod(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private List<String> sanitizeStringLiterals(List<String> values, boolean uppercase) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .map(value -> uppercase ? value.toUpperCase(Locale.ROOT) : value.toLowerCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private List<Integer> sanitizeStatusCodes(List<Integer> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     private String normalizePrefix(String prefix) {

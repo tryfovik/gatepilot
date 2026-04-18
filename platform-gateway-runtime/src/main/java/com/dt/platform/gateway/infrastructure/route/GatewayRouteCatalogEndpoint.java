@@ -69,7 +69,8 @@ public class GatewayRouteCatalogEndpoint {
                     definition.getPublicApiPaths(),
                     definition.getConnectTimeoutMs(),
                     definition.getResponseTimeout() == null ? null : definition.getResponseTimeout().toMillis(),
-                    buildFlowControlView(definition, routeProperties)
+                    buildFlowControlView(definition, routeProperties),
+                    buildRetryView(definition)
             ));
         }
         return new GatewayRouteCatalogView(
@@ -106,6 +107,30 @@ public class GatewayRouteCatalogEndpoint {
                         param.getFieldName(),
                         param.getPattern(),
                         param.getMatchStrategy()
+                )
+        );
+    }
+
+    private RetryView buildRetryView(GatewayRouteDefinition definition) {
+        GatewayRouteDefinition.RetryPolicy retryPolicy = definition.getRetryPolicy();
+        if (retryPolicy == null) {
+            return new RetryView(false, null, List.of(), List.of(), List.of(), List.of(), null);
+        }
+        GatewayRouteDefinition.RetryBackoff backoff = retryPolicy.backoff();
+        return new RetryView(
+                true,
+                retryPolicy.retries(),
+                retryPolicy.methods(),
+                retryPolicy.statuses(),
+                retryPolicy.series(),
+                retryPolicy.exceptions(),
+                backoff == null
+                        ? null
+                        : new RetryBackoffView(
+                        backoff.firstBackoff() == null ? null : backoff.firstBackoff().toMillis(),
+                        backoff.maxBackoff() == null ? null : backoff.maxBackoff().toMillis(),
+                        backoff.factor(),
+                        backoff.basedOnPreviousValue()
                 )
         );
     }
@@ -183,6 +208,7 @@ public class GatewayRouteCatalogEndpoint {
      * @param connectTimeoutMs 连接超时
      * @param responseTimeoutMs 响应超时
      * @param flowControl 路由流控策略
+     * @param retry 路由重试策略
      */
     public record RouteView(String routeKey,
                             String pathSegment,
@@ -199,7 +225,8 @@ public class GatewayRouteCatalogEndpoint {
                             List<String> publicPaths,
                             Integer connectTimeoutMs,
                             Long responseTimeoutMs,
-                            FlowControlView flowControl) {
+                            FlowControlView flowControl,
+                            RetryView retry) {
     }
 
     /**
@@ -238,5 +265,39 @@ public class GatewayRouteCatalogEndpoint {
                                 String fieldName,
                                 String pattern,
                                 String matchStrategy) {
+    }
+
+    /**
+     * 路由重试策略视图。
+     *
+     * @param enabled 是否启用
+     * @param retries 重试次数
+     * @param methods 允许重试的方法
+     * @param statuses 允许重试的状态码
+     * @param series 允许重试的状态码系列
+     * @param exceptions 允许重试的异常类型
+     * @param backoff 退避配置
+     */
+    public record RetryView(boolean enabled,
+                            Integer retries,
+                            List<String> methods,
+                            List<Integer> statuses,
+                            List<String> series,
+                            List<String> exceptions,
+                            RetryBackoffView backoff) {
+    }
+
+    /**
+     * 路由重试退避配置视图。
+     *
+     * @param firstBackoffMs 首次退避时长
+     * @param maxBackoffMs 最大退避时长
+     * @param factor 退避倍数
+     * @param basedOnPreviousValue 是否按上一次退避值继续增长
+     */
+    public record RetryBackoffView(Long firstBackoffMs,
+                                   Long maxBackoffMs,
+                                   int factor,
+                                   boolean basedOnPreviousValue) {
     }
 }

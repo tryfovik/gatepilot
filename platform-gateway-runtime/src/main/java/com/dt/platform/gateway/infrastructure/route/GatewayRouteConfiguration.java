@@ -1,6 +1,7 @@
 package com.dt.platform.gateway.infrastructure.route;
 
 import com.dt.platform.gateway.infrastructure.config.GatewayProperties;
+import org.springframework.cloud.gateway.support.TimeoutException;
 import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.GatewayFilterSpec;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
@@ -8,8 +9,11 @@ import org.springframework.cloud.gateway.route.builder.UriSpec;
 import org.springframework.cloud.gateway.support.RouteMetadataUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.unit.DataSize;
 
+import java.io.IOException;
 import java.util.regex.Pattern;
 
 /**
@@ -88,7 +92,8 @@ public class GatewayRouteConfiguration {
                                     GatewayRouteDefinition definition,
                                     String apiPathRoot,
                                     GatewayProperties properties) {
-        GatewayFilterSpec gatewayFilterSpec = applyRequestSizeLimit(filter, definition.getApiMaxRequestSize());
+        GatewayFilterSpec gatewayFilterSpec = applyRetryPolicy(filter, definition.getRetryPolicy());
+        gatewayFilterSpec = applyRequestSizeLimit(gatewayFilterSpec, definition.getApiMaxRequestSize());
         gatewayFilterSpec = gatewayFilterSpec.rewritePath(buildRewritePattern(apiPathRoot),
                 buildServiceTarget(definition.getServicePathPrefix()));
         gatewayFilterSpec = applyContextHeaders(gatewayFilterSpec, definition, properties);
@@ -132,6 +137,38 @@ public class GatewayRouteConfiguration {
         return filterSpec.setRequestSize(maxRequestSize);
     }
 
+    @SuppressWarnings("unchecked")
+    private GatewayFilterSpec applyRetryPolicy(GatewayFilterSpec filterSpec,
+                                               GatewayRouteDefinition.RetryPolicy retryPolicy) {
+        if (retryPolicy == null) {
+            return filterSpec;
+        }
+        return filterSpec.retry(config -> {
+            config.setRetries(retryPolicy.retries());
+            config.setMethods(retryPolicy.methods().stream()
+                    .map(HttpMethod::valueOf)
+                    .toArray(HttpMethod[]::new));
+            config.setStatuses(retryPolicy.statuses().stream()
+                    .map(HttpStatus::valueOf)
+                    .toArray(HttpStatus[]::new));
+            config.setSeries(retryPolicy.series().stream()
+                    .map(this::resolveStatusSeries)
+                    .toArray(HttpStatus.Series[]::new));
+            config.setExceptions(retryPolicy.exceptions().stream()
+                    .map(this::resolveRetryException)
+                    .toArray(Class[]::new));
+            if (retryPolicy.backoff() != null) {
+                GatewayRouteDefinition.RetryBackoff backoff = retryPolicy.backoff();
+                config.setBackoff(
+                        backoff.firstBackoff(),
+                        backoff.maxBackoff(),
+                        backoff.factor(),
+                        backoff.basedOnPreviousValue()
+                );
+            }
+        });
+    }
+
     private UriSpec applyRouteMetadata(UriSpec uriSpec, GatewayRouteDefinition definition) {
         UriSpec updated = uriSpec;
         if (definition.getConnectTimeoutMs() != null) {
@@ -154,5 +191,24 @@ public class GatewayRouteConfiguration {
         String normalized = servicePathPrefix.startsWith("/") ? servicePathPrefix : "/" + servicePathPrefix;
         normalized = normalized.endsWith("/") ? normalized.substring(0, normalized.length() - 1) : normalized;
         return normalized + "/${segment}";
+    }
+
+    private HttpStatus.Series resolveStatusSeries(String value) {
+        return switch (value) {
+            case "informational" -> HttpStatus.Series.INFORMATIONAL;
+            case "successful" -> HttpStatus.Series.SUCCESSFUL;
+            case "redirection" -> HttpStatus.Series.REDIRECTION;
+            case "client-error" -> HttpStatus.Series.CLIENT_ERROR;
+            case "server-error" -> HttpStatus.Series.SERVER_ERROR;
+            default -> throw new IllegalArgumentException("Unsupported retry status series: " + value);
+        };
+    }
+
+    private Class<? extends Throwable> resolveRetryException(String value) {
+        return switch (value) {
+            case "io" -> IOException.class;
+            case "timeout" -> TimeoutException.class;
+            default -> throw new IllegalArgumentException("Unsupported retry exception: " + value);
+        };
     }
 }

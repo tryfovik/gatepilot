@@ -7,6 +7,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -14,6 +15,12 @@ import java.util.Optional;
  * 负责把配置属性编译成标准化路由定义。
  */
 public class GatewayRouteDefinitionLocator {
+
+    private static final List<String> DEFAULT_RETRY_METHODS = List.of("GET");
+
+    private static final List<String> DEFAULT_RETRY_SERIES = List.of("server-error");
+
+    private static final List<String> DEFAULT_RETRY_EXCEPTIONS = List.of("io", "timeout");
 
     private final List<GatewayRouteDefinition> routeDefinitions;
 
@@ -129,6 +136,7 @@ public class GatewayRouteDefinitionLocator {
                         route.getActuatorUri(),
                         route.getInternalMethods(),
                         route.getInternalMaxRequestSize(),
+                        buildRetryPolicy(route),
                         route.getAuth().isRequired(),
                         sanitizeRelativePaths(route.getAuth().getPublicPaths()),
                         route.getConnectTimeoutMs(),
@@ -224,6 +232,57 @@ public class GatewayRouteDefinitionLocator {
         return publicPaths.stream()
                 .filter(StringUtils::hasText)
                 .map(this::normalizeRelativePath)
+                .distinct()
+                .toList();
+    }
+
+    private GatewayRouteDefinition.RetryPolicy buildRetryPolicy(GatewayProperties.RouteProperties route) {
+        GatewayProperties.RetryProperties retry = route.getGovernance().getRetry();
+        if (!retry.isEnabled()) {
+            return null;
+        }
+        return new GatewayRouteDefinition.RetryPolicy(
+                retry.getRetries(),
+                sanitizeLiterals(retry.getMethods(), DEFAULT_RETRY_METHODS, true),
+                sanitizeIntegerLiterals(retry.getStatuses()),
+                sanitizeLiterals(retry.getSeries(), DEFAULT_RETRY_SERIES, false),
+                sanitizeLiterals(retry.getExceptions(), DEFAULT_RETRY_EXCEPTIONS, false),
+                buildRetryBackoff(retry.getBackoff())
+        );
+    }
+
+    private GatewayRouteDefinition.RetryBackoff buildRetryBackoff(GatewayProperties.RetryBackoffProperties backoff) {
+        if (backoff == null) {
+            return null;
+        }
+        return new GatewayRouteDefinition.RetryBackoff(
+                backoff.getFirstBackoff(),
+                backoff.getMaxBackoff(),
+                backoff.getFactor(),
+                backoff.isBasedOnPreviousValue()
+        );
+    }
+
+    private List<String> sanitizeLiterals(List<String> values,
+                                          List<String> defaultValues,
+                                          boolean uppercase) {
+        if (values == null) {
+            return defaultValues;
+        }
+        return values.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .map(value -> uppercase ? value.toUpperCase(Locale.ROOT) : value.toLowerCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private List<Integer> sanitizeIntegerLiterals(List<Integer> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
     }

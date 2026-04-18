@@ -533,9 +533,22 @@ public class GatewayProperties {
     public static class GovernanceProperties {
 
         /**
+         * API 重试策略。
+         */
+        private RetryProperties retry = new RetryProperties();
+
+        /**
          * Sentinel 流控规则。
          */
         private FlowControlProperties flowControl = new FlowControlProperties();
+
+        public RetryProperties getRetry() {
+            return retry;
+        }
+
+        public void setRetry(RetryProperties retry) {
+            this.retry = retry;
+        }
 
         public FlowControlProperties getFlowControl() {
             return flowControl;
@@ -543,6 +556,161 @@ public class GatewayProperties {
 
         public void setFlowControl(FlowControlProperties flowControl) {
             this.flowControl = flowControl;
+        }
+    }
+
+    /**
+     * 路由级重试配置。
+     */
+    public static class RetryProperties {
+
+        /**
+         * 是否启用当前路由的重试。
+         */
+        private boolean enabled;
+
+        /**
+         * 最大重试次数。
+         */
+        private int retries = 3;
+
+        /**
+         * 允许重试的请求方法。
+         */
+        private List<String> methods;
+
+        /**
+         * 允许重试的状态码。
+         */
+        private List<Integer> statuses;
+
+        /**
+         * 允许重试的状态码系列。
+         */
+        private List<String> series;
+
+        /**
+         * 允许重试的异常类型。
+         */
+        private List<String> exceptions;
+
+        /**
+         * 重试退避配置。
+         */
+        private RetryBackoffProperties backoff;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getRetries() {
+            return retries;
+        }
+
+        public void setRetries(int retries) {
+            this.retries = retries;
+        }
+
+        public List<String> getMethods() {
+            return methods;
+        }
+
+        public void setMethods(List<String> methods) {
+            this.methods = methods == null ? null : new ArrayList<>(methods);
+        }
+
+        public List<Integer> getStatuses() {
+            return statuses;
+        }
+
+        public void setStatuses(List<Integer> statuses) {
+            this.statuses = statuses == null ? null : new ArrayList<>(statuses);
+        }
+
+        public List<String> getSeries() {
+            return series;
+        }
+
+        public void setSeries(List<String> series) {
+            this.series = series == null ? null : new ArrayList<>(series);
+        }
+
+        public List<String> getExceptions() {
+            return exceptions;
+        }
+
+        public void setExceptions(List<String> exceptions) {
+            this.exceptions = exceptions == null ? null : new ArrayList<>(exceptions);
+        }
+
+        public RetryBackoffProperties getBackoff() {
+            return backoff;
+        }
+
+        public void setBackoff(RetryBackoffProperties backoff) {
+            this.backoff = backoff;
+        }
+    }
+
+    /**
+     * 路由级重试退避配置。
+     */
+    public static class RetryBackoffProperties {
+
+        /**
+         * 首次退避时长。
+         */
+        private Duration firstBackoff = Duration.ofMillis(5);
+
+        /**
+         * 最大退避时长。
+         */
+        private Duration maxBackoff;
+
+        /**
+         * 退避倍数。
+         */
+        private int factor = 2;
+
+        /**
+         * 是否基于上一次退避值继续增长。
+         */
+        private boolean basedOnPreviousValue = true;
+
+        public Duration getFirstBackoff() {
+            return firstBackoff;
+        }
+
+        public void setFirstBackoff(Duration firstBackoff) {
+            this.firstBackoff = firstBackoff;
+        }
+
+        public Duration getMaxBackoff() {
+            return maxBackoff;
+        }
+
+        public void setMaxBackoff(Duration maxBackoff) {
+            this.maxBackoff = maxBackoff;
+        }
+
+        public int getFactor() {
+            return factor;
+        }
+
+        public void setFactor(int factor) {
+            this.factor = factor;
+        }
+
+        public boolean isBasedOnPreviousValue() {
+            return basedOnPreviousValue;
+        }
+
+        public void setBasedOnPreviousValue(boolean basedOnPreviousValue) {
+            this.basedOnPreviousValue = basedOnPreviousValue;
         }
     }
 

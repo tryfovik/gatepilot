@@ -51,6 +51,8 @@ public final class GatewayRouteDefinition {
 
     private final DataSize internalMaxRequestSize;
 
+    private final RetryPolicy retryPolicy;
+
     private final boolean authRequired;
 
     private final List<String> publicApiPaths;
@@ -74,6 +76,7 @@ public final class GatewayRouteDefinition {
                            URI actuatorUri,
                            List<String> internalMethods,
                            DataSize internalMaxRequestSize,
+                           RetryPolicy retryPolicy,
                            boolean authRequired,
                            List<String> publicApiPatterns,
                            Integer connectTimeoutMs,
@@ -93,6 +96,7 @@ public final class GatewayRouteDefinition {
         this.internalMethods = sanitizeHttpMethods(internalMethods);
         this.internalMethodSet = Set.copyOf(this.internalMethods);
         this.internalMaxRequestSize = internalMaxRequestSize;
+        this.retryPolicy = sanitizeRetryPolicy(retryPolicy);
         this.authRequired = authRequired;
         this.publicApiPaths = List.copyOf(publicApiPatterns);
         this.publicApiPatterns = this.publicApiPaths.stream()
@@ -153,6 +157,10 @@ public final class GatewayRouteDefinition {
 
     public DataSize getInternalMaxRequestSize() {
         return internalMaxRequestSize;
+    }
+
+    public RetryPolicy getRetryPolicy() {
+        return retryPolicy;
     }
 
     public boolean isAuthRequired() {
@@ -294,6 +302,20 @@ public final class GatewayRouteDefinition {
         return "platform-gateway-api-" + sanitize(projectKey) + "-" + sanitize(routeKey);
     }
 
+    public record RetryPolicy(int retries,
+                              List<String> methods,
+                              List<Integer> statuses,
+                              List<String> series,
+                              List<String> exceptions,
+                              RetryBackoff backoff) {
+    }
+
+    public record RetryBackoff(Duration firstBackoff,
+                               Duration maxBackoff,
+                               int factor,
+                               boolean basedOnPreviousValue) {
+    }
+
     private boolean matchesPathRoot(String requestPath, String pathRoot) {
         return requestPath.equals(pathRoot) || requestPath.startsWith(pathRoot + "/");
     }
@@ -322,6 +344,47 @@ public final class GatewayRouteDefinition {
             if (normalized != null) {
                 sanitized.add(normalized);
             }
+        }
+        return List.copyOf(sanitized);
+    }
+
+    private RetryPolicy sanitizeRetryPolicy(RetryPolicy retryPolicy) {
+        if (retryPolicy == null) {
+            return null;
+        }
+        return new RetryPolicy(
+                retryPolicy.retries(),
+                sanitizeHttpMethods(retryPolicy.methods()),
+                sanitizeIntegers(retryPolicy.statuses()),
+                sanitizeLiterals(retryPolicy.series()),
+                sanitizeLiterals(retryPolicy.exceptions()),
+                retryPolicy.backoff()
+        );
+    }
+
+    private List<Integer> sanitizeIntegers(List<Integer> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<Integer> sanitized = new LinkedHashSet<>();
+        for (Integer value : values) {
+            if (value != null) {
+                sanitized.add(value);
+            }
+        }
+        return List.copyOf(sanitized);
+    }
+
+    private List<String> sanitizeLiterals(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> sanitized = new LinkedHashSet<>();
+        for (String value : values) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            sanitized.add(value.trim().toLowerCase(Locale.ROOT));
         }
         return List.copyOf(sanitized);
     }

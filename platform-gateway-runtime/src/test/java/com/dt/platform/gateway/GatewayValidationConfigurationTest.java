@@ -162,6 +162,64 @@ class GatewayValidationConfigurationTest {
                 });
     }
 
+    @Test
+    void shouldFailWhenRetryConfiguredOnDisabledApiRoute() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.api-enabled=false",
+                        "platform.gateway.projects.game.routes.admin.governance.retry.enabled=true"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway retry requires api route to be enabled");
+                });
+    }
+
+    @Test
+    void shouldFailWhenRetryMethodUnsupported() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.governance.retry.enabled=true",
+                        "platform.gateway.projects.game.routes.admin.governance.retry.methods[0]=BREW"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway retry method is unsupported");
+                });
+    }
+
+    @Test
+    void shouldFailWhenRetryTriggersAllEmpty() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.governance.retry.enabled=true",
+                        "platform.gateway.projects.game.routes.admin.governance.retry.series[0]=",
+                        "platform.gateway.projects.game.routes.admin.governance.retry.exceptions[0]="
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway retry series, statuses and exceptions must not all be empty");
+                });
+    }
+
+    @Test
+    void shouldFailWhenRetryBackoffInvalid() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.governance.retry.enabled=true",
+                        "platform.gateway.projects.game.routes.admin.governance.retry.backoff.first-backoff=50ms",
+                        "platform.gateway.projects.game.routes.admin.governance.retry.backoff.max-backoff=10ms"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway retry max backoff must not be less than first backoff");
+                });
+    }
+
     @Configuration
     @EnableConfigurationProperties(GatewayProperties.class)
     static class TestGatewayValidationConfiguration extends GatewayValidationConfiguration {
