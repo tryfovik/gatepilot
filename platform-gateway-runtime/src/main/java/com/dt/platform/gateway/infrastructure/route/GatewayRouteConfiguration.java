@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.util.unit.DataSize;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.regex.Pattern;
 
 /**
@@ -70,9 +71,33 @@ public class GatewayRouteConfiguration {
                                    GatewayRouteDefinition definition,
                                    GatewayProperties properties) {
         for (String apiPathRoot : definition.getApiPathRoots()) {
+            for (GatewayRouteDefinition.ReleaseVariant variant : definition.getReleaseVariants()) {
+                String routeId = definition.buildRouteId("api", apiPathRoot, variant.variantKey());
+                routes.route(routeId, route -> route.order(-100).path(apiPathRoot, apiPathRoot + "/**")
+                        .and()
+                        .header(properties.getTrafficColor().getHeaderName(), buildTrafficColorHeaderPattern(variant.matchColors()))
+                        .filters(filter -> applyApiFilters(
+                                filter,
+                                definition,
+                                apiPathRoot,
+                                properties,
+                                variant.servicePathPrefix(),
+                                variant.connectTimeoutMs(),
+                                variant.responseTimeout()
+                        ))
+                        .uri(variant.serviceUri().toString()));
+            }
             String routeId = definition.buildRouteId("api", apiPathRoot);
-            routes.route(routeId, route -> route.path(apiPathRoot, apiPathRoot + "/**")
-                    .filters(filter -> applyApiFilters(filter, definition, apiPathRoot, properties))
+            routes.route(routeId, route -> route.order(0).path(apiPathRoot, apiPathRoot + "/**")
+                    .filters(filter -> applyApiFilters(
+                            filter,
+                            definition,
+                            apiPathRoot,
+                            properties,
+                            definition.getServicePathPrefix(),
+                            definition.getConnectTimeoutMs(),
+                            definition.getResponseTimeout()
+                    ))
                     .uri(definition.getServiceUri().toString()));
         }
     }
@@ -82,7 +107,7 @@ public class GatewayRouteConfiguration {
                                         GatewayProperties properties) {
         for (String internalPathRoot : definition.getInternalPathRoots()) {
             String routeId = definition.buildRouteId("actuator", internalPathRoot);
-            routes.route(routeId, route -> route.path(internalPathRoot, internalPathRoot + "/**")
+            routes.route(routeId, route -> route.order(0).path(internalPathRoot, internalPathRoot + "/**")
                     .filters(filter -> applyActuatorFilters(filter, definition, internalPathRoot, properties))
                     .uri(definition.getActuatorUri().toString()));
         }
@@ -91,14 +116,17 @@ public class GatewayRouteConfiguration {
     private UriSpec applyApiFilters(GatewayFilterSpec filter,
                                     GatewayRouteDefinition definition,
                                     String apiPathRoot,
-                                    GatewayProperties properties) {
+                                    GatewayProperties properties,
+                                    String servicePathPrefix,
+                                    Integer connectTimeoutMs,
+                                    Duration responseTimeout) {
         GatewayFilterSpec gatewayFilterSpec = applyRetryPolicy(filter, definition.getRetryPolicy());
         gatewayFilterSpec = applyRequestSizeLimit(gatewayFilterSpec, definition.getApiMaxRequestSize());
         gatewayFilterSpec = gatewayFilterSpec.rewritePath(buildRewritePattern(apiPathRoot),
-                buildServiceTarget(definition.getServicePathPrefix()));
+                buildServiceTarget(servicePathPrefix));
         gatewayFilterSpec = applyContextHeaders(gatewayFilterSpec, definition, properties);
         UriSpec uriSpec = gatewayFilterSpec;
-        return applyRouteMetadata(uriSpec, definition);
+        return applyRouteMetadata(uriSpec, connectTimeoutMs, responseTimeout);
     }
 
     private UriSpec applyActuatorFilters(GatewayFilterSpec filter,
@@ -109,7 +137,7 @@ public class GatewayRouteConfiguration {
         gatewayFilterSpec = gatewayFilterSpec.rewritePath(buildRewritePattern(internalPathRoot), "/${segment}");
         gatewayFilterSpec = applyContextHeaders(gatewayFilterSpec, definition, properties);
         UriSpec uriSpec = gatewayFilterSpec;
-        return applyRouteMetadata(uriSpec, definition);
+        return applyRouteMetadata(uriSpec, definition.getConnectTimeoutMs(), definition.getResponseTimeout());
     }
 
     private GatewayFilterSpec applyContextHeaders(GatewayFilterSpec filterSpec,
@@ -169,13 +197,15 @@ public class GatewayRouteConfiguration {
         });
     }
 
-    private UriSpec applyRouteMetadata(UriSpec uriSpec, GatewayRouteDefinition definition) {
+    private UriSpec applyRouteMetadata(UriSpec uriSpec,
+                                       Integer connectTimeoutMs,
+                                       Duration responseTimeout) {
         UriSpec updated = uriSpec;
-        if (definition.getConnectTimeoutMs() != null) {
-            updated = updated.metadata(RouteMetadataUtils.CONNECT_TIMEOUT_ATTR, definition.getConnectTimeoutMs());
+        if (connectTimeoutMs != null) {
+            updated = updated.metadata(RouteMetadataUtils.CONNECT_TIMEOUT_ATTR, connectTimeoutMs);
         }
-        if (definition.getResponseTimeout() != null) {
-            updated = updated.metadata(RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR, definition.getResponseTimeout().toMillis());
+        if (responseTimeout != null) {
+            updated = updated.metadata(RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR, responseTimeout.toMillis());
         }
         return updated;
     }
@@ -191,6 +221,16 @@ public class GatewayRouteConfiguration {
         String normalized = servicePathPrefix.startsWith("/") ? servicePathPrefix : "/" + servicePathPrefix;
         normalized = normalized.endsWith("/") ? normalized.substring(0, normalized.length() - 1) : normalized;
         return normalized + "/${segment}";
+    }
+
+    private String buildTrafficColorHeaderPattern(java.util.List<String> colors) {
+        if (colors == null || colors.isEmpty()) {
+            return "^$";
+        }
+        return "^(?:" + colors.stream()
+                .map(Pattern::quote)
+                .reduce((left, right) -> left + "|" + right)
+                .orElse("^$") + ")$";
     }
 
     private HttpStatus.Series resolveStatusSeries(String value) {

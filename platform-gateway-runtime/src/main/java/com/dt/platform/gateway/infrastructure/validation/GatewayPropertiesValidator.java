@@ -6,9 +6,12 @@ import org.springframework.http.HttpMethod;
 import org.springframework.util.StringUtils;
 import org.springframework.util.unit.DataSize;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 网关配置启动校验器。
@@ -36,6 +39,14 @@ public class GatewayPropertiesValidator {
             "regex",
             "contains"
     );
+
+    private static final Set<String> TRAFFIC_COLOR_SOURCES = Set.of(
+            "header",
+            "cookie",
+            "query"
+    );
+
+    private static final Pattern TRAFFIC_COLOR_NAME_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9._-]{0,63}$");
 
     private static final Set<String> SUPPORTED_HTTP_METHODS = Set.of(
             HttpMethod.GET.name(),
@@ -76,6 +87,7 @@ public class GatewayPropertiesValidator {
         validatePrefixes(properties);
         validateCors(properties);
         validateContextHeaders(properties);
+        validateTrafficColor(properties);
         validateRouteMethods(properties);
         validateRouteGovernance(properties);
     }
@@ -116,6 +128,31 @@ public class GatewayPropertiesValidator {
         }
     }
 
+    private void validateTrafficColor(GatewayProperties properties) {
+        GatewayProperties.TrafficColorProperties trafficColor = properties.getTrafficColor();
+        if (!trafficColor.isEnabled()) {
+            return;
+        }
+        requireText(trafficColor.getHeaderName(), "gateway traffic color header name must not be blank");
+        requireTrafficColor(trafficColor.getDefaultColor(), "gateway traffic color default color is invalid");
+        for (GatewayProperties.TrafficColorRuleProperties rule : trafficColor.getRules()) {
+            if (rule == null || !rule.isEnabled()) {
+                continue;
+            }
+            String source = normalizeLiteral(rule.getSource());
+            if (!TRAFFIC_COLOR_SOURCES.contains(source)) {
+                throw new IllegalArgumentException("gateway traffic color source is unsupported: " + rule.getSource());
+            }
+            requireText(rule.getFieldName(), "gateway traffic color field name must not be blank");
+            requireText(rule.getPattern(), "gateway traffic color pattern must not be blank");
+            String matchStrategy = normalizeLiteral(rule.getMatchStrategy());
+            if (!PARAM_MATCH_STRATEGIES.contains(matchStrategy)) {
+                throw new IllegalArgumentException("gateway traffic color match strategy is unsupported: " + rule.getMatchStrategy());
+            }
+            requireTrafficColor(rule.getColor(), "gateway traffic color rule target color is invalid");
+        }
+    }
+
     private void validateRouteGovernance(GatewayProperties properties) {
         for (var projectEntry : properties.getProjects().entrySet()) {
             String projectKey = projectEntry.getKey();
@@ -131,6 +168,7 @@ public class GatewayPropertiesValidator {
                 }
                 validateRetryPolicy(projectKey, routeKey, route);
                 validateFlowControl(projectKey, routeKey, route);
+                validateReleaseVariants(projectKey, routeKey, route, properties.getTrafficColor());
             }
         }
     }
@@ -337,6 +375,60 @@ public class GatewayPropertiesValidator {
         }
     }
 
+    private void validateReleaseVariants(String projectKey,
+                                         String routeKey,
+                                         GatewayProperties.RouteProperties route,
+                                         GatewayProperties.TrafficColorProperties trafficColor) {
+        Map<String, GatewayProperties.ReleaseVariantProperties> variants = route.getRelease().getVariants();
+        if (variants.isEmpty()) {
+            return;
+        }
+        boolean hasEnabledVariant = variants.values().stream()
+                .filter(java.util.Objects::nonNull)
+                .anyMatch(GatewayProperties.ReleaseVariantProperties::isEnabled);
+        if (!hasEnabledVariant) {
+            return;
+        }
+        if (!route.isApiEnabled()) {
+            throw new IllegalArgumentException("gateway release variants require api route to be enabled: "
+                    + projectKey + "/" + routeKey);
+        }
+        if (!trafficColor.isEnabled()) {
+            throw new IllegalArgumentException("gateway release variants require traffic color to be enabled: "
+                    + projectKey + "/" + routeKey);
+        }
+        Set<String> registeredColors = new LinkedHashSet<>();
+        for (Map.Entry<String, GatewayProperties.ReleaseVariantProperties> entry : variants.entrySet()) {
+            GatewayProperties.ReleaseVariantProperties variant = entry.getValue();
+            if (variant == null || !variant.isEnabled()) {
+                continue;
+            }
+            String variantKey = normalizeTrafficColor(entry.getKey());
+            if (variantKey == null) {
+                throw new IllegalArgumentException("gateway release variant key is invalid: "
+                        + projectKey + "/" + routeKey + " -> " + entry.getKey());
+            }
+            List<String> matchColors = sanitizeTrafficColors(variant.getMatchColors());
+            if (matchColors.isEmpty()) {
+                matchColors = List.of(variantKey);
+            }
+            for (String color : matchColors) {
+                if (!registeredColors.add(color)) {
+                    throw new IllegalArgumentException("gateway release variant traffic color must be unique per route: "
+                            + projectKey + "/" + routeKey + " -> " + color);
+                }
+            }
+            if (variant.getConnectTimeoutMs() != null && variant.getConnectTimeoutMs() <= 0) {
+                throw new IllegalArgumentException("gateway release variant connect timeout must be positive: "
+                        + projectKey + "/" + routeKey + " -> " + entry.getKey());
+            }
+            if (variant.getResponseTimeout() != null && variant.getResponseTimeout().isNegative()) {
+                throw new IllegalArgumentException("gateway release variant response timeout must not be negative: "
+                        + projectKey + "/" + routeKey + " -> " + entry.getKey());
+            }
+        }
+    }
+
     private boolean isBlankCollection(Iterable<String> values) {
         if (values == null) {
             return true;
@@ -369,6 +461,14 @@ public class GatewayPropertiesValidator {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    private String normalizeTrafficColor(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return TRAFFIC_COLOR_NAME_PATTERN.matcher(normalized).matches() ? normalized : null;
+    }
+
     private List<String> sanitizeStringLiterals(List<String> values, boolean uppercase) {
         if (values == null) {
             return List.of();
@@ -389,6 +489,23 @@ public class GatewayPropertiesValidator {
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
+    }
+
+    private List<String> sanitizeTrafficColors(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+                .map(this::normalizeTrafficColor)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private void requireTrafficColor(String color, String message) {
+        if (normalizeTrafficColor(color) == null) {
+            throw new IllegalArgumentException(message + ": " + color);
+        }
     }
 
     private String normalizePrefix(String prefix) {

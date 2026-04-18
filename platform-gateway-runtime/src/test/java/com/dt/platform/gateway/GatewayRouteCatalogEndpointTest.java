@@ -29,6 +29,11 @@ class GatewayRouteCatalogEndpointTest {
         assertThat(view.internalPrefix()).isEqualTo("/internal");
         assertThat(view.contextHeaders().enabled()).isTrue();
         assertThat(view.contextHeaders().projectHeaderName()).isEqualTo("X-Platform-Project");
+        assertThat(view.trafficColor().enabled()).isTrue();
+        assertThat(view.trafficColor().headerName()).isEqualTo("X-Traffic-Color");
+        assertThat(view.trafficColor().defaultColor()).isEqualTo("stable");
+        assertThat(view.trafficColor().rules()).hasSize(1);
+        assertThat(view.trafficColor().rules().get(0).fieldName()).isEqualTo("X-Canary");
         assertThat(view.projects()).hasSize(1);
 
         GatewayRouteCatalogEndpoint.ProjectView project = view.projects().get(0);
@@ -67,10 +72,22 @@ class GatewayRouteCatalogEndpointTest {
         assertThat(adminRoute.retry().backoff()).isNotNull();
         assertThat(adminRoute.retry().backoff().firstBackoffMs()).isEqualTo(20L);
         assertThat(adminRoute.retry().backoff().maxBackoffMs()).isEqualTo(200L);
+        assertThat(adminRoute.releaseVariants()).hasSize(1);
+        assertThat(adminRoute.releaseVariants().get(0).variantKey()).isEqualTo("green");
+        assertThat(adminRoute.releaseVariants().get(0).matchColors()).containsExactly("green");
+        assertThat(adminRoute.releaseVariants().get(0).serviceUri()).isEqualTo(URI.create("http://127.0.0.1:28080"));
     }
 
     private GatewayProperties createGatewayProperties() {
         GatewayProperties properties = new GatewayProperties();
+        properties.getTrafficColor().setEnabled(true);
+        GatewayProperties.TrafficColorRuleProperties trafficRule = new GatewayProperties.TrafficColorRuleProperties();
+        trafficRule.setName("canary-header");
+        trafficRule.setSource("header");
+        trafficRule.setFieldName("X-Canary");
+        trafficRule.setPattern("true");
+        trafficRule.setColor("green");
+        properties.getTrafficColor().setRules(java.util.List.of(trafficRule));
         GatewayProperties.ProjectProperties gameProject = new GatewayProperties.ProjectProperties();
         gameProject.setPathSegment("game");
         gameProject.setDisplayName("Game Platform");
@@ -107,6 +124,10 @@ class GatewayRouteCatalogEndpointTest {
         adminRoute.getGovernance().getRetry().getBackoff().setMaxBackoff(Duration.ofMillis(200));
         adminRoute.getGovernance().getRetry().getBackoff().setFactor(2);
         adminRoute.getGovernance().getRetry().getBackoff().setBasedOnPreviousValue(true);
+        GatewayProperties.ReleaseVariantProperties greenVariant = new GatewayProperties.ReleaseVariantProperties();
+        greenVariant.setServiceUri(URI.create("http://127.0.0.1:28080"));
+        greenVariant.setActuatorUri(URI.create("http://127.0.0.1:28080"));
+        adminRoute.getRelease().getVariants().put("green", greenVariant);
 
         GatewayProperties.RouteProperties openRoute = new GatewayProperties.RouteProperties();
         openRoute.setPathSegment("open");

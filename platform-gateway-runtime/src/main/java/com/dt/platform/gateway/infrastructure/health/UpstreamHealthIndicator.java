@@ -44,35 +44,49 @@ public class UpstreamHealthIndicator implements ReactiveHealthIndicator {
     @Override
     public Mono<Health> health() {
         return Flux.fromIterable(routeDefinitionLocator.getActuatorRoutes())
-                .concatMap(definition -> checkUpstream(definition)
-                        .map(result -> Map.entry(definition.getProjectKey() + "/" + definition.getRouteKey(), result)))
+                .concatMap(this::checkUpstreams)
                 .collectList()
                 .map(this::buildHealth);
     }
 
-    private Mono<UpstreamHealthResult> checkUpstream(GatewayRouteDefinition definition) {
-        if (definition.getActuatorUri() == null) {
+    private Flux<Map.Entry<String, UpstreamHealthResult>> checkUpstreams(GatewayRouteDefinition definition) {
+        Flux<Map.Entry<String, UpstreamHealthResult>> base = checkUpstream(definition, null, definition.getActuatorUri())
+                .map(result -> Map.entry(buildDetailKey(definition, null), result))
+                .flux();
+        Flux<Map.Entry<String, UpstreamHealthResult>> variants = Flux.fromIterable(definition.getReleaseVariants())
+                .concatMap(variant -> checkUpstream(definition, variant.variantKey(), variant.actuatorUri())
+                        .map(result -> Map.entry(buildDetailKey(definition, variant.variantKey()), result)));
+        return Flux.concat(base, variants);
+    }
+
+    private Mono<UpstreamHealthResult> checkUpstream(GatewayRouteDefinition definition,
+                                                     String variantKey,
+                                                     URI actuatorUri) {
+        if (actuatorUri == null) {
             return Mono.just(UpstreamHealthResult.down(
                     definition.getProjectKey(),
                     definition.getRouteKey(),
+                    variantKey,
                     null,
                     new IllegalArgumentException("gateway actuator uri must not be null")
             ));
         }
-        URI targetUri = definition.getActuatorUri().resolve(properties.getHealth().getPath());
+        URI targetUri = actuatorUri.resolve(properties.getHealth().getPath());
         return webClient.get()
                 .uri(targetUri)
-                .exchangeToMono(response -> readResponse(definition, targetUri, response.statusCode(), response))
+                .exchangeToMono(response -> readResponse(definition, variantKey, targetUri, response.statusCode(), response))
                 .timeout(properties.getHealth().getTimeout())
                 .onErrorResume(exception -> Mono.just(UpstreamHealthResult.down(
                         definition.getProjectKey(),
                         definition.getRouteKey(),
+                        variantKey,
                         targetUri,
                         exception
                 )));
     }
 
     private Mono<UpstreamHealthResult> readResponse(GatewayRouteDefinition definition,
+                                                    String variantKey,
                                                     URI targetUri,
                                                     HttpStatusCode statusCode,
                                                     org.springframework.web.reactive.function.client.ClientResponse response) {
@@ -81,10 +95,16 @@ public class UpstreamHealthIndicator implements ReactiveHealthIndicator {
                 .map(body -> UpstreamHealthResult.fromResponse(
                         definition.getProjectKey(),
                         definition.getRouteKey(),
+                        variantKey,
                         targetUri,
                         statusCode,
                         body
                 ));
+    }
+
+    private String buildDetailKey(GatewayRouteDefinition definition, String variantKey) {
+        String routeKey = definition.getProjectKey() + "-" + definition.getRouteKey();
+        return variantKey == null ? routeKey : routeKey + "@" + variantKey;
     }
 
     private Health buildHealth(List<Map.Entry<String, UpstreamHealthResult>> results) {
@@ -105,6 +125,8 @@ public class UpstreamHealthIndicator implements ReactiveHealthIndicator {
 
         private final String routeKey;
 
+        private final String variantKey;
+
         private final URI targetUri;
 
         private final String status;
@@ -115,12 +137,14 @@ public class UpstreamHealthIndicator implements ReactiveHealthIndicator {
 
         private UpstreamHealthResult(String projectKey,
                                      String routeKey,
+                                     String variantKey,
                                      URI targetUri,
                                      String status,
                                      Integer httpStatus,
                                      String error) {
             this.projectKey = projectKey;
             this.routeKey = routeKey;
+            this.variantKey = variantKey;
             this.targetUri = targetUri;
             this.status = status;
             this.httpStatus = httpStatus;
@@ -129,22 +153,27 @@ public class UpstreamHealthIndicator implements ReactiveHealthIndicator {
 
         static UpstreamHealthResult fromResponse(String projectKey,
                                                  String routeKey,
+                                                 String variantKey,
                                                  URI targetUri,
                                                  HttpStatusCode httpStatus,
                                                  Map<?, ?> body) {
             Object status = body.get("status");
             String upstreamStatus = status == null ? "UNKNOWN" : status.toString();
             if (httpStatus.is2xxSuccessful() && "UP".equalsIgnoreCase(upstreamStatus)) {
-                return new UpstreamHealthResult(projectKey, routeKey, targetUri, "UP", httpStatus.value(), null);
+                return new UpstreamHealthResult(projectKey, routeKey, variantKey, targetUri, "UP", httpStatus.value(), null);
             }
             String errorMessage = httpStatus.is2xxSuccessful()
                     ? "upstream health status is " + upstreamStatus
                     : "upstream returned http " + httpStatus.value();
-            return new UpstreamHealthResult(projectKey, routeKey, targetUri, "DOWN", httpStatus.value(), errorMessage);
+            return new UpstreamHealthResult(projectKey, routeKey, variantKey, targetUri, "DOWN", httpStatus.value(), errorMessage);
         }
 
-        static UpstreamHealthResult down(String projectKey, String routeKey, URI targetUri, Throwable exception) {
-            return new UpstreamHealthResult(projectKey, routeKey, targetUri, "DOWN", null, exception.getMessage());
+        static UpstreamHealthResult down(String projectKey,
+                                         String routeKey,
+                                         String variantKey,
+                                         URI targetUri,
+                                         Throwable exception) {
+            return new UpstreamHealthResult(projectKey, routeKey, variantKey, targetUri, "DOWN", null, exception.getMessage());
         }
 
         boolean isHealthy() {
@@ -155,6 +184,9 @@ public class UpstreamHealthIndicator implements ReactiveHealthIndicator {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("project", projectKey);
             detail.put("route", routeKey);
+            if (variantKey != null && !variantKey.isBlank()) {
+                detail.put("variant", variantKey);
+            }
             detail.put("status", status);
             if (targetUri != null) {
                 detail.put("uri", targetUri.toString());

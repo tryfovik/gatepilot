@@ -79,6 +79,7 @@ platform:
         - "*"
       exposed-headers:
         - X-Trace-Id
+        - X-Traffic-Color
         - Authorization
       allow-credentials: true
       max-age: 1h
@@ -86,6 +87,19 @@ platform:
       enabled: true
       project-header-name: X-Platform-Project
       route-header-name: X-Platform-Route
+    traffic-color:
+      enabled: false
+      header-name: X-Traffic-Color
+      response-header-enabled: true
+      trust-request-header: false
+      default-color: stable
+      # rules:
+      #   - name: canary-header
+      #     source: header
+      #     field-name: X-Canary
+      #     pattern: true
+      #     match-strategy: exact
+      #     color: green
     projects:
       game:
         enabled: true
@@ -132,6 +146,13 @@ platform:
             #       max-backoff: 200ms
             #       factor: 2
             #       based-on-previous-value: true
+            # release:
+            #   variants:
+            #     green:
+            #       service-uri: http://127.0.0.1:28080
+            #       actuator-uri: http://127.0.0.1:28080
+            #       match-colors:
+            #         - green
             #   flow-control:
             #     enabled: true
             #     count: 200

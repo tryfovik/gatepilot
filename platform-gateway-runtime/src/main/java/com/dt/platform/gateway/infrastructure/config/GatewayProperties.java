@@ -47,6 +47,11 @@ public class GatewayProperties {
     private ContextHeadersProperties contextHeaders = new ContextHeadersProperties();
 
     /**
+     * 流量染色配置。
+     */
+    private TrafficColorProperties trafficColor = new TrafficColorProperties();
+
+    /**
      * 项目级路由配置。
      */
     private final Map<String, ProjectProperties> projects = new LinkedHashMap<>();
@@ -97,6 +102,14 @@ public class GatewayProperties {
 
     public void setContextHeaders(ContextHeadersProperties contextHeaders) {
         this.contextHeaders = contextHeaders;
+    }
+
+    public TrafficColorProperties getTrafficColor() {
+        return trafficColor;
+    }
+
+    public void setTrafficColor(TrafficColorProperties trafficColor) {
+        this.trafficColor = trafficColor;
     }
 
     public Map<String, ProjectProperties> getProjects() {
@@ -374,6 +387,11 @@ public class GatewayProperties {
          */
         private GovernanceProperties governance = new GovernanceProperties();
 
+        /**
+         * 发布变体配置。
+         */
+        private ReleaseProperties release = new ReleaseProperties();
+
         public boolean isEnabled() {
             return enabled;
         }
@@ -493,6 +511,14 @@ public class GatewayProperties {
         public void setGovernance(GovernanceProperties governance) {
             this.governance = governance;
         }
+
+        public ReleaseProperties getRelease() {
+            return release;
+        }
+
+        public void setRelease(ReleaseProperties release) {
+            this.release = release;
+        }
     }
 
     /**
@@ -556,6 +582,125 @@ public class GatewayProperties {
 
         public void setFlowControl(FlowControlProperties flowControl) {
             this.flowControl = flowControl;
+        }
+    }
+
+    /**
+     * 路由发布配置。
+     */
+    public static class ReleaseProperties {
+
+        /**
+         * 按流量颜色命中的发布变体。
+         */
+        private final Map<String, ReleaseVariantProperties> variants = new LinkedHashMap<>();
+
+        public Map<String, ReleaseVariantProperties> getVariants() {
+            return variants;
+        }
+
+        public void setVariants(Map<String, ReleaseVariantProperties> variants) {
+            this.variants.clear();
+            if (variants != null) {
+                this.variants.putAll(variants);
+            }
+        }
+    }
+
+    /**
+     * 单个发布变体配置。
+     */
+    public static class ReleaseVariantProperties {
+
+        /**
+         * 是否启用当前发布变体。
+         */
+        private boolean enabled = true;
+
+        /**
+         * 命中的流量颜色标签。
+         */
+        private List<String> matchColors = new ArrayList<>();
+
+        /**
+         * 变体 API 上游地址。
+         */
+        private URI serviceUri;
+
+        /**
+         * 变体 API 上游路径前缀。
+         */
+        private String servicePathPrefix;
+
+        /**
+         * 变体 Actuator 上游地址。
+         */
+        private URI actuatorUri;
+
+        /**
+         * 变体连接超时时间，单位毫秒。
+         */
+        private Integer connectTimeoutMs;
+
+        /**
+         * 变体响应超时时间。
+         */
+        private Duration responseTimeout;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public List<String> getMatchColors() {
+            return matchColors;
+        }
+
+        public void setMatchColors(List<String> matchColors) {
+            this.matchColors = matchColors == null ? new ArrayList<>() : new ArrayList<>(matchColors);
+        }
+
+        public URI getServiceUri() {
+            return serviceUri;
+        }
+
+        public void setServiceUri(URI serviceUri) {
+            this.serviceUri = serviceUri;
+        }
+
+        public String getServicePathPrefix() {
+            return servicePathPrefix;
+        }
+
+        public void setServicePathPrefix(String servicePathPrefix) {
+            this.servicePathPrefix = servicePathPrefix;
+        }
+
+        public URI getActuatorUri() {
+            return actuatorUri;
+        }
+
+        public void setActuatorUri(URI actuatorUri) {
+            this.actuatorUri = actuatorUri;
+        }
+
+        public Integer getConnectTimeoutMs() {
+            return connectTimeoutMs;
+        }
+
+        public void setConnectTimeoutMs(Integer connectTimeoutMs) {
+            this.connectTimeoutMs = connectTimeoutMs;
+        }
+
+        public Duration getResponseTimeout() {
+            return responseTimeout;
+        }
+
+        public void setResponseTimeout(Duration responseTimeout) {
+            this.responseTimeout = responseTimeout;
         }
     }
 
@@ -942,7 +1087,7 @@ public class GatewayProperties {
         /**
          * 允许前端读取的响应头。
          */
-        private List<String> exposedHeaders = new ArrayList<>(List.of("X-Trace-Id", "Authorization"));
+        private List<String> exposedHeaders = new ArrayList<>(List.of("X-Trace-Id", "X-Traffic-Color", "Authorization"));
 
         /**
          * 是否允许携带凭证。
@@ -1053,6 +1198,187 @@ public class GatewayProperties {
 
         public void setRouteHeaderName(String routeHeaderName) {
             this.routeHeaderName = routeHeaderName;
+        }
+    }
+
+    /**
+     * 流量染色配置。
+     */
+    public static class TrafficColorProperties {
+
+        /**
+         * 是否启用流量染色。
+         */
+        private boolean enabled;
+
+        /**
+         * 对外透传的流量颜色头名称。
+         */
+        private String headerName = "X-Traffic-Color";
+
+        /**
+         * 是否在响应头中回写流量颜色。
+         */
+        private boolean responseHeaderEnabled = true;
+
+        /**
+         * 是否信任客户端已带的流量颜色头。
+         */
+        private boolean trustRequestHeader;
+
+        /**
+         * 没有命中任何规则时使用的默认颜色。
+         */
+        private String defaultColor = "stable";
+
+        /**
+         * 染色规则，按声明顺序匹配。
+         */
+        private List<TrafficColorRuleProperties> rules = new ArrayList<>();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getHeaderName() {
+            return headerName;
+        }
+
+        public void setHeaderName(String headerName) {
+            this.headerName = headerName;
+        }
+
+        public boolean isResponseHeaderEnabled() {
+            return responseHeaderEnabled;
+        }
+
+        public void setResponseHeaderEnabled(boolean responseHeaderEnabled) {
+            this.responseHeaderEnabled = responseHeaderEnabled;
+        }
+
+        public boolean isTrustRequestHeader() {
+            return trustRequestHeader;
+        }
+
+        public void setTrustRequestHeader(boolean trustRequestHeader) {
+            this.trustRequestHeader = trustRequestHeader;
+        }
+
+        public String getDefaultColor() {
+            return defaultColor;
+        }
+
+        public void setDefaultColor(String defaultColor) {
+            this.defaultColor = defaultColor;
+        }
+
+        public List<TrafficColorRuleProperties> getRules() {
+            return rules;
+        }
+
+        public void setRules(List<TrafficColorRuleProperties> rules) {
+            this.rules = rules == null ? new ArrayList<>() : new ArrayList<>(rules);
+        }
+    }
+
+    /**
+     * 单条流量染色规则。
+     */
+    public static class TrafficColorRuleProperties {
+
+        /**
+         * 规则名称，便于排障识别。
+         */
+        private String name;
+
+        /**
+         * 是否启用当前规则。
+         */
+        private boolean enabled = true;
+
+        /**
+         * 取值来源，支持 header、cookie、query。
+         */
+        private String source = "header";
+
+        /**
+         * 头、Cookie 或 URL 参数名称。
+         */
+        private String fieldName;
+
+        /**
+         * 匹配模式。
+         */
+        private String pattern;
+
+        /**
+         * 匹配策略，支持 exact、prefix、regex、contains。
+         */
+        private String matchStrategy = "exact";
+
+        /**
+         * 命中后写入的流量颜色。
+         */
+        private String color;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getSource() {
+            return source;
+        }
+
+        public void setSource(String source) {
+            this.source = source;
+        }
+
+        public String getFieldName() {
+            return fieldName;
+        }
+
+        public void setFieldName(String fieldName) {
+            this.fieldName = fieldName;
+        }
+
+        public String getPattern() {
+            return pattern;
+        }
+
+        public void setPattern(String pattern) {
+            this.pattern = pattern;
+        }
+
+        public String getMatchStrategy() {
+            return matchStrategy;
+        }
+
+        public void setMatchStrategy(String matchStrategy) {
+            this.matchStrategy = matchStrategy;
+        }
+
+        public String getColor() {
+            return color;
+        }
+
+        public void setColor(String color) {
+            this.color = color;
         }
     }
 }

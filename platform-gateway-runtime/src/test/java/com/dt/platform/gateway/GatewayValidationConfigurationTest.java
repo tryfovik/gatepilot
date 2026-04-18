@@ -82,6 +82,20 @@ class GatewayValidationConfigurationTest {
     }
 
     @Test
+    void shouldFailWhenTrafficColorDefaultIsInvalid() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.traffic-color.enabled=true",
+                        "platform.gateway.traffic-color.default-color=green zone"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway traffic color default color is invalid");
+                });
+    }
+
+    @Test
     void shouldFailWhenFlowControlCountMissing() {
         contextRunner.withPropertyValues(
                         "platform.gateway.projects.game.routes.admin.api-enabled=true",
@@ -217,6 +231,19 @@ class GatewayValidationConfigurationTest {
                     assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
                     assertThat(context.getStartupFailure().getMessage())
                             .contains("gateway retry max backoff must not be less than first backoff");
+                });
+    }
+
+    @Test
+    void shouldFailWhenReleaseVariantConfiguredWithoutTrafficColor() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.release.variants.green.service-uri=http://127.0.0.1:28080"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway release variants require traffic color to be enabled");
                 });
     }
 

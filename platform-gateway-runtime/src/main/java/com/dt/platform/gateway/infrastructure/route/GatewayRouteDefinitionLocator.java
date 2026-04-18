@@ -137,6 +137,7 @@ public class GatewayRouteDefinitionLocator {
                         route.getInternalMethods(),
                         route.getInternalMaxRequestSize(),
                         buildRetryPolicy(route),
+                        buildReleaseVariants(route),
                         route.getAuth().isRequired(),
                         sanitizeRelativePaths(route.getAuth().getPublicPaths()),
                         route.getConnectTimeoutMs(),
@@ -263,6 +264,33 @@ public class GatewayRouteDefinitionLocator {
         );
     }
 
+    private List<GatewayRouteDefinition.ReleaseVariant> buildReleaseVariants(GatewayProperties.RouteProperties route) {
+        if (route.getRelease().getVariants().isEmpty()) {
+            return List.of();
+        }
+        List<GatewayRouteDefinition.ReleaseVariant> variants = new ArrayList<>();
+        for (Map.Entry<String, GatewayProperties.ReleaseVariantProperties> entry : route.getRelease().getVariants().entrySet()) {
+            GatewayProperties.ReleaseVariantProperties variant = entry.getValue();
+            if (variant == null || !variant.isEnabled()) {
+                continue;
+            }
+            URI variantServiceUri = variant.getServiceUri() == null ? route.getServiceUri() : variant.getServiceUri();
+            URI variantActuatorUri = variant.getActuatorUri() == null
+                    ? (variant.getServiceUri() == null ? route.getActuatorUri() : variant.getServiceUri())
+                    : variant.getActuatorUri();
+            variants.add(new GatewayRouteDefinition.ReleaseVariant(
+                    entry.getKey(),
+                    sanitizeMatchColors(entry.getKey(), variant.getMatchColors()),
+                    variantServiceUri,
+                    StringUtils.hasText(variant.getServicePathPrefix()) ? variant.getServicePathPrefix() : route.getServicePathPrefix(),
+                    variantActuatorUri,
+                    variant.getConnectTimeoutMs() == null ? route.getConnectTimeoutMs() : variant.getConnectTimeoutMs(),
+                    variant.getResponseTimeout() == null ? route.getResponseTimeout() : variant.getResponseTimeout()
+            ));
+        }
+        return List.copyOf(variants);
+    }
+
     private List<String> sanitizeLiterals(List<String> values,
                                           List<String> defaultValues,
                                           boolean uppercase) {
@@ -275,6 +303,14 @@ public class GatewayRouteDefinitionLocator {
                 .map(value -> uppercase ? value.toUpperCase(Locale.ROOT) : value.toLowerCase(Locale.ROOT))
                 .distinct()
                 .toList();
+    }
+
+    private List<String> sanitizeMatchColors(String variantKey, List<String> colors) {
+        List<String> sanitized = sanitizeLiterals(colors, List.of(), false);
+        if (sanitized.isEmpty()) {
+            return List.of(variantKey.trim().toLowerCase(Locale.ROOT));
+        }
+        return sanitized;
     }
 
     private List<Integer> sanitizeIntegerLiterals(List<Integer> values) {

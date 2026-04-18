@@ -35,6 +35,11 @@
 - 内部运维最大请求体大小 `internal-max-request-size`
 - 认证要求 `auth.required`
 - 允许匿名访问的相对路径 `auth.public-paths`
+- Trace 请求头名称 `getboot.observability.trace.header-name`
+- 是否由网关补齐 Trace 请求头和响应头 `request-header-propagation-enabled` / `response-header-enabled`
+- 需要做瞬时失败保护的路由重试策略 `governance.retry.*`
+- 流量染色配置 `traffic-color.*`
+- 灰度 / 蓝绿发布变体配置 `release.variants.*`
 
 如果一个项目内部已经区分后台接口和开放接口，通常会拆成：
 
@@ -127,6 +132,70 @@ platform:
 - 超过上限，直接返回 `413 Payload Too Large`
 - 这种限制适合用于登录、上传、导入、批量写入等接口的边界保护
 
+如果要为 API 路由补充瞬时失败重试，可以按 route 维度声明 `governance.retry.*`：
+
+```yaml
+platform:
+  gateway:
+    projects:
+      village-care:
+        routes:
+          open:
+            governance:
+              retry:
+                enabled: true
+                retries: 2
+                methods:
+                  - GET
+                statuses:
+                  - 502
+                  - 503
+                  - 504
+                exceptions:
+                  - io
+                  - timeout
+                backoff:
+                  first-backoff: 20ms
+                  max-backoff: 200ms
+                  factor: 2
+                  based-on-previous-value: true
+```
+
+建议把重试只用于显式可重放的读请求或幂等请求，不要默认给扣款、下单、状态变更这类写接口打开重试。
+
+如果要做灰度或蓝绿发布，还需要把“流量染色”和“发布变体”一起配好：
+
+```yaml
+platform:
+  gateway:
+    traffic-color:
+      enabled: true
+      header-name: X-Traffic-Color
+      response-header-enabled: true
+      trust-request-header: false
+      default-color: stable
+      rules:
+        - name: canary-header
+          source: header
+          field-name: X-Canary
+          pattern: true
+          match-strategy: exact
+          color: green
+    projects:
+      village-care:
+        routes:
+          open:
+            release:
+              variants:
+                green:
+                  service-uri: http://127.0.0.1:29080
+                  actuator-uri: http://127.0.0.1:29080
+                  match-colors:
+                    - green
+```
+
+网关会先算出当前请求的 `X-Traffic-Color`，再用这个颜色优先命中发布变体；如果没有变体命中，流量会自动回落到默认上游。
+
 ## 4. 标准接入步骤
 
 ### 第一步：给项目和路由定名
@@ -181,7 +250,60 @@ auth:
 - `/api/game/admin/auth/login` 可匿名访问
 - `/api/game/admin/**` 下的其他路径仍然受认证保护
 
-### 第四步：启动网关
+### 第四步：对齐 Trace 约定
+
+平台网关不再单独造一套 Trace 规则，直接复用 `getboot-observability` 的约定。
+
+推荐直接保持默认配置：
+
+```yaml
+getboot:
+  observability:
+    trace:
+      enabled: true
+      header-name: X-Trace-Id
+      request-header-propagation-enabled: true
+      response-header-enabled: true
+```
+
+联动规则很简单：
+
+- 客户端已带 `X-Trace-Id`，网关直接复用，并继续透传给上游。
+- 客户端没带 `X-Trace-Id`，网关生成新的 TraceId，并补齐到请求头和响应头。
+- 下游如果也接了 `getboot-observability`，会自动沿用同一个 TraceId。
+- 下游如果没接 `getboot-observability`，也应该至少读取并继续透传同一个 Trace 头。
+
+这里最重要的不是“网关自己有 Trace”，而是整个调用链只认一套 header 名称，不要网关一套、下游另一套。
+
+### 第五步：按需配置重试治理
+
+重试治理只作用在 API 路由，适合处理瞬时网络波动、上游短暂 `502/503/504` 这类场景。
+
+接入时建议先确定三件事：
+
+- 当前 route 是否真的允许自动重试
+- 哪些方法可以重试，优先限制在 `GET` 或明确幂等的方法
+- 失败判定条件是按状态码、状态码分组还是异常类型触发
+
+如果还没把上游幂等性边界想清楚，就先不要开重试。
+
+### 第六步：配置流量染色与发布变体
+
+这一步决定平台网关能不能真正支撑生产发布。
+
+建议按这个顺序理解：
+
+- 先定义流量颜色头，默认就是 `X-Traffic-Color`
+- 再决定颜色从哪里来，按 header、cookie 还是 query 染色
+- 最后给需要灰度 / 蓝绿发布的 route 挂发布变体
+
+一个比较稳妥的默认策略是：
+
+- 外部公网请求先不直接信任 `X-Traffic-Color`，由网关根据规则生成
+- 内部联调或多跳网关场景，再按需开启 `trust-request-header`
+- 变体只挂在 API 路由上，不额外改变认证、方法限制和请求体约束
+
+### 第七步：启动网关
 
 本地调试可以直接基于示例配置启动：
 
@@ -196,7 +318,7 @@ java -jar platform-gateway-server/target/platform-gateway-1.0.0-SNAPSHOT.jar \
 - `platform-gateway-server/src/main/resources/application.yml`
 - `platform-gateway-server/src/main/resources/application-local.example.yml`
 
-## 5. 联调时先验这四个点
+## 5. 联调时先验这些关键点
 
 建议先跑最小联调闭环，不要一上来就拿完整业务流压测：
 
@@ -204,8 +326,13 @@ java -jar platform-gateway-server/target/platform-gateway-1.0.0-SNAPSHOT.jar \
 2. 受保护路由的认证结果符合预期。
 3. 方法白名单在不符合约束时返回 `405` 和 `Allow`。
 4. 请求体超限时返回 `413`。
-5. 内部运维入口只能走 `/internal/**`。
-6. Actuator 路由目录和实际配置一致。
+5. 客户端自带 `X-Trace-Id` 时，网关响应头和下游日志里仍然是同一个 TraceId。
+6. 客户端不带 TraceId 时，网关会自动生成并在响应头里回写。
+7. 如果启用了流量染色，网关响应头里的 `X-Traffic-Color` 和预期一致。
+8. 如果当前 route 配了灰度 / 蓝绿变体，带颜色的请求能命中正确上游。
+9. 如果当前 route 开了重试，瞬时失败会按预期重试，而且只作用在显式允许的方法上。
+10. 内部运维入口只能走 `/internal/**`。
+11. Actuator 路由目录和实际配置一致。
 
 示例命令：
 
@@ -214,6 +341,8 @@ curl -i http://127.0.0.1:18082/api/game/open/system/ping
 curl -i http://127.0.0.1:18082/api/game/admin/system/ping
 curl -i -X DELETE http://127.0.0.1:18082/api/game/admin/games/catalog
 curl -i -X POST http://127.0.0.1:18082/api/game/admin/import/jobs --data-binary @large-payload.json
+curl -i -H 'X-Trace-Id: trace-demo-001' http://127.0.0.1:18082/api/game/open/system/ping
+curl -i -H 'X-Canary: true' http://127.0.0.1:18082/api/game/open/system/ping
 curl -i http://127.0.0.1:18082/internal/game/admin/actuator/health
 curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 ```
@@ -222,6 +351,15 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 
 - `apiPrefix`
 - `internalPrefix`
+- `contextHeaders.enabled`
+- `contextHeaders.projectHeaderName`
+- `contextHeaders.routeHeaderName`
+- `trafficColor.enabled`
+- `trafficColor.headerName`
+- `trafficColor.defaultColor`
+- `trafficColor.rules[].source`
+- `trafficColor.rules[].fieldName`
+- `trafficColor.rules[].color`
 - `projects[].projectKey`
 - `projects[].routes[].apiPathRoots`
 - `projects[].routes[].internalPathRoots`
@@ -233,6 +371,20 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - `projects[].routes[].publicPaths`
 - `projects[].routes[].connectTimeoutMs`
 - `projects[].routes[].responseTimeoutMs`
+- `projects[].routes[].retry.enabled`
+- `projects[].routes[].retry.retries`
+- `projects[].routes[].retry.methods`
+- `projects[].routes[].retry.statuses`
+- `projects[].routes[].retry.series`
+- `projects[].routes[].retry.exceptions`
+- `projects[].routes[].retry.backoff.firstBackoffMs`
+- `projects[].routes[].retry.backoff.maxBackoffMs`
+- `projects[].routes[].retry.backoff.factor`
+- `projects[].routes[].retry.backoff.basedOnPreviousValue`
+- `projects[].routes[].releaseVariants[].variantKey`
+- `projects[].routes[].releaseVariants[].matchColors`
+- `projects[].routes[].releaseVariants[].serviceUri`
+- `projects[].routes[].releaseVariants[].actuatorUri`
 
 ## 6. 接入方最容易踩的坑
 
@@ -281,7 +433,42 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - 调用方传输的真实体积是否和预估一致
 - `/actuator/platformGatewayRoutes` 暴露出来的字节上限是否正确
 
-### 5) `/internal/**` 调不通
+### 5) TraceId 前后不一致
+
+优先检查：
+
+- 网关和下游项目的 `getboot.observability.trace.header-name` 是否一致
+- 网关是否开启了 `request-header-propagation-enabled` 和 `response-header-enabled`
+- 下游服务是不是又自己生成了一次新的 TraceId
+- 浏览器场景下，CORS 的 `exposed-headers` 是否暴露了 `X-Trace-Id`
+
+如果下游没接 `getboot-observability`，也至少要保证它会读取当前请求头里的 TraceId，并继续往自己的下游传。
+
+### 6) 重试没生效，或者重试到了不该重试的请求
+
+优先检查：
+
+- 当前配置的是不是 API 路由；`/internal/**` 不参与这套重试治理
+- `governance.retry.enabled` 是否开启
+- `methods` 是否包含当前请求方法
+- `statuses`、`series`、`exceptions` 是否真的覆盖到了当前失败场景
+- `retries` 和 `backoff.*` 是否设置得过于保守或过大
+
+如果这是写请求，先回到业务幂等性设计本身，不要用网关重试去赌正确性。
+
+### 7) 灰度 / 蓝绿流量没有命中预期变体
+
+优先检查：
+
+- `platform.gateway.traffic-color.enabled` 是否开启
+- 网关响应头里的 `X-Traffic-Color` 实际算出来是什么
+- 染色规则取值来源、字段名和匹配模式是否真的命中了当前请求
+- `release.variants.<variant>.match-colors` 是否覆盖了当前颜色
+- 变体上游地址是否已配置，并且变体路由在 `/actuator/platformGatewayRoutes` 里可见
+
+如果响应头里的 `X-Traffic-Color` 已经正确，但流量仍然走默认上游，优先查发布变体配置；如果响应头本身就不对，先回去查染色规则。
+
+### 8) `/internal/**` 调不通
 
 优先检查：
 
@@ -290,7 +477,7 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - 上游服务是否真的暴露了 actuator 端点
 - 上游健康检查路径是否与 `platform.gateway.health.path` 对齐
 
-### 6) 前端跨域失败
+### 9) 前端跨域失败
 
 优先检查：
 
@@ -301,6 +488,17 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - `exposed-headers`
 
 本地联调时默认配置已经放开了 `localhost` 和 `127.0.0.1`。
+
+### 10) 中文响应出现乱码
+
+优先检查：
+
+- 响应头里的 `Content-Type` 是否包含 `application/json;charset=UTF-8`
+- 认证失败、方法拦截、内部入口拦截这类网关直接返回的响应，是否走到了网关默认 JSON 输出
+- 如果启用了 Sentinel Gateway fallback，fallback 的 `content-type` 是否也明确写成 UTF-8
+- 前端或调用方是否强行按错误编码解析了响应体
+
+当前仓库默认已经把网关错误响应的 JSON `Content-Type` 固定为 `application/json;charset=UTF-8`。
 
 ## 7. 观测与排障入口
 
@@ -316,6 +514,8 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 1. 先看 `/actuator/health`，确认网关自身是活的。
 2. 再看 `/actuator/platformGatewayRoutes`，确认路由已经按预期编译生效。
 3. 再访问目标 `/api/**` 或 `/internal/**` 路径，判断是网关拦截还是上游报错。
+4. 如果发布链路有问题，先看响应头里的 `X-Traffic-Color`，再看 `/actuator/platformGatewayRoutes` 里的发布变体。
+5. 如果链路排查需要串日志，直接看请求头和响应头里的 `X-Trace-Id` 是否贯通。
 
 ## 8. 上线前检查清单
 
@@ -327,6 +527,12 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - 需要受限的方法已经写入 `api-methods` / `internal-methods`
 - 大报文接口已经写入合适的 `api-max-request-size` / `internal-max-request-size`
 - `auth.public-paths` 使用的是相对路径
+- 网关和下游的 Trace 头约定已经统一，默认使用 `X-Trace-Id`
+- 浏览器场景已确认 `X-Trace-Id` 在 CORS `exposed-headers` 里可见
+- 流量染色规则已经验证，`X-Traffic-Color` 的值和预期一致
+- 浏览器场景已确认 `X-Traffic-Color` 在 CORS `exposed-headers` 里可见
+- 灰度 / 蓝绿发布变体已经验证，染色请求会命中正确上游
+- 开启重试的 route 已确认是可安全重放的请求，并验证过失败触发条件
 - `connect-timeout-ms` 和 `response-timeout` 已按上游实际延迟设置
 - `/actuator/platformGatewayRoutes` 返回内容和配置一致
 - `/api/**` 和 `/internal/**` 的联调命令已经跑通

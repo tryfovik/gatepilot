@@ -70,10 +70,12 @@ platform:
 - 路由级认证策略：每条路由可声明 `auth.required` 与 `auth.public-paths`，不再用硬编码路径散落在过滤器里。
 - 路由级超时治理：支持 `connect-timeout-ms` 和 `response-timeout`，直接下沉为 Gateway route metadata。
 - 路由级流量治理：每条 API 路由可声明 `governance.flow-control.*`，启动时自动装载为 Sentinel Gateway API 分组和流控规则。
+- 流量染色透传：支持按 header / cookie / query 规则计算 `X-Traffic-Color`，并向下游与响应头统一透传。
+- 路由级发布变体：每条 API 路由可声明 `release.variants.*`，按流量颜色优先命中灰度、蓝绿等发布槽位。
 - 平台上下文透传：默认向上游注入 `X-Platform-Project`、`X-Platform-Route`。
 - 内部入口隔离：运维入口统一收敛在 `/internal/**`，不对公网业务路径混放。
-- 上游健康聚合：`gatewayUpstreams` 会主动检查各路由的 actuator 健康状态。
-- 生效路由目录：新增 Actuator 端点 `/actuator/platformGatewayRoutes`，可直接查看当前生效的项目、路径、认证策略、流控策略、超时和上游配置。
+- 上游健康聚合：`gatewayUpstreams` 会主动检查各路由及其发布变体的 actuator 健康状态。
+- 生效路由目录：新增 Actuator 端点 `/actuator/platformGatewayRoutes`，可直接查看当前生效的项目、路径、认证策略、流控策略、重试策略、流量染色和发布变体。
 
 ## 配置说明
 
@@ -105,6 +107,10 @@ platform:
   当前路由的 Sentinel 流控策略，包括 QPS、突发额度、控制行为和热点参数维度限流。
 - `projects.<project>.routes.<route>.governance.retry.*`
   当前 API 路由的重试与退避策略，包括次数、方法、状态码、异常和退避参数。
+- `traffic-color.*`
+  全局流量染色规则，包括颜色头名称、是否信任请求头、默认颜色以及按 header / cookie / query 的染色规则。
+- `projects.<project>.routes.<route>.release.variants.*`
+  当前 API 路由的发布变体，按流量颜色命中不同上游，可用于灰度和蓝绿发布。
 - `projects.<project>.routes.<route>.connect-timeout-ms`
   路由连接超时。
 - `projects.<project>.routes.<route>.response-timeout`
@@ -117,12 +123,14 @@ platform:
 
 ## 快速接入
 
-如果是新项目首次接入，至少需要明确四件事：
+如果是新项目首次接入，至少需要明确六件事：
 
 - 这个项目在网关里的标准入口名，例如 `game`
 - 这个项目下要暴露的路由入口，例如 `admin`、`open`
 - 每条路由对应的业务上游地址和上游路径前缀
 - 每条路由是否强制认证、哪些相对路径允许匿名访问
+- 是否需要在网关入口做流量染色，以及染色规则按 header、cookie 还是 query 生效
+- 哪些路由需要灰度 / 蓝绿发布变体，以及这些变体分别对应哪个上游
 
 最小配置示例：
 
@@ -187,6 +195,55 @@ platform:
 
 完整接入步骤、联调命令和排障说明见 [接入手册](docs/integration-guide.md)。
 
+## 灰度 / 蓝绿发布
+
+平台网关把“流量染色”和“发布变体”拆成两层能力：
+
+- 入口先通过 `platform.gateway.traffic-color.*` 计算当前请求的流量颜色。
+- API 路由再通过 `platform.gateway.projects.<project>.routes.<route>.release.variants.*` 按颜色命中具体发布槽位。
+
+这样可以直接覆盖三类真实场景：
+
+- 流量染色：网关按 header / cookie / query 给请求打 `X-Traffic-Color`。
+- 全链路灰度：同一个 `X-Traffic-Color` 会继续透传给下游，下游再调用其他服务时也能沿用。
+- 蓝绿发布：默认上游承接主流量，变体上游承接指定颜色流量；切流时只需要调整默认上游与变体配置。
+
+示例配置：
+
+```yaml
+platform:
+  gateway:
+    traffic-color:
+      enabled: true
+      header-name: X-Traffic-Color
+      response-header-enabled: true
+      trust-request-header: false
+      default-color: stable
+      rules:
+        - name: canary-header
+          source: header
+          field-name: X-Canary
+          pattern: true
+          match-strategy: exact
+          color: green
+    projects:
+      game:
+        routes:
+          open:
+            service-uri: http://127.0.0.1:18080
+            service-path-prefix: /open
+            actuator-uri: http://127.0.0.1:18080
+            release:
+              variants:
+                green:
+                  service-uri: http://127.0.0.1:28080
+                  actuator-uri: http://127.0.0.1:28080
+                  match-colors:
+                    - green
+```
+
+这套模型里，`green` 颜色会优先命中绿色变体；其他流量仍然回落到默认上游。浏览器联调时，响应头里也能直接看见 `X-Traffic-Color`。
+
 ## Trace 联动
 
 平台网关不自造另一套 Trace 体系，直接复用 `getboot-observability` 的入口 Trace 约定。
@@ -222,7 +279,7 @@ getboot:
 - `/actuator/health/readiness`
 - `/actuator/platformGatewayRoutes`
 
-其中 `/actuator/platformGatewayRoutes` 会返回当前生效的项目、路由、路径根、认证策略、超时和流控策略，适合在联调和变更发布后做快速核对。
+其中 `/actuator/platformGatewayRoutes` 会返回当前生效的项目、路由、路径根、认证策略、超时、流量染色和发布变体，适合在联调和变更发布后做快速核对。
 
 路由级流控示例：
 

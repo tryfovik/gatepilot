@@ -2,6 +2,7 @@ package com.dt.platform.gateway.infrastructure.security;
 
 import com.dt.platform.gateway.infrastructure.config.GatewayProperties;
 import com.dt.platform.gateway.infrastructure.route.GatewayRouteDefinitionLocator;
+import com.dt.platform.gateway.infrastructure.traffic.GatewayTrafficColorFilter;
 import com.getboot.auth.spi.SaTokenWebFluxAuthChecker;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +21,19 @@ import java.util.List;
  */
 @Configuration
 public class GatewaySecurityConfiguration {
+
+    /**
+     * 注册流量染色过滤器。
+     *
+     * @param properties 网关配置
+     * @return 流量染色过滤器
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 1)
+    @ConditionalOnProperty(prefix = "platform.gateway.traffic-color", name = "enabled", havingValue = "true")
+    public WebFilter gatewayTrafficColorFilter(GatewayProperties properties) {
+        return new GatewayTrafficColorFilter(properties.getTrafficColor());
+    }
 
     /**
      * 注册内部运维入口保护过滤器。

@@ -70,7 +70,8 @@ public class GatewayRouteCatalogEndpoint {
                     definition.getConnectTimeoutMs(),
                     definition.getResponseTimeout() == null ? null : definition.getResponseTimeout().toMillis(),
                     buildFlowControlView(definition, routeProperties),
-                    buildRetryView(definition)
+                    buildRetryView(definition),
+                    buildReleaseVariantViews(definition)
             ));
         }
         return new GatewayRouteCatalogView(
@@ -81,6 +82,7 @@ public class GatewayRouteCatalogEndpoint {
                         properties.getContextHeaders().getProjectHeaderName(),
                         properties.getContextHeaders().getRouteHeaderName()
                 ),
+                buildTrafficColorView(),
                 projects.values().stream()
                         .map(ProjectAccumulator::toView)
                         .toList()
@@ -135,6 +137,43 @@ public class GatewayRouteCatalogEndpoint {
         );
     }
 
+    private TrafficColorView buildTrafficColorView() {
+        GatewayProperties.TrafficColorProperties trafficColor = properties.getTrafficColor();
+        return new TrafficColorView(
+                trafficColor.isEnabled(),
+                trafficColor.getHeaderName(),
+                trafficColor.isResponseHeaderEnabled(),
+                trafficColor.isTrustRequestHeader(),
+                trafficColor.getDefaultColor(),
+                trafficColor.getRules().stream()
+                        .filter(java.util.Objects::nonNull)
+                        .filter(GatewayProperties.TrafficColorRuleProperties::isEnabled)
+                        .map(rule -> new TrafficColorRuleView(
+                                rule.getName(),
+                                rule.getSource(),
+                                rule.getFieldName(),
+                                rule.getPattern(),
+                                rule.getMatchStrategy(),
+                                rule.getColor()
+                        ))
+                        .toList()
+        );
+    }
+
+    private List<ReleaseVariantView> buildReleaseVariantViews(GatewayRouteDefinition definition) {
+        return definition.getReleaseVariants().stream()
+                .map(variant -> new ReleaseVariantView(
+                        variant.variantKey(),
+                        variant.matchColors(),
+                        variant.serviceUri(),
+                        variant.servicePathPrefix(),
+                        variant.actuatorUri(),
+                        variant.connectTimeoutMs(),
+                        variant.responseTimeout() == null ? null : variant.responseTimeout().toMillis()
+                ))
+                .toList();
+    }
+
     private record ProjectAccumulator(String projectKey,
                                       String pathSegment,
                                       String displayName,
@@ -155,11 +194,13 @@ public class GatewayRouteCatalogEndpoint {
      * @param apiPrefix API 前缀
      * @param internalPrefix 内部前缀
      * @param contextHeaders 上下文头配置
+     * @param trafficColor 流量染色配置
      * @param projects 项目路由目录
      */
     public record GatewayRouteCatalogView(String apiPrefix,
                                           String internalPrefix,
                                           ContextHeadersView contextHeaders,
+                                          TrafficColorView trafficColor,
                                           List<ProjectView> projects) {
     }
 
@@ -173,6 +214,42 @@ public class GatewayRouteCatalogEndpoint {
     public record ContextHeadersView(boolean enabled,
                                      String projectHeaderName,
                                      String routeHeaderName) {
+    }
+
+    /**
+     * 流量染色视图。
+     *
+     * @param enabled 是否启用
+     * @param headerName 流量颜色头
+     * @param responseHeaderEnabled 是否回写响应头
+     * @param trustRequestHeader 是否信任请求头
+     * @param defaultColor 默认颜色
+     * @param rules 染色规则
+     */
+    public record TrafficColorView(boolean enabled,
+                                   String headerName,
+                                   boolean responseHeaderEnabled,
+                                   boolean trustRequestHeader,
+                                   String defaultColor,
+                                   List<TrafficColorRuleView> rules) {
+    }
+
+    /**
+     * 流量染色规则视图。
+     *
+     * @param name 规则名称
+     * @param source 取值来源
+     * @param fieldName 字段名称
+     * @param pattern 匹配模式
+     * @param matchStrategy 匹配策略
+     * @param color 命中颜色
+     */
+    public record TrafficColorRuleView(String name,
+                                       String source,
+                                       String fieldName,
+                                       String pattern,
+                                       String matchStrategy,
+                                       String color) {
     }
 
     /**
@@ -209,6 +286,7 @@ public class GatewayRouteCatalogEndpoint {
      * @param responseTimeoutMs 响应超时
      * @param flowControl 路由流控策略
      * @param retry 路由重试策略
+     * @param releaseVariants 发布变体
      */
     public record RouteView(String routeKey,
                             String pathSegment,
@@ -226,7 +304,8 @@ public class GatewayRouteCatalogEndpoint {
                             Integer connectTimeoutMs,
                             Long responseTimeoutMs,
                             FlowControlView flowControl,
-                            RetryView retry) {
+                            RetryView retry,
+                            List<ReleaseVariantView> releaseVariants) {
     }
 
     /**
@@ -299,5 +378,25 @@ public class GatewayRouteCatalogEndpoint {
                                    Long maxBackoffMs,
                                    int factor,
                                    boolean basedOnPreviousValue) {
+    }
+
+    /**
+     * 发布变体视图。
+     *
+     * @param variantKey 变体标识
+     * @param matchColors 命中的流量颜色
+     * @param serviceUri 变体 API 上游地址
+     * @param servicePathPrefix 变体 API 上游路径前缀
+     * @param actuatorUri 变体 Actuator 地址
+     * @param connectTimeoutMs 变体连接超时
+     * @param responseTimeoutMs 变体响应超时
+     */
+    public record ReleaseVariantView(String variantKey,
+                                     List<String> matchColors,
+                                     URI serviceUri,
+                                     String servicePathPrefix,
+                                     URI actuatorUri,
+                                     Integer connectTimeoutMs,
+                                     Long responseTimeoutMs) {
     }
 }

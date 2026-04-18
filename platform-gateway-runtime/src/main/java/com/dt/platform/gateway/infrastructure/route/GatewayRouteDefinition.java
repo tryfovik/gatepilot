@@ -7,6 +7,7 @@ import org.springframework.web.util.pattern.PathPatternParser;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -53,6 +54,8 @@ public final class GatewayRouteDefinition {
 
     private final RetryPolicy retryPolicy;
 
+    private final List<ReleaseVariant> releaseVariants;
+
     private final boolean authRequired;
 
     private final List<String> publicApiPaths;
@@ -77,6 +80,7 @@ public final class GatewayRouteDefinition {
                            List<String> internalMethods,
                            DataSize internalMaxRequestSize,
                            RetryPolicy retryPolicy,
+                           List<ReleaseVariant> releaseVariants,
                            boolean authRequired,
                            List<String> publicApiPatterns,
                            Integer connectTimeoutMs,
@@ -97,6 +101,7 @@ public final class GatewayRouteDefinition {
         this.internalMethodSet = Set.copyOf(this.internalMethods);
         this.internalMaxRequestSize = internalMaxRequestSize;
         this.retryPolicy = sanitizeRetryPolicy(retryPolicy);
+        this.releaseVariants = sanitizeReleaseVariants(releaseVariants);
         this.authRequired = authRequired;
         this.publicApiPaths = List.copyOf(publicApiPatterns);
         this.publicApiPatterns = this.publicApiPaths.stream()
@@ -161,6 +166,10 @@ public final class GatewayRouteDefinition {
 
     public RetryPolicy getRetryPolicy() {
         return retryPolicy;
+    }
+
+    public List<ReleaseVariant> getReleaseVariants() {
+        return releaseVariants;
     }
 
     public boolean isAuthRequired() {
@@ -294,6 +303,18 @@ public final class GatewayRouteDefinition {
     }
 
     /**
+     * 构造发布变体路由标识。
+     *
+     * @param routeType 路由类型
+     * @param routePathRoot 路由根路径
+     * @param variantKey 发布变体标识
+     * @return 路由标识
+     */
+    public String buildRouteId(String routeType, String routePathRoot, String variantKey) {
+        return buildRouteId(routeType, routePathRoot) + "-" + sanitize(variantKey);
+    }
+
+    /**
      * 构造当前路由在治理系统中的 API 分组资源名。
      *
      * @return 治理 API 分组资源名
@@ -314,6 +335,15 @@ public final class GatewayRouteDefinition {
                                Duration maxBackoff,
                                int factor,
                                boolean basedOnPreviousValue) {
+    }
+
+    public record ReleaseVariant(String variantKey,
+                                 List<String> matchColors,
+                                 URI serviceUri,
+                                 String servicePathPrefix,
+                                 URI actuatorUri,
+                                 Integer connectTimeoutMs,
+                                 Duration responseTimeout) {
     }
 
     private boolean matchesPathRoot(String requestPath, String pathRoot) {
@@ -362,6 +392,32 @@ public final class GatewayRouteDefinition {
         );
     }
 
+    private List<ReleaseVariant> sanitizeReleaseVariants(List<ReleaseVariant> variants) {
+        if (variants == null || variants.isEmpty()) {
+            return List.of();
+        }
+        List<ReleaseVariant> sanitized = new ArrayList<>();
+        for (ReleaseVariant variant : variants) {
+            if (variant == null) {
+                continue;
+            }
+            String variantKey = sanitizeVariantKey(variant.variantKey());
+            if (variantKey == null) {
+                continue;
+            }
+            sanitized.add(new ReleaseVariant(
+                    variantKey,
+                    sanitizeLiterals(variant.matchColors()),
+                    variant.serviceUri(),
+                    variant.servicePathPrefix(),
+                    variant.actuatorUri(),
+                    variant.connectTimeoutMs(),
+                    variant.responseTimeout()
+            ));
+        }
+        return List.copyOf(sanitized);
+    }
+
     private List<Integer> sanitizeIntegers(List<Integer> values) {
         if (values == null || values.isEmpty()) {
             return List.of();
@@ -408,5 +464,12 @@ public final class GatewayRouteDefinition {
 
     private String sanitize(String value) {
         return value == null ? "route" : value.replaceAll("[^a-zA-Z0-9-]", "-");
+    }
+
+    private String sanitizeVariantKey(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim().toLowerCase(Locale.ROOT);
     }
 }
