@@ -2,7 +2,9 @@ package com.dt.platform.gateway;
 
 import com.dt.platform.gateway.infrastructure.config.GatewayProperties;
 import com.dt.platform.gateway.infrastructure.security.InternalRouteAccessFilter;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
@@ -31,6 +33,8 @@ class InternalRouteAccessFilterTest {
         filter.filter(exchange, exchange1 -> Mono.empty()).block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        Assertions.assertEquals(MediaType.parseMediaType("application/json;charset=UTF-8"),
+                exchange.getResponse().getHeaders().getContentType());
     }
 
     @Test

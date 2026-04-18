@@ -20,6 +20,9 @@ import java.nio.charset.StandardCharsets;
  */
 public class InternalRouteAccessFilter implements WebFilter {
 
+    private static final MediaType RESPONSE_CONTENT_TYPE =
+            MediaType.parseMediaType("application/json;charset=UTF-8");
+
     /**
      * 未授权响应体。
      */
@@ -97,7 +100,7 @@ public class InternalRouteAccessFilter implements WebFilter {
      */
     private Mono<Void> writeForbidden(ServerWebExchange exchange) {
         exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
-        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        exchange.getResponse().getHeaders().setContentType(RESPONSE_CONTENT_TYPE);
         return exchange.getResponse()
                 .writeWith(Mono.just(exchange.getResponse().bufferFactory().wrap(FORBIDDEN_RESPONSE)));
     }

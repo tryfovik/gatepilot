@@ -6,6 +6,7 @@ import com.dt.platform.gateway.infrastructure.security.GatewayMethodAccessFilter
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
@@ -48,6 +49,8 @@ class GatewayMethodAccessFilterTest {
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
         assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.ALLOW)).isEqualTo("GET, POST");
+        assertThat(exchange.getResponse().getHeaders().getContentType())
+                .isEqualTo(MediaType.parseMediaType("application/json;charset=UTF-8"));
     }
 
     @Test
@@ -62,6 +65,8 @@ class GatewayMethodAccessFilterTest {
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
         assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.ALLOW)).isEqualTo("GET");
+        assertThat(exchange.getResponse().getHeaders().getContentType())
+                .isEqualTo(MediaType.parseMediaType("application/json;charset=UTF-8"));
     }
 
     @Test

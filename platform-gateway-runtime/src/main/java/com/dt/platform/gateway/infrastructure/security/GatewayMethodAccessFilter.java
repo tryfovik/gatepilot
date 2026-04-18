@@ -20,6 +20,9 @@ import java.util.Optional;
  */
 public class GatewayMethodAccessFilter implements WebFilter {
 
+    private static final MediaType RESPONSE_CONTENT_TYPE =
+            MediaType.parseMediaType("application/json;charset=UTF-8");
+
     private static final byte[] METHOD_NOT_ALLOWED_RESPONSE =
             "{\"status\":\"fail\",\"code\":405,\"message\":\"Method Not Allowed\"}".getBytes(StandardCharsets.UTF_8);
 
@@ -66,7 +69,7 @@ public class GatewayMethodAccessFilter implements WebFilter {
 
     private Mono<Void> writeMethodNotAllowed(ServerWebExchange exchange, List<String> allowedMethods) {
         exchange.getResponse().setStatusCode(HttpStatus.METHOD_NOT_ALLOWED);
-        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        exchange.getResponse().getHeaders().setContentType(RESPONSE_CONTENT_TYPE);
         exchange.getResponse().getHeaders().set(HttpHeaders.ALLOW, String.join(", ", allowedMethods));
         return exchange.getResponse()
                 .writeWith(Mono.just(exchange.getResponse().bufferFactory().wrap(METHOD_NOT_ALLOWED_RESPONSE)));
