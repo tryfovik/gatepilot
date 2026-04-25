@@ -1,7 +1,10 @@
 package com.dt.gatepilot.controller.infrastructure.scheduling;
 
+import com.dt.gatepilot.controller.infrastructure.config.ControllerManagerConstants;
 import com.dt.gatepilot.controller.infrastructure.config.GatePilotControllerManagerProperties;
-import com.dt.gatepilot.controller.application.service.ReleaseReconcileController;
+import com.getboot.lock.api.exception.DistributedLockException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**
@@ -9,20 +12,22 @@ import org.springframework.scheduling.annotation.Scheduled;
  */
 public class ReleaseReconcileScheduler {
 
+    private static final Logger log = LoggerFactory.getLogger(ReleaseReconcileScheduler.class);
+
     private final GatePilotControllerManagerProperties properties;
 
-    private final ReleaseReconcileController reconcileController;
+    private final ReleaseReconcileExecutor reconcileExecutor;
 
     /**
      * 创建发布意图定时 reconcile 调度器。
      *
      * @param properties controller-manager 配置
-     * @param reconcileController 发布意图 reconcile 控制器
+     * @param reconcileExecutor 发布 reconcile 执行器
      */
     public ReleaseReconcileScheduler(GatePilotControllerManagerProperties properties,
-                                     ReleaseReconcileController reconcileController) {
+                                     ReleaseReconcileExecutor reconcileExecutor) {
         this.properties = properties;
-        this.reconcileController = reconcileController;
+        this.reconcileExecutor = reconcileExecutor;
     }
 
     /**
@@ -33,6 +38,11 @@ public class ReleaseReconcileScheduler {
         if (!properties.isEnabled()) {
             return;
         }
-        reconcileController.reconcileBatch(properties.getBatchSize());
+        try {
+            reconcileExecutor.reconcileBatch(properties.getBatchSize());
+        } catch (DistributedLockException exception) {
+            // 多副本下抢不到锁是正常 standby 行为
+            log.debug(ControllerManagerConstants.MESSAGE_RECONCILE_LOCK_BUSY, exception);
+        }
     }
 }

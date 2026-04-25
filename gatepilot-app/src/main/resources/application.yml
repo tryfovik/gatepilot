@@ -17,6 +17,8 @@ management:
         enabled: true
 
 getboot:
+  lock:
+    enabled: false
   observability:
     trace:
       enabled: true

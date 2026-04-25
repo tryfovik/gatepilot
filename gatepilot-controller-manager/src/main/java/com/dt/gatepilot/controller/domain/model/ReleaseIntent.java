@@ -30,6 +30,16 @@ public class ReleaseIntent {
     private String version;
 
     /**
+     * 回滚目标版本。
+     */
+    private String targetVersion;
+
+    /**
+     * 回滚目标配置哈希。
+     */
+    private String targetConfigHash;
+
+    /**
      * 配置分片键。
      */
     private String configShard;

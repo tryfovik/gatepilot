@@ -55,4 +55,21 @@ public class PublishedConfigReconciler {
         result.setEvent(event);
         return result;
     }
+
+    /**
+     * 执行回滚 reconcile。
+     *
+     * @param request reconcile 请求
+     * @param sourceConfig 回滚目标快照中的已发布配置
+     * @return reconcile 结果
+     */
+    public ReconcileResult rollback(ReconcileRequest request, PublishedConfig sourceConfig) {
+        PublishedConfig publishedConfig = assembler.assembleRollback(request, sourceConfig);
+        GatewayEvent event = eventFactory.rollbackConfigGenerated(publishedConfig, sourceConfig);
+        ReconcileResult result = new ReconcileResult();
+        // 回滚结果仍写入 PublishedConfig，后续 agent/proxy 无需识别特殊链路
+        result.setPublishedConfig(publishedConfig);
+        result.setEvent(event);
+        return result;
+    }
 }

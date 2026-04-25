@@ -24,7 +24,8 @@ public class ReleaseEventFactory {
         GatewayEvent event = new GatewayEvent();
         // 事件名跟版本绑定，便于按发布版本排查
         event.getMetadata().setNamespace(publishedConfig.getMetadata().getNamespace());
-        event.getMetadata().setName("event-" + publishedConfig.getSpec().getVersion());
+        event.getMetadata().setName(ReleaseEventFactoryConstants.EVENT_NAME_PREFIX
+                + publishedConfig.getSpec().getVersion());
         event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_EVENT_TYPE,
                 GatewayEventConstants.EVENT_TYPE_PUBLISHED_CONFIG_GENERATED);
         event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_VERSION,
@@ -33,7 +34,7 @@ public class ReleaseEventFactory {
         spec.setSeverity(EventSeverity.INFO);
         spec.setSource(GatewayEventConstants.SOURCE_CONTROLLER_MANAGER);
         spec.setReason(GatewayEventConstants.REASON_PUBLISHED_CONFIG_GENERATED);
-        spec.setMessage("controller-manager 已生成 PublishedConfig");
+        spec.setMessage(ReleaseEventFactoryConstants.MESSAGE_PUBLISHED_CONFIG_GENERATED);
         spec.setFirstObservedAt(Instant.now());
         spec.setLastObservedAt(spec.getFirstObservedAt());
         spec.setCount(1);
@@ -49,6 +50,23 @@ public class ReleaseEventFactory {
                 publishedConfig.getSpec().getConfigHash());
         spec.getAttributes().put(GatewayEventConstants.ATTRIBUTE_CONFIG_SHARD,
                 publishedConfig.getSpec().getConfigShard());
+        return event;
+    }
+
+    /**
+     * 创建回滚 PublishedConfig 已生成事件。
+     *
+     * @param publishedConfig 回滚发布配置
+     * @param sourceConfig 回滚来源配置
+     * @return 网关事件
+     */
+    public GatewayEvent rollbackConfigGenerated(PublishedConfig publishedConfig, PublishedConfig sourceConfig) {
+        GatewayEvent event = publishedConfigGenerated(publishedConfig);
+        // 回滚事件补充来源版本，方便控制台串联回滚链路
+        event.getSpec().setReason(GatewayEventConstants.REASON_ROLLBACK_CONFIG_GENERATED);
+        event.getSpec().setMessage(ReleaseEventFactoryConstants.MESSAGE_ROLLBACK_CONFIG_GENERATED);
+        event.getSpec().getAttributes().put(GatewayEventConstants.ATTRIBUTE_TARGET_VERSION,
+                sourceConfig.getSpec().getVersion());
         return event;
     }
 }

@@ -30,6 +30,11 @@ public class ReconcileRequest {
     private String version;
 
     /**
+     * 回滚目标版本。
+     */
+    private String targetVersion;
+
+    /**
      * 同一分片内单调递增序号。
      */
     private Long sequence;

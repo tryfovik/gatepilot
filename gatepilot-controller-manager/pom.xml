@@ -34,6 +34,16 @@
             <artifactId>spring-context</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.dt</groupId>
+            <artifactId>getboot-lock</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.dt</groupId>
+                    <artifactId>getboot-coordination</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <scope>provided</scope>

@@ -18,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -60,6 +62,51 @@ public class PublishedConfigAssembler {
         spec.setTargetNodeRefs(desiredState.getTargetNodes().stream().map(this::nodeRef).toList());
         spec.setConfigHash(hash(spec));
         config.getStatus().setDesiredNodeCount(desiredState.getTargetNodes().size());
+        config.getStatus().setAppliedNodeCount(0);
+        config.getStatus().setFailedNodeCount(0);
+        config.getStatus().setApplyState(ConfigApplyState.PENDING);
+        return config;
+    }
+
+    /**
+     * 组装回滚发布配置。
+     *
+     * @param request reconcile 请求
+     * @param sourceConfig 回滚目标快照中的已发布配置
+     * @return 已发布配置
+     */
+    public PublishedConfig assembleRollback(ReconcileRequest request, PublishedConfig sourceConfig) {
+        PublishedConfig config = new PublishedConfig();
+        // 回滚也生成新版本，agent 和 proxy 仍按普通 PublishedConfig 消费
+        config.getMetadata().setName(publishedConfigName(request.getVersion(), request.getConfigShard()));
+        config.getMetadata().setNamespace(request.getNamespace());
+        config.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_PROJECT, request.getProjectName());
+        if (request.getConfigShard() != null) {
+            config.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_CONFIG_SHARD,
+                    request.getConfigShard());
+        }
+        PublishedConfig.PublishedConfigSpec sourceSpec = sourceConfig.getSpec();
+        PublishedConfig.PublishedConfigSpec spec = config.getSpec();
+        spec.setProjectRef(Objects.requireNonNullElseGet(copyReference(sourceSpec.getProjectRef()),
+                () -> projectRef(request)));
+        spec.setVersion(request.getVersion());
+        spec.setConfigShard(request.getConfigShard());
+        spec.setSequence(request.getSequence());
+        spec.setFullSnapshot(true);
+        spec.setBaseVersion(request.getTargetVersion());
+        spec.setGeneratedAt(Instant.now());
+        spec.setMinAgentVersion(sourceSpec.getMinAgentVersion());
+        spec.setMinProxyVersion(sourceSpec.getMinProxyVersion());
+        spec.setRoutes(copyRoutes(sourceSpec.getRoutes()));
+        spec.setUpstreams(copyUpstreams(sourceSpec.getUpstreams()));
+        spec.setPolicies(copyPolicies(sourceSpec.getPolicies()));
+        spec.setTargetNodeRefs(copyReferences(sourceSpec.getTargetNodeRefs()));
+        spec.setTargetNodeSelector(sourceSpec.getTargetNodeSelector());
+        spec.setExtensions(new LinkedHashMap<>(sourceSpec.getExtensions()));
+        spec.getExtensions().put(PublishedConfigConstants.KEY_ROLLBACK_SOURCE_VERSION, sourceSpec.getVersion());
+        spec.getExtensions().put(PublishedConfigConstants.KEY_ROLLBACK_SOURCE_HASH, sourceSpec.getConfigHash());
+        spec.setConfigHash(hash(spec));
+        config.getStatus().setDesiredNodeCount(spec.getTargetNodeRefs().size());
         config.getStatus().setAppliedNodeCount(0);
         config.getStatus().setFailedNodeCount(0);
         config.getStatus().setApplyState(ConfigApplyState.PENDING);
@@ -219,6 +266,82 @@ public class PublishedConfigAssembler {
         reference.setName(name);
         reference.setUid(uid);
         return reference;
+    }
+
+    private List<PublishedConfig.PublishedRoute> copyRoutes(List<PublishedConfig.PublishedRoute> routes) {
+        return routes.stream().map(this::copyRoute).toList();
+    }
+
+    private PublishedConfig.PublishedRoute copyRoute(PublishedConfig.PublishedRoute route) {
+        PublishedConfig.PublishedRoute copy = new PublishedConfig.PublishedRoute();
+        // 回滚快照只复制 proxy 运行态需要的字段
+        copy.setRouteId(route.getRouteId());
+        copy.setSourceRef(copyReference(route.getSourceRef()));
+        copy.setProtocols(new ArrayList<>(route.getProtocols()));
+        copy.setHosts(new ArrayList<>(route.getHosts()));
+        copy.setPath(route.getPath());
+        copy.setMethods(new ArrayList<>(route.getMethods()));
+        copy.setStripPrefix(route.getStripPrefix());
+        copy.setRewritePathPrefix(route.getRewritePathPrefix());
+        copy.setAddHeaders(new LinkedHashMap<>(route.getAddHeaders()));
+        copy.setRemoveHeaders(new ArrayList<>(route.getRemoveHeaders()));
+        copy.setUpstreamName(route.getUpstreamName());
+        copy.setPolicyNames(new ArrayList<>(route.getPolicyNames()));
+        return copy;
+    }
+
+    private List<PublishedConfig.PublishedUpstream> copyUpstreams(List<PublishedConfig.PublishedUpstream> upstreams) {
+        return upstreams.stream().map(this::copyUpstream).toList();
+    }
+
+    private PublishedConfig.PublishedUpstream copyUpstream(PublishedConfig.PublishedUpstream upstream) {
+        PublishedConfig.PublishedUpstream copy = new PublishedConfig.PublishedUpstream();
+        // endpoint 列表复制一份，避免后续改写污染历史快照
+        copy.setName(upstream.getName());
+        copy.setSourceRef(copyReference(upstream.getSourceRef()));
+        copy.setProtocol(upstream.getProtocol());
+        copy.setLoadBalance(upstream.getLoadBalance());
+        copy.setEndpoints(upstream.getEndpoints().stream().map(this::copyEndpoint).toList());
+        return copy;
+    }
+
+    private PublishedConfig.PublishedEndpoint copyEndpoint(PublishedConfig.PublishedEndpoint endpoint) {
+        PublishedConfig.PublishedEndpoint copy = new PublishedConfig.PublishedEndpoint();
+        copy.setHost(endpoint.getHost());
+        copy.setPort(endpoint.getPort());
+        copy.setWeight(endpoint.getWeight());
+        return copy;
+    }
+
+    private List<PublishedConfig.PublishedPolicy> copyPolicies(List<PublishedConfig.PublishedPolicy> policies) {
+        return policies.stream().map(this::copyPolicy).toList();
+    }
+
+    private PublishedConfig.PublishedPolicy copyPolicy(PublishedConfig.PublishedPolicy policy) {
+        PublishedConfig.PublishedPolicy copy = new PublishedConfig.PublishedPolicy();
+        // 策略配置对象不在回滚流程内修改，外层 map 复制即可隔离新增扩展
+        copy.setName(policy.getName());
+        copy.setSourceRef(copyReference(policy.getSourceRef()));
+        copy.setType(policy.getType());
+        copy.setConfig(new LinkedHashMap<>(policy.getConfig()));
+        return copy;
+    }
+
+    private List<ResourceReference> copyReferences(List<ResourceReference> references) {
+        return references.stream().map(this::copyReference).toList();
+    }
+
+    private ResourceReference copyReference(ResourceReference reference) {
+        if (reference == null) {
+            return null;
+        }
+        ResourceReference copy = new ResourceReference();
+        // 资源引用按值复制，避免回滚发布污染历史快照
+        copy.setKind(reference.getKind());
+        copy.setNamespace(reference.getNamespace());
+        copy.setName(reference.getName());
+        copy.setUid(reference.getUid());
+        return copy;
     }
 
     private String hash(PublishedConfig.PublishedConfigSpec spec) {

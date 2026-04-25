@@ -205,6 +205,9 @@ controller-manager 与 apiserver 的关系：
 - 分服务部署时，controller-manager 通过 apiserver API 读写资源。
 - 单体合包部署时，controller-manager 可以使用进程内适配器读写同一份资源存储。
 - 无论哪种部署方式，controller-manager 应用层只能依赖自身 `domain.port`，不反向依赖 apiserver 的 Controller 或 Web 层。
+- 多副本 controller-manager 必须在调度批次入口接入 getboot-lock 分布式锁；发布事件 claim 是第二道防线，不能替代批次锁。
+- GatePilot 模块只默认依赖 getboot-lock 契约，不默认强制带入 getboot-coordination 运行实现；Redis / ZooKeeper 锁实现由具体部署包显式引入并配置。
+- 回滚推进只能读取已保存的 `GatewayConfigSnapshot` 中的 `PublishedConfig`，不能重新读取当前草稿资源拼出“伪回滚”。
 - apiserver 不能通过一个同步 Service 调用把整条发布链路跑完，否则发布推进职责会回流到 apiserver。
 
 ### gatepilot-agent
@@ -311,6 +314,12 @@ Console 页面设计必须遵守 [GatePilot Console 设计规范](console-design
 - 通用工具类。
 
 `gatepilot-embedded` 是为了保证 `gatepilot-app` 只做启动和静态资源装配，同时避免 apiserver 反向依赖 controller-manager。分服务部署不依赖这个模块。
+
+装配规则：
+
+- `gatepilot.mode=standalone` 时启用 `gatepilot-embedded`，用于单 JVM 合包运行。
+- `gatepilot.mode=cluster` 或未配置部署模式时不启用 `gatepilot-embedded`，避免 classpath 中存在模块就自动产生进程内桥接。
+- 禁止再新增 `gatepilot.embedded.enabled` 这类第二开关，单体和集群切换只能由 `gatepilot.mode` 决定。
 
 ### gatepilot-app
 
@@ -511,6 +520,7 @@ gatepilot-app
 
 要求：
 
+- 运行配置使用 `gatepilot.mode=standalone`。
 - app 只负责装配。
 - embedded 只负责进程内端口桥接。
 - 内部仍按模块接口协作。
@@ -530,6 +540,7 @@ gatepilot-console
 
 要求：
 
+- 运行配置使用 `gatepilot.mode=cluster`。
 - agent 跟 proxy 同节点或同 Pod 部署。
 - proxy 不直接连数据库。
 - proxy 不直接读草稿配置。

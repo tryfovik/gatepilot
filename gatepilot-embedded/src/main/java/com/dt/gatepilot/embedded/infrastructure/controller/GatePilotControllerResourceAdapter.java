@@ -25,12 +25,15 @@ import com.dt.gatepilot.controller.application.command.ReconcileResult;
 import com.dt.gatepilot.controller.domain.port.GatewayDesiredStateReader;
 import com.dt.gatepilot.controller.domain.port.ReconcileResultSink;
 import com.dt.gatepilot.controller.domain.port.ReleaseIntentSource;
+import com.dt.gatepilot.controller.domain.port.RollbackConfigReader;
 import com.dt.gatepilot.controller.domain.model.GatewayDesiredState;
 import com.dt.gatepilot.controller.domain.model.ReleaseIntent;
+import com.dt.gatepilot.embedded.infrastructure.config.GatePilotDeploymentModeConstants;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -38,8 +41,11 @@ import org.springframework.util.StringUtils;
  * controller-manager 使用的 apiserver 进程内资源适配器。
  */
 @Component
+@ConditionalOnProperty(prefix = GatePilotDeploymentModeConstants.CONFIG_PREFIX,
+        name = GatePilotDeploymentModeConstants.MODE_PROPERTY,
+        havingValue = GatePilotDeploymentModeConstants.MODE_STANDALONE)
 public class GatePilotControllerResourceAdapter
-        implements ReleaseIntentSource, GatewayDesiredStateReader, ReconcileResultSink {
+        implements ReleaseIntentSource, GatewayDesiredStateReader, ReconcileResultSink, RollbackConfigReader {
 
     private final GatePilotResourceService resourceService;
 
@@ -63,7 +69,7 @@ public class GatePilotControllerResourceAdapter
         // controller 每轮只领取有限数量，避免单副本长时间占用
         return list(GatePilotResourcePaths.EVENTS, null, GatewayEvent.class)
                 .stream()
-                .filter(this::isPendingCreateReleaseCommand)
+                .filter(this::isPendingReleaseIntent)
                 .limit(effectiveLimit)
                 .map(this::toReleaseIntent)
                 .toList();
@@ -72,7 +78,7 @@ public class GatePilotControllerResourceAdapter
     @Override
     public boolean claim(ReleaseIntent intent, String controllerId) {
         GatewayEvent event = loadSourceEvent(intent);
-        if (!isPendingCreateReleaseCommand(event)) {
+        if (!isPendingReleaseIntent(event)) {
             return false;
         }
         // claim 通过事件标签表达，后续数据库乐观锁会继续加强
@@ -96,8 +102,8 @@ public class GatePilotControllerResourceAdapter
                 GatewayEventConstants.RECONCILE_STATE_COMPLETED);
         event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_VERSION,
                 publishedConfig.getSpec().getVersion());
-        event.getSpec().setReason(GatewayEventConstants.REASON_RELEASE_RECONCILED);
-        event.getSpec().setMessage("controller-manager 已生成 PublishedConfig 并保存快照");
+        event.getSpec().setReason(completedReason(intent));
+        event.getSpec().setMessage(EmbeddedAdapterConstants.MESSAGE_RECONCILE_COMPLETED);
         event.getSpec().setSeverity(EventSeverity.INFO);
         event.getSpec().setLastObservedAt(Instant.now());
         event.getSpec().getAttributes().put(GatewayEventConstants.ATTRIBUTE_PUBLISHED_CONFIG_NAME,
@@ -138,6 +144,26 @@ public class GatePilotControllerResourceAdapter
         desiredState.setAuthPolicies(projectAuthPolicies(intent));
         desiredState.setTargetNodes(targetNodes(intent, project));
         return desiredState;
+    }
+
+    @Override
+    public PublishedConfig readRollbackConfig(ReleaseIntent intent) {
+        if (!StringUtils.hasText(intent.getTargetVersion())) {
+            throw new IllegalStateException(EmbeddedAdapterConstants.MESSAGE_ROLLBACK_TARGET_VERSION_REQUIRED);
+        }
+        // 回滚配置来自已保存快照，不读取当前草稿资源
+        GatewayConfigSnapshot snapshot = snapshotService.findSnapshot(intent.getNamespace(), intent.getProjectName(),
+                        intent.getTargetVersion(), intent.getConfigShard())
+                .orElseThrow(() -> new IllegalStateException(EmbeddedAdapterConstants.MESSAGE_ROLLBACK_SNAPSHOT_MISSING));
+        if (StringUtils.hasText(intent.getTargetConfigHash())
+                && !Objects.equals(intent.getTargetConfigHash(), snapshot.getSpec().getConfigHash())) {
+            throw new IllegalStateException(EmbeddedAdapterConstants.MESSAGE_ROLLBACK_CONFIG_HASH_MISMATCH);
+        }
+        PublishedConfig publishedConfig = snapshot.getSpec().getPublishedConfig();
+        if (publishedConfig == null) {
+            throw new IllegalStateException(EmbeddedAdapterConstants.MESSAGE_ROLLBACK_CONFIG_MISSING);
+        }
+        return publishedConfig;
     }
 
     @Override
@@ -207,12 +233,16 @@ public class GatePilotControllerResourceAdapter
                 .toList();
     }
 
-    private boolean isPendingCreateReleaseCommand(GatewayEvent event) {
+    private boolean isPendingReleaseIntent(GatewayEvent event) {
         Map<String, String> labels = event.getMetadata().getLabels();
-        return GatewayEventConstants.EVENT_TYPE_RELEASE_REQUEST.equals(
-                labels.get(ResourceMetadataConstants.LABEL_EVENT_TYPE))
+        return isReleaseEventType(labels.get(ResourceMetadataConstants.LABEL_EVENT_TYPE))
                 && GatewayEventConstants.RECONCILE_STATE_PENDING.equals(
                 labels.get(ResourceMetadataConstants.LABEL_RECONCILE_STATE));
+    }
+
+    private boolean isReleaseEventType(String eventType) {
+        return GatewayEventConstants.EVENT_TYPE_RELEASE_REQUEST.equals(eventType)
+                || GatewayEventConstants.EVENT_TYPE_ROLLBACK_REQUEST.equals(eventType);
     }
 
     private ReleaseIntent toReleaseIntent(GatewayEvent event) {
@@ -226,13 +256,38 @@ public class GatePilotControllerResourceAdapter
             intent.setProjectName(event.getSpec().getInvolvedObject().getName());
         }
         intent.setVersion(attributes.get(GatewayEventConstants.ATTRIBUTE_VERSION));
+        intent.setTargetVersion(targetVersion(event));
+        intent.setTargetConfigHash(attributes.get(GatewayEventConstants.ATTRIBUTE_CONFIG_HASH));
         intent.setConfigShard(event.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_CONFIG_SHARD));
-        intent.setTrigger(GatewayEventConstants.TRIGGER_PUBLISH);
+        intent.setTrigger(trigger(event));
         intent.setRequestedBy(attributes.get(GatewayEventConstants.ATTRIBUTE_CREATED_BY));
         intent.setDescription(attributes.get(GatewayEventConstants.ATTRIBUTE_DESCRIPTION));
         intent.setRequestedAt(event.getSpec().getFirstObservedAt());
         intent.setSourceEventName(event.getMetadata().getName());
         return intent;
+    }
+
+    private String targetVersion(GatewayEvent event) {
+        String attributeValue = event.getSpec().getAttributes().get(GatewayEventConstants.ATTRIBUTE_TARGET_VERSION);
+        if (StringUtils.hasText(attributeValue)) {
+            return attributeValue;
+        }
+        return event.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_TARGET_VERSION);
+    }
+
+    private String trigger(GatewayEvent event) {
+        String eventType = event.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_EVENT_TYPE);
+        if (GatewayEventConstants.EVENT_TYPE_ROLLBACK_REQUEST.equals(eventType)) {
+            return GatewayEventConstants.TRIGGER_ROLLBACK;
+        }
+        return GatewayEventConstants.TRIGGER_PUBLISH;
+    }
+
+    private String completedReason(ReleaseIntent intent) {
+        if (GatewayEventConstants.TRIGGER_ROLLBACK.equals(intent.getTrigger())) {
+            return GatewayEventConstants.REASON_ROLLBACK_RECONCILED;
+        }
+        return GatewayEventConstants.REASON_RELEASE_RECONCILED;
     }
 
     private long nextSequence(String namespace, String configShard) {

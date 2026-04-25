@@ -185,7 +185,8 @@ console
 - [x] 建立 controller-manager 的资源读取、发布产物写入和事件写回 `domain.port`。
 - [x] 建立 embedded 到 controller-manager `domain.port` 的进程内资源存储适配器。
 - [x] 实现发布意图 / GatewayEvent 到 PublishedConfig 的异步推进服务。
-- [ ] 支持失败回滚编排。
+- [x] 支持失败回滚编排。
+- [x] controller-manager 调度批次入口接入 getboot-lock 分布式锁。
 
 ### Phase 5：agent
 
@@ -271,6 +272,7 @@ console
 - [x] 单体模式装配 proxy 运行审计到 agent 上报链路。
 - [x] 支持单体大包运行。
 - [x] 保留分服务部署能力。
+- [x] embedded 只跟随 `gatepilot.mode=standalone` 自动装配，不再提供第二开关。
 
 ### Phase 9：验证与发布质量
 
@@ -281,6 +283,7 @@ console
 - [x] apiserver Controller 返回协议使用 getboot `ApiResponse` 的测试覆盖。
 - [x] agent apiserver 客户端复用 getboot-http-client 增强后的 `WebClient.Builder`，不手写 Trace Header 的测试覆盖。
 - [x] app 单体模式通过 getboot-observability 回写 `X-Trace-Id` 的集成测试覆盖。
+- [x] embedded 单体、集群和未配置部署模式的装配切换测试覆盖。
 - [x] 发布意图到 `PublishedConfig`、配置快照、agent pull 的最小链路测试通过。
 - [x] MyBatis-Plus 资源存储保存、更新、分页测试通过。
 - [x] agent / apiserver / app 运行审计上报、持久化、查询和进程内桥接测试通过。
@@ -297,6 +300,16 @@ console
 - [ ] Kubernetes 基础部署验证通过：VIP / Nginx 入口不承载 GatePilot 项目治理，proxy Deployment + Service + HPA 可扩副本。
 - [ ] agent 从 K8s 环境读取 podName、namespace、zone、nodeName、isolationGroup、configShards 并注册为 `GatewayNode`。
 - [ ] controller-manager 多副本通过 Kubernetes Lease 或等价机制完成 leader / standby 验证。
+
+### Phase 9.5：架构债与 CR 待办
+
+- [ ] CR controller-manager 分布式锁与发布事件 claim 的双保险语义，确认多副本下不会重复推进、不会长时间饿死发布队列，且锁实现缺失时不能静默退化成无锁生产运行。
+- [ ] CR 回滚 PublishedConfig 复制策略，确认快照内容不会被后续发布污染，必要时改成 ObjectMapper 深拷贝或不可变快照。
+- [ ] CR embedded 资源读取的 500 条上限扫描，改成按 label / namespace / cursor 精准分页，避免 1000 项目后 reconcile 漏数据。
+- [ ] CR 发布版本号生成策略，评估是否接入 getboot 统一 ID 能力或单独版本序列，避免继续依赖本地时间。
+- [ ] CR MyBatis-Plus 资源表索引、乐观锁和发布事件 claim 原子性，避免多 controller-manager 抢占时只靠内存判断。
+- [ ] CR agent last-good 存储当前仍是内存实现的问题，补文件或外部卷持久化，保证 proxy 控制面不可用时可恢复启动。
+- [ ] CR proxy 运行态策略解析中的 Map 兼容逻辑，确认大配置下没有反射/转换热点拖慢转发路径。
 
 ## 5. 打勾规则
 

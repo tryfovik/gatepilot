@@ -54,7 +54,7 @@ public class GatePilotReleaseService {
     public ReleaseResult createRelease(CreateReleaseCommand request) {
         Instant now = Instant.now();
         String releaseId = GatePilotReleaseConstants.RELEASE_ID_PREFIX + UUID.randomUUID();
-        String version = request.getProjectName() + GatePilotReleaseConstants.VERSION_SEPARATOR + now.toEpochMilli();
+        String version = releaseVersion(request.getProjectName(), releaseId, now);
         GatewayEvent event = buildReleaseEvent(request, releaseId, version, now);
         GatePilotResourceType eventType = resourceService.requireResourceType(ResourceKind.GATEWAY_EVENT);
         // 发布入口只保存事件，具体推进由 controller-manager 异步处理
@@ -135,11 +135,7 @@ public class GatePilotReleaseService {
                         request.getConfigShard())
                 .orElseThrow(() -> BusinessException.of(CommonErrorCode.NOT_FOUND.code(), "目标快照不存在"));
         String releaseId = GatePilotReleaseConstants.ROLLBACK_ID_PREFIX + UUID.randomUUID();
-        String version = request.getProjectName()
-                + GatePilotReleaseConstants.VERSION_SEPARATOR
-                + GatePilotReleaseConstants.ROLLBACK_VERSION_PART
-                + GatePilotReleaseConstants.VERSION_SEPARATOR
-                + now.toEpochMilli();
+        String version = rollbackVersion(request.getProjectName(), releaseId, now);
         GatewayEvent event = buildRollbackEvent(request, snapshot, releaseId, version, now);
         GatePilotResourceType eventType = resourceService.requireResourceType(ResourceKind.GATEWAY_EVENT);
         // 回滚同样只生成发布意图，避免 apiserver 同步推整条链路
@@ -253,5 +249,33 @@ public class GatePilotReleaseService {
         dryRunMessage.setReason(reason);
         dryRunMessage.setMessage(message);
         response.getMessages().add(dryRunMessage);
+    }
+
+    private String releaseVersion(String projectName, String releaseId, Instant now) {
+        // 版本号带 releaseId 短后缀，避免同毫秒并发发布撞版本
+        return projectName
+                + GatePilotReleaseConstants.VERSION_SEPARATOR
+                + now.toEpochMilli()
+                + GatePilotReleaseConstants.VERSION_SEPARATOR
+                + versionSuffix(releaseId);
+    }
+
+    private String rollbackVersion(String projectName, String releaseId, Instant now) {
+        // 回滚版本同样保证唯一，避免覆盖正常发布快照
+        return projectName
+                + GatePilotReleaseConstants.VERSION_SEPARATOR
+                + GatePilotReleaseConstants.ROLLBACK_VERSION_PART
+                + GatePilotReleaseConstants.VERSION_SEPARATOR
+                + now.toEpochMilli()
+                + GatePilotReleaseConstants.VERSION_SEPARATOR
+                + versionSuffix(releaseId);
+    }
+
+    private String versionSuffix(String releaseId) {
+        String normalized = releaseId.replace(GatePilotReleaseConstants.VERSION_SEPARATOR, "");
+        if (normalized.length() <= GatePilotReleaseConstants.VERSION_ID_SUFFIX_LENGTH) {
+            return normalized;
+        }
+        return normalized.substring(normalized.length() - GatePilotReleaseConstants.VERSION_ID_SUFFIX_LENGTH);
     }
 }

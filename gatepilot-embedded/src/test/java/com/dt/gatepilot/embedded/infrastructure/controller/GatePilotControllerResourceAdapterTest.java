@@ -14,6 +14,7 @@ import com.dt.gatepilot.domain.resource.route.GatewayRoute;
 import com.dt.gatepilot.domain.resource.upstream.Upstream;
 import com.dt.gatepilot.apiserver.application.command.PullAgentConfigCommand;
 import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
+import com.dt.gatepilot.apiserver.application.command.CreateRollbackCommand;
 import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResult;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.application.dto.ReleaseResult;
@@ -62,6 +63,7 @@ class GatePilotControllerResourceAdapterTest {
             new LocalControllerLeaderElector("test-controller"),
             adapter,
             adapter,
+            adapter,
             adapter
     );
 
@@ -69,7 +71,7 @@ class GatePilotControllerResourceAdapterTest {
     void shouldReconcileReleaseIntentAndMakePublishedConfigPullableByAgent() {
         saveProject();
         saveUpstream();
-        saveRoute();
+        saveRoute("/game");
         saveNode();
         CreateReleaseCommand request = new CreateReleaseCommand();
         request.setNamespace("default");
@@ -104,6 +106,56 @@ class GatePilotControllerResourceAdapterTest {
                 .contains("ReleaseReconciled", "PublishedConfigGenerated");
     }
 
+    @Test
+    void shouldReconcileRollbackIntentFromSavedSnapshot() {
+        saveProject();
+        saveUpstream();
+        saveRoute("/game");
+        saveNode();
+        ReleaseResult firstRelease = releaseService.createRelease(releaseCommand("operator", "发布 v1"));
+        reconcileController.reconcileBatch(10);
+        saveRoute("/game-v2");
+        ReleaseResult secondRelease = releaseService.createRelease(releaseCommand("operator", "发布 v2"));
+        reconcileController.reconcileBatch(10);
+        CreateRollbackCommand rollbackCommand = new CreateRollbackCommand();
+        rollbackCommand.setNamespace("default");
+        rollbackCommand.setProjectName("game");
+        rollbackCommand.setTargetVersion(firstRelease.getVersion());
+        rollbackCommand.setConfigShard("shard-a");
+        rollbackCommand.setCreatedBy("operator");
+
+        ReleaseResult rollback = releaseService.createRollback(rollbackCommand);
+        int processed = reconcileController.reconcileBatch(10);
+        PullAgentConfigCommand pullRequest = new PullAgentConfigCommand();
+        pullRequest.setNamespace("default");
+        pullRequest.setNodeId("node-1");
+        pullRequest.getConfigShards().add("shard-a");
+        AgentConfigPullResult pullResponse = agentService.pullConfig(pullRequest);
+        CursorPage<Object> events = resourceService.list("events", "default", null, 50);
+
+        assertThat(secondRelease.getVersion()).isNotEqualTo(firstRelease.getVersion());
+        assertThat(processed).isEqualTo(1);
+        assertThat(pullResponse.getPublishedConfig().getSpec().getVersion()).isEqualTo(rollback.getVersion());
+        assertThat(pullResponse.getPublishedConfig().getSpec().getSequence()).isEqualTo(3L);
+        assertThat(pullResponse.getPublishedConfig().getSpec().getBaseVersion()).isEqualTo(firstRelease.getVersion());
+        assertThat(pullResponse.getPublishedConfig().getSpec().getRoutes())
+                .extracting(PublishedConfig.PublishedRoute::getPath)
+                .containsExactly("/game");
+        assertThat(events.getItems())
+                .map(item -> ((GatewayEvent) item).getSpec().getReason())
+                .contains("RollbackReconciled", "RollbackConfigGenerated");
+    }
+
+    private CreateReleaseCommand releaseCommand(String createdBy, String description) {
+        CreateReleaseCommand request = new CreateReleaseCommand();
+        request.setNamespace("default");
+        request.setProjectName("game");
+        request.setConfigShard("shard-a");
+        request.setCreatedBy(createdBy);
+        request.setDescription(description);
+        return request;
+    }
+
     private void saveProject() {
         GatewayProject project = new GatewayProject();
         project.getMetadata().getLabels().put("team", "game");
@@ -112,13 +164,13 @@ class GatePilotControllerResourceAdapterTest {
         resourceService.save(resourceType, "default", "game", project);
     }
 
-    private void saveRoute() {
+    private void saveRoute(String path) {
         GatewayRoute route = new GatewayRoute();
         route.getSpec().setProjectRef(projectRef());
         route.getSpec().getProtocols().add(Protocol.HTTP);
         route.getSpec().getHosts().add("game.example.com");
         route.getSpec().getPath().setType("Prefix");
-        route.getSpec().getPath().setValue("/game");
+        route.getSpec().getPath().setValue(path);
         route.getSpec().setUpstreamRef(upstreamRef());
         GatePilotResourceType resourceType = resourceService.requireResourceType(ResourceKind.GATEWAY_ROUTE);
         resourceService.save(resourceType, "default", "game-api", route);

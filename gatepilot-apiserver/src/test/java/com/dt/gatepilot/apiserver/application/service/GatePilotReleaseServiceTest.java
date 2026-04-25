@@ -55,6 +55,20 @@ class GatePilotReleaseServiceTest {
     }
 
     @Test
+    void shouldCreateUniqueReleaseVersionsForBackToBackRequests() {
+        saveProject("default", "game");
+        CreateReleaseCommand request = new CreateReleaseCommand();
+        request.setNamespace("default");
+        request.setProjectName("game");
+        request.setCreatedBy("operator");
+
+        ReleaseResult first = releaseService.createRelease(request);
+        ReleaseResult second = releaseService.createRelease(request);
+
+        assertThat(first.getVersion()).isNotEqualTo(second.getVersion());
+    }
+
+    @Test
     void shouldCreateRollbackEventAndMarkSnapshot() {
         saveProject("default", "game");
         PublishedConfig config = publishedConfig("default", "game", "v1", "shard-a");

@@ -21,6 +21,11 @@ public final class GatePilotReleaseConstants {
     public static final String VERSION_SEPARATOR = "-";
 
     /**
+     * 版本唯一后缀长度。
+     */
+    public static final int VERSION_ID_SUFFIX_LENGTH = 8;
+
+    /**
      * dry-run 版本片段。
      */
     public static final String DRY_RUN_VERSION_PART = "dry-run";

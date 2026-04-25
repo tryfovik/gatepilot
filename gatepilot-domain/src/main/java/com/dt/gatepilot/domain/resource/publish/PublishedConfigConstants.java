@@ -257,6 +257,16 @@ public final class PublishedConfigConstants {
     public static final String KEY_CONTENT_TYPE = "contentType";
 
     /**
+     * 回滚来源版本配置键。
+     */
+    public static final String KEY_ROLLBACK_SOURCE_VERSION = "rollbackSourceVersion";
+
+    /**
+     * 回滚来源哈希配置键。
+     */
+    public static final String KEY_ROLLBACK_SOURCE_HASH = "rollbackSourceHash";
+
+    /**
      * requestsPerSecond 配置键。
      */
     public static final String KEY_REQUESTS_PER_SECOND = "requestsPerSecond";

@@ -66,9 +66,19 @@ public final class GatewayEventConstants {
     public static final String REASON_RELEASE_RECONCILED = "ReleaseReconciled";
 
     /**
+     * 回滚已推进原因码。
+     */
+    public static final String REASON_ROLLBACK_RECONCILED = "RollbackReconciled";
+
+    /**
      * PublishedConfig 已生成原因码。
      */
     public static final String REASON_PUBLISHED_CONFIG_GENERATED = "PublishedConfigGenerated";
+
+    /**
+     * 回滚 PublishedConfig 已生成原因码。
+     */
+    public static final String REASON_ROLLBACK_CONFIG_GENERATED = "RollbackConfigGenerated";
 
     /**
      * 发布标识属性。
@@ -139,6 +149,11 @@ public final class GatewayEventConstants {
      * 发布触发类型。
      */
     public static final String TRIGGER_PUBLISH = "publish";
+
+    /**
+     * 回滚触发类型。
+     */
+    public static final String TRIGGER_ROLLBACK = "rollback";
 
     private GatewayEventConstants() {
         // 事件常量不允许实例化

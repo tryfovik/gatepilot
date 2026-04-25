@@ -2,10 +2,12 @@ package com.dt.gatepilot.embedded.infrastructure.assembly;
 
 import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditReporter;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
+import com.dt.gatepilot.embedded.infrastructure.config.GatePilotDeploymentModeConstants;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -13,6 +15,9 @@ import org.springframework.context.annotation.Configuration;
  * GatePilot 单 JVM 嵌入式装配配置。
  */
 @Configuration
+@ConditionalOnProperty(prefix = GatePilotDeploymentModeConstants.CONFIG_PREFIX,
+        name = GatePilotDeploymentModeConstants.MODE_PROPERTY,
+        havingValue = GatePilotDeploymentModeConstants.MODE_STANDALONE)
 public class GatePilotEmbeddedAssemblyConfiguration {
 
     /**
