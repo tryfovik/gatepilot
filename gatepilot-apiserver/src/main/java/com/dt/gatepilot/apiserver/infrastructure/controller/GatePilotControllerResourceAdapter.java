@@ -2,7 +2,8 @@ package com.dt.gatepilot.apiserver.infrastructure.controller;
 
 import com.dt.gatepilot.domain.enums.EventSeverity;
 import com.dt.gatepilot.domain.enums.ResourceKind;
-import com.dt.gatepilot.domain.resource.common.LabelSelector;
+import com.dt.gatepilot.domain.resource.meta.LabelSelector;
+import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
@@ -246,8 +247,7 @@ public class GatePilotControllerResourceAdapter
                 .orElse(0L) + 1L;
     }
 
-    private boolean projectMatches(com.dt.gatepilot.domain.resource.common.ResourceReference reference,
-                                   String projectName) {
+    private boolean projectMatches(ResourceReference reference, String projectName) {
         return reference != null && Objects.equals(reference.getName(), projectName);
     }
 

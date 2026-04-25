@@ -1,7 +1,7 @@
 package com.dt.gatepilot.apiserver.infrastructure.persistence.memory;
 
 import com.dt.gatepilot.domain.enums.ResourceKind;
-import com.dt.gatepilot.domain.resource.common.ResourceMetadata;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.repository.GatePilotResourceStore;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;

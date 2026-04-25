@@ -1,8 +1,8 @@
 package com.dt.gatepilot.domain.resource.node;
 
 import com.dt.gatepilot.domain.enums.NodeRole;
-import com.dt.gatepilot.domain.resource.common.LabelSelector;
-import com.dt.gatepilot.domain.resource.common.ResourceMetadata;
+import com.dt.gatepilot.domain.resource.meta.LabelSelector;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;

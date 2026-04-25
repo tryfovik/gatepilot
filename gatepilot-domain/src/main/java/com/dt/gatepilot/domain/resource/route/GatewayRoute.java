@@ -2,9 +2,9 @@ package com.dt.gatepilot.domain.resource.route;
 
 import com.dt.gatepilot.domain.enums.HttpMethod;
 import com.dt.gatepilot.domain.enums.Protocol;
-import com.dt.gatepilot.domain.resource.common.ResourceMetadata;
-import com.dt.gatepilot.domain.resource.common.ResourceReference;
-import com.dt.gatepilot.domain.resource.common.ResourceStatus;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
+import com.dt.gatepilot.domain.resource.meta.ResourceReference;
+import com.dt.gatepilot.domain.resource.meta.ResourceStatus;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

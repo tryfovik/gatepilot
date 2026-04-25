@@ -55,7 +55,7 @@ infrastructure  出站实现：数据库、HTTP 客户端、Spring 配置、调�
 - [GatePilot 架构边界规范](architecture-boundaries.md)
 - [GatePilot Console 设计规范](console-design-guidelines.md)
 
-旧 `platform-gateway-*` 不是废弃代码池，但也不是可以直接搬运的实现来源。里面的路由编译、过滤器、染色、熔断、审计、诊断、校验和 Sentinel 注册只能作为能力样本、算法参考、测试素材和工程经验。改造前必须先看 [旧能力改造清单](architecture-boundaries.md#12-旧能力改造清单)，以 GatePilot 资源模型、`PublishedConfig` 和 DDD 边界为准，禁止按旧模型、旧接口、旧包结构直接搬代码。
+历史网关代码不是当前开发主线，也不是可以直接搬运的实现来源。里面的路由编译、过滤器、染色、熔断、审计、诊断、校验和 Sentinel 注册只能作为能力样本、算法参考、测试素材和工程经验。旧模块不参与 Maven 主构建，改造前必须先看 [旧能力改造清单](architecture-boundaries.md#12-旧能力改造清单)，以 GatePilot 资源模型、`PublishedConfig` 和 DDD 边界为准，禁止按旧模型、旧接口、旧包结构直接搬代码。新模型尚未覆盖的旧能力不能直接删，必须先完成改造和测试。
 
 后端开发还必须参考上层 getboot 规范：
 
@@ -121,6 +121,9 @@ console
 - [x] 写入并执行 GatePilot Java 展开式 Javadoc 注释格式。
 - [x] 清理旧模块收敛过程中的半成品状态，保证工作区重新回到可编译、可测试状态。
 - [x] 将 GatePilot 模块包结构调整为 DDD 分层，移除内部 `api / spi / support` 包口径。
+- [x] 从父级 Maven reactor 摘掉历史模块，主构建只保留 GatePilot 新模块。
+- [x] 建立旧能力退役对账规则，未被新模型覆盖的旧能力不得物理删除。
+- [x] 将资源元模型包从 `resource.common` 收敛为 `resource.meta`，避免 `common` 变成垃圾包入口。
 
 ### Phase 1：目标模块骨架
 
@@ -131,7 +134,7 @@ console
 - [x] 建立 `gatepilot-proxy` 模块骨架。
 - [x] 建立 `gatepilot-console` 模块骨架。
 - [x] 建立 `gatepilot-app` 装配模块骨架。
-- [x] 删除或收敛临时 `platform-gateway-core` 命名，避免形成新的垃圾包。
+- [x] 删除或收敛历史临时 core 命名，避免形成新的垃圾包。
 
 ### Phase 2：资源模型
 
@@ -204,9 +207,14 @@ console
 - [ ] 接入 getboot-auth 执行路由级认证。
 - [x] 参考旧 `GatewayMethodAccessFilter` 改造 HTTP 方法白名单判断能力。
 - [ ] 接入 proxy WebFlux 过滤链执行 HTTP 方法白名单。
+- [ ] 接入 proxy WebFlux 过滤链执行路由转发。
+- [ ] 接入 proxy WebFlux 过滤链执行染色解析、请求头透传和响应头回写。
+- [ ] 改造 Query / IP 染色规则。
 - [ ] 参考旧 `GatewayCircuitBreakerFilter` 改造熔断和 fallback 能力。
 - [ ] 参考旧 `GatewaySentinelRuleRegistrar` 改造 Sentinel 规则注册能力。
 - [ ] 参考旧审计过滤器改造访问审计采集能力。
+- [ ] 改造内部运维入口保护。
+- [ ] 改造上游健康主动探测。
 - [ ] 保留并验证路由、转发、限流、熔断、重试、染色、灰度、蓝绿执行能力。
 - [x] 运行审计事件只采集并上报，不在 proxy 内做管理查询。
 
@@ -237,6 +245,7 @@ console
 - [ ] 参考旧 `GatewayConfigSnapshotRepository` 改造快照概念到数据库持久化版本表。
 - [ ] 参考旧 `GatewayAccessAuditController` 改造审计查询能力到 apiserver 持久化查询 API。
 - [ ] 参考旧 `GatewayRouteCatalogEndpoint` 改造路由目录展示到 console，不再依赖 Actuator 私有端点。
+- [ ] 所有旧能力完成新模型覆盖和测试后，物理删除历史模块源码。
 
 ### Phase 8：app 合包
 

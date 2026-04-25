@@ -2,7 +2,7 @@ package com.dt.gatepilot.controller.application.service;
 
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.ResourceKind;
-import com.dt.gatepilot.domain.resource.common.ResourceReference;
+import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;

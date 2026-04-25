@@ -1,6 +1,6 @@
 package com.dt.gatepilot.apiserver.domain.resource;
 
-import com.dt.gatepilot.domain.resource.common.ResourceMetadata;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;

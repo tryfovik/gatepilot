@@ -1,7 +1,7 @@
 package com.dt.gatepilot.apiserver.application.command;
 
 import com.dt.gatepilot.domain.enums.NodeRole;
-import com.dt.gatepilot.domain.resource.common.LabelSelector;
+import com.dt.gatepilot.domain.resource.meta.LabelSelector;
 import jakarta.validation.constraints.NotBlank;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

@@ -1,4 +1,4 @@
-package com.dt.gatepilot.domain.resource.common;
+package com.dt.gatepilot.domain.resource.meta;
 
 import com.dt.gatepilot.domain.enums.ResourceKind;
 import lombok.Data;

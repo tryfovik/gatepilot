@@ -600,23 +600,40 @@ Envoy 是业界常用的高性能代理数据面，xDS 是控制面向 Envoy 动
 
 这只是升级方向，不是当前阶段的必选复杂度。当前阶段更重要的是先把控制面 / agent / proxy 边界设计成类似 xDS 的单向配置下发模型，保证以后换数据面时不会推倒重来。
 
-## 11. 当前收敛约束
+## 11. 历史模块退役约束
 
-当前仓库已有历史模块名，后续改造时按下面目标收敛：
+父级 Maven reactor 只保留 GatePilot 新模块：
 
-- `platform-gateway-management` / `platform-gateway-admin-server` 收敛到 `gatepilot-apiserver`。
+- `gatepilot-domain`
+- `gatepilot-apiserver`
+- `gatepilot-controller-manager`
+- `gatepilot-agent`
+- `gatepilot-proxy`
+- `gatepilot-console`
+- `gatepilot-app`
+
+历史模块不再参与主构建，也不能被 GatePilot 新模块依赖、导入或复制：
+
+- `platform-gateway-management` / `platform-gateway-admin-server` 对应能力收敛到 `gatepilot-apiserver`。
 - 发布编排能力重建到 `gatepilot-controller-manager`。
-- 节点注册、配置同步、last-good 和状态上报新建到 `gatepilot-agent`。
-- `platform-gateway-runtime` / `platform-gateway-server` 收敛到 `gatepilot-proxy`。
-- `platform-gateway-admin-web` 收敛到 `gatepilot-console`。
-- 新建 `gatepilot-app` 作为最终合包启动器。
-- `platform-gateway-legacy-config` 只作为过渡期旧版配置兼容和字段参考模块，不能新增新能力；旧配置能力最终应被 GatePilot 资源模型和 apiserver / controller-manager / proxy 链路替代。
+- 节点注册、配置同步、last-good 和状态上报重建到 `gatepilot-agent`。
+- `platform-gateway-runtime` / `platform-gateway-server` 对应能力收敛到 `gatepilot-proxy`。
+- `platform-gateway-admin-web` 对应能力收敛到 `gatepilot-console`。
+- `platform-gateway-legacy-config` 只作为旧配置字段和测试样本参考，不允许成为生产事实来源。
+
+历史源码是否物理删除，必须按能力对账结果推进：
+
+- 已经按 GatePilot 新模型重建并有测试覆盖的能力，可以删除旧实现。
+- 新模型尚未覆盖的能力，先保留为临时参考样本，不能进入主构建。
+- 删除前必须在执行计划里标明对应新模块、覆盖状态和剩余缺口。
+- 一旦出现新模块直接依赖历史模块，必须先修边界，再继续开发。
 
 改造期间也必须遵守边界：
 
-- 不再向 runtime/server 增加配置管理能力。
-- 不再向 management/admin-server 增加数据面转发能力。
-- 不再新增 `core/common/shared` 这类泛化模块。
+- 不再向数据面增加配置管理能力。
+- 不再向管理面增加数据面转发能力。
+- 不再新增 `core/common/shared/support` 这类泛化包。
+- 资源元模型固定放在 `gatepilot-domain/.../resource/meta`，不能再新增 `resource/common`。
 - 新代码优先按目标模块职责落位。
 
 ## 12. 旧能力改造清单
@@ -625,24 +642,24 @@ Envoy 是业界常用的高性能代理数据面，xDS 是控制面向 Envoy 动
 
 ### 可改造能力
 
-| 旧实现位置 | 已有能力 | 改造目标 | 改造要求 |
-| --- | --- | --- | --- |
-| `platform-gateway-legacy-config/GatewayProperties` | 旧 YAML 配置模型，包含项目、路由、认证、CORS、健康检查、上下文头、染色、审计、治理策略 | `gatepilot-domain` 资源模型和 `gatepilot-apiserver` admission 校验 | 只能作为字段设计参考，不能继续让生产依赖本地 YAML 作为事实来源 |
-| `platform-gateway-legacy-config/GatewayRouteDefinitionLocator` | 路由编译和路由命中 | `gatepilot-proxy/domain/runtime` | 改成从 `PublishedConfig` 预编译，不再从 `GatewayProperties` 读取 |
-| `platform-gateway-legacy-config/GatewayTrafficColorResolver` | Header、Cookie、Query、IP 等染色解析 | `gatepilot-proxy/domain/runtime` | 保留解析规则，输入改成 proxy 运行态请求上下文和已发布策略 |
-| `platform-gateway-legacy-config/GatewayPropertiesValidator` | 配置合法性校验 | `gatepilot-apiserver/application` 和 `gatepilot-controller-manager/application` | 拆成资源 admission 校验、发布 dry-run 校验、PublishedConfig 编译校验 |
-| `platform-gateway-runtime/GatewayAuthenticationFilter` | 路由级认证 | `gatepilot-proxy` | 参考旧判断逻辑，继续复用 getboot-auth，策略来自 `PublishedConfig`，失败响应使用 getboot 统一规则 |
-| `platform-gateway-runtime/GatewayMethodAccessFilter` | HTTP 方法白名单 | `gatepilot-proxy` | 改为读取编译后的 route policy，热路径不能访问控制面 |
-| `platform-gateway-runtime/InternalRouteAccessFilter` | 内部运维入口保护 | `gatepilot-proxy` 或 `gatepilot-apiserver` 各自入口保护 | 按入口分开，proxy 保护本机 apply / health / state，apiserver 保护管理 API |
-| `platform-gateway-runtime/GatewayTrafficColorFilter` | 流量染色执行和响应头回写 | `gatepilot-proxy` | 与灰度、蓝绿选择统一走运行态策略快照 |
-| `platform-gateway-runtime/GatewayCircuitBreakerFilter` | 轻量熔断和 fallback | `gatepilot-proxy` | 参考旧状态机和测试样本，优先评估 getboot-governance / Sentinel 能力，缺失能力先补 getboot |
-| `platform-gateway-runtime/GatewayAccessAuditFilter` | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
-| `platform-gateway-runtime/UpstreamHealthIndicator` | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |
-| `platform-gateway-server/GatewaySentinelRuleRegistrar` | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 规则由 `PublishedConfig` 编译生成，不再从旧 YAML 全量注册 |
-| `platform-gateway-management/GatewayDiagnosticsService` | 路由诊断、策略诊断、染色和发布变体解释 | `gatepilot-apiserver/application` 和 `gatepilot-console` 页面 | 诊断基于已发布配置、节点状态和审计数据，不直接读取 proxy 内存 |
-| `platform-gateway-management/GatewayManagementService` | 配置导出、dry-run、diff、版本快照 | `gatepilot-apiserver` 和 `gatepilot-controller-manager` | 管理 API 和发布编排拆开，快照和版本必须持久化到数据库 |
-| `platform-gateway-management/GatewayAccessAuditController` | 审计查询 API | `gatepilot-apiserver/interfaces/rest` | 查询 apiserver 持久化审计，不查 proxy 本地内存 |
-| `platform-gateway-management/GatewayRouteCatalogEndpoint` | 当前路由目录展示 | `gatepilot-apiserver` 查询 API 和 `gatepilot-console` | 展示资源、PublishedConfig 和节点 apply 状态，不再做 Actuator 私有端点 |
+| 旧实现位置 | 已有能力 | 改造目标 | 当前覆盖状态 | 改造要求 |
+| --- | --- | --- | --- | --- |
+| `platform-gateway-legacy-config/GatewayProperties` | 旧 YAML 配置模型，包含项目、路由、认证、CORS、健康检查、上下文头、染色、审计、治理策略 | `gatepilot-domain` 资源模型和 `gatepilot-apiserver` admission 校验 | 部分覆盖 | 只能作为字段设计参考，不能继续让生产依赖本地 YAML 作为事实来源 |
+| `platform-gateway-legacy-config/GatewayRouteDefinitionLocator` | 路由编译和路由命中 | `gatepilot-proxy/domain/runtime` | 已覆盖编译索引和最长前缀命中，转发执行未完成 | 改成从 `PublishedConfig` 预编译，不再从 `GatewayProperties` 读取 |
+| `platform-gateway-legacy-config/GatewayTrafficColorResolver` | Header、Cookie、Query、IP 等染色解析 | `gatepilot-proxy/domain/runtime` | 部分覆盖，Header / Cookie / 权重 / 默认色已有测试，Query / IP 仍缺 | 保留解析规则，输入改成 proxy 运行态请求上下文和已发布策略 |
+| `platform-gateway-legacy-config/GatewayPropertiesValidator` | 配置合法性校验 | `gatepilot-apiserver/application` 和 `gatepilot-controller-manager/application` | 部分覆盖 | 拆成资源 admission 校验、发布 dry-run 校验、PublishedConfig 编译校验 |
+| `platform-gateway-runtime/GatewayAuthenticationFilter` | 路由级认证 | `gatepilot-proxy` | 只覆盖策略判断，getboot-auth 执行未接入 | 参考旧判断逻辑，继续复用 getboot-auth，策略来自 `PublishedConfig`，失败响应使用 getboot 统一规则 |
+| `platform-gateway-runtime/GatewayMethodAccessFilter` | HTTP 方法白名单 | `gatepilot-proxy` | 只覆盖策略判断，WebFlux 过滤链执行未接入 | 改为读取编译后的 route policy，热路径不能访问控制面 |
+| `platform-gateway-runtime/InternalRouteAccessFilter` | 内部运维入口保护 | `gatepilot-proxy` 或 `gatepilot-apiserver` 各自入口保护 | 未覆盖 | 按入口分开，proxy 保护本机 apply / health / state，apiserver 保护管理 API |
+| `platform-gateway-runtime/GatewayTrafficColorFilter` | 流量染色执行和响应头回写 | `gatepilot-proxy` | 只覆盖解析，过滤链执行和响应头回写未接入 | 与灰度、蓝绿选择统一走运行态策略快照 |
+| `platform-gateway-runtime/GatewayCircuitBreakerFilter` | 轻量熔断和 fallback | `gatepilot-proxy` | 未覆盖 | 参考旧状态机和测试样本，优先评估 getboot-governance / Sentinel 能力，缺失能力先补 getboot |
+| `platform-gateway-runtime/GatewayAccessAuditFilter` | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | 只有端口占位，采集 / 上报 / 查询未完成 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
+| `platform-gateway-runtime/UpstreamHealthIndicator` | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | agent 上报模型已预留，主动探测未完成 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |
+| `platform-gateway-server/GatewaySentinelRuleRegistrar` | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 未覆盖 | 规则由 `PublishedConfig` 编译生成，不再从旧 YAML 全量注册 |
+| `platform-gateway-management/GatewayDiagnosticsService` | 路由诊断、策略诊断、染色和发布变体解释 | `gatepilot-apiserver/application` 和 `gatepilot-console` 页面 | Console 页面骨架已有，诊断用例未完成 | 诊断基于已发布配置、节点状态和审计数据，不直接读取 proxy 内存 |
+| `platform-gateway-management/GatewayManagementService` | 配置导出、dry-run、diff、版本快照 | `gatepilot-apiserver` 和 `gatepilot-controller-manager` | 资源查询、diff、快照基础已覆盖，配置摘要和完整 dry-run 仍缺 | 管理 API 和发布编排拆开，快照和版本必须持久化到数据库 |
+| `platform-gateway-management/GatewayAccessAuditController` | 审计查询 API | `gatepilot-apiserver/interfaces/rest` | 未覆盖 | 查询 apiserver 持久化审计，不查 proxy 本地内存 |
+| `platform-gateway-management/GatewayRouteCatalogEndpoint` | 当前路由目录展示 | `gatepilot-apiserver` 查询 API 和 `gatepilot-console` | 部分覆盖，资源列表已有，PublishedConfig / 节点 apply 联合视图未完成 | 展示资源、PublishedConfig 和节点 apply 状态，不再做 Actuator 私有端点 |
 
 ### 改造顺序
 

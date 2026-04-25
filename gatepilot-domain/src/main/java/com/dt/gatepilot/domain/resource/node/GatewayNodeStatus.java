@@ -2,7 +2,7 @@ package com.dt.gatepilot.domain.resource.node;
 
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.NodePhase;
-import com.dt.gatepilot.domain.resource.common.ResourceStatus;
+import com.dt.gatepilot.domain.resource.meta.ResourceStatus;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

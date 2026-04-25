@@ -2,8 +2,8 @@ package com.dt.gatepilot.apiserver.application.service;
 
 import com.dt.gatepilot.domain.enums.EventSeverity;
 import com.dt.gatepilot.domain.enums.ResourceKind;
-import com.dt.gatepilot.domain.resource.common.ResourceMetadata;
-import com.dt.gatepilot.domain.resource.common.ResourceReference;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
+import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
 import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;

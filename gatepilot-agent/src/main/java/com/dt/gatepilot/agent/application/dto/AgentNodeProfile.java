@@ -1,7 +1,7 @@
 package com.dt.gatepilot.agent.application.dto;
 
 import com.dt.gatepilot.domain.enums.NodeRole;
-import com.dt.gatepilot.domain.resource.common.LabelSelector;
+import com.dt.gatepilot.domain.resource.meta.LabelSelector;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
