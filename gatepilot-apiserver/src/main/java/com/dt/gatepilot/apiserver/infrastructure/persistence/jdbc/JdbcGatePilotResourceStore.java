@@ -2,9 +2,11 @@ package com.dt.gatepilot.apiserver.infrastructure.persistence.jdbc;
 
 import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
+import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverConstants;
 import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverProperties;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.repository.GatePilotResourceStore;
+import com.dt.gatepilot.apiserver.domain.repository.ResourceStoreConstants;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,7 +30,9 @@ import org.springframework.util.StringUtils;
  * 基于数据库的 GatePilot 资源存储实现。
  */
 @Repository
-@ConditionalOnProperty(prefix = "gatepilot.apiserver.store", name = "type", havingValue = "jdbc")
+@ConditionalOnProperty(prefix = GatePilotApiserverConstants.STORE_CONFIG_PREFIX,
+        name = GatePilotApiserverConstants.STORE_TYPE_PROPERTY,
+        havingValue = GatePilotApiserverConstants.STORE_TYPE_JDBC)
 public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
 
     private static final int MAX_LIMIT = 500;
@@ -141,7 +145,7 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
         if (items.size() > effectiveLimit) {
             T nextItem = items.remove(effectiveLimit);
             ResourceMetadata metadata = metadataSupport.metadataOf(nextItem);
-            nextCursor = metadata.getNamespace() + "/" + metadata.getName();
+            nextCursor = metadata.getNamespace() + ResourceStoreConstants.CURSOR_SEPARATOR + metadata.getName();
         }
         CursorPage<T> page = new CursorPage<>();
         page.setItems(items);

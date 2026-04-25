@@ -2,6 +2,7 @@ package com.dt.gatepilot.agent.application.dto;
 
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.NodePhase;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.node.GatewayNodeStatus;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -18,7 +19,7 @@ public class AgentHeartbeatSnapshot {
     /**
      * 节点命名空间。
      */
-    private String namespace = "default";
+    private String namespace = ResourceMetadataConstants.DEFAULT_NAMESPACE;
 
     /**
      * 节点标识。

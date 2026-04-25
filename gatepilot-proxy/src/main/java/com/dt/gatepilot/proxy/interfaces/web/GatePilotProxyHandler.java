@@ -9,13 +9,13 @@ import com.dt.gatepilot.proxy.domain.runtime.RouteAccessDecision;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessRequest;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorRequest;
+import com.dt.gatepilot.proxy.domain.runtime.TrafficColorConstants;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -33,21 +33,6 @@ import reactor.core.publisher.Mono;
  * GatePilot proxy WebFlux 入口处理器。
  */
 public class GatePilotProxyHandler {
-
-    private static final String TRAFFIC_COLOR_HEADER = "X-Traffic-Color";
-
-    private static final Set<String> HOP_BY_HOP_HEADERS = Set.of(
-            "connection",
-            "keep-alive",
-            "proxy-authenticate",
-            "proxy-authorization",
-            "te",
-            "trailer",
-            "transfer-encoding",
-            "upgrade",
-            "host",
-            "content-length"
-    );
 
     private final ProxyRuntimeState runtimeState;
 
@@ -164,7 +149,7 @@ public class GatePilotProxyHandler {
                     // 先复制上游响应头，再补回网关计算出的染色结果
                     copyResponseHeaders(response, headers);
                     if (StringUtils.hasText(trafficColor)) {
-                        headers.set(TRAFFIC_COLOR_HEADER, trafficColor);
+                        headers.set(TrafficColorConstants.DEFAULT_HEADER_NAME, trafficColor);
                     }
                 })
                 .body(BodyInserters.fromDataBuffers(response.bodyToFlux(DataBuffer.class)));
@@ -182,7 +167,7 @@ public class GatePilotProxyHandler {
         });
         route.getAddHeaders().forEach(targetHeaders::set);
         if (StringUtils.hasText(trafficColor)) {
-            targetHeaders.set(TRAFFIC_COLOR_HEADER, trafficColor);
+            targetHeaders.set(TrafficColorConstants.DEFAULT_HEADER_NAME, trafficColor);
         }
     }
 
@@ -207,7 +192,7 @@ public class GatePilotProxyHandler {
 
     private boolean hopByHop(String name) {
         // HTTP 头名大小写不敏感，统一按小写比较
-        return name == null || HOP_BY_HOP_HEADERS.contains(name.toLowerCase(Locale.ROOT));
+        return name == null || ProxyHttpConstants.HOP_BY_HOP_HEADERS.contains(name.toLowerCase(Locale.ROOT));
     }
 
     private URI targetUri(ServerRequest request, CompiledRoute route, CompiledUpstream upstream) {
@@ -234,7 +219,7 @@ public class GatePilotProxyHandler {
             return joinPath(route.getRewritePathPrefix(), suffix);
         }
         if (Boolean.TRUE.equals(route.getStripPrefix())) {
-            return suffix.isEmpty() ? "/" : suffix;
+            return suffix.isEmpty() ? ProxyHttpConstants.ROOT_PATH : suffix;
         }
         return requestPath;
     }
@@ -245,27 +230,31 @@ public class GatePilotProxyHandler {
             return "";
         }
         String suffix = requestPath.substring(prefix.length());
-        return suffix.isEmpty() ? "" : (suffix.startsWith("/") ? suffix : "/" + suffix);
+        return suffix.isEmpty() ? "" : (suffix.startsWith(ProxyHttpConstants.PATH_SEPARATOR)
+                ? suffix
+                : ProxyHttpConstants.PATH_SEPARATOR + suffix);
     }
 
     private String joinPath(String prefix, String suffix) {
         // 保证 prefix 和 suffix 中间只有一个斜杠
-        String normalizedPrefix = prefix.endsWith("/") && prefix.length() > 1
+        String normalizedPrefix = prefix.endsWith(ProxyHttpConstants.PATH_SEPARATOR) && prefix.length() > 1
                 ? prefix.substring(0, prefix.length() - 1)
                 : prefix;
-        if (!StringUtils.hasText(suffix) || "/".equals(suffix)) {
+        if (!StringUtils.hasText(suffix) || ProxyHttpConstants.ROOT_PATH.equals(suffix)) {
             return normalizedPrefix;
         }
-        return normalizedPrefix + (suffix.startsWith("/") ? suffix : "/" + suffix);
+        return normalizedPrefix + (suffix.startsWith(ProxyHttpConstants.PATH_SEPARATOR)
+                ? suffix
+                : ProxyHttpConstants.PATH_SEPARATOR + suffix);
     }
 
     private String scheme(CompiledUpstream upstream) {
         // WebSocket 先按 HTTP/S 转发入口处理
         Protocol protocol = upstream.getProtocol();
         if (protocol == Protocol.HTTPS || protocol == Protocol.WSS) {
-            return "https";
+            return ProxyHttpConstants.SCHEME_HTTPS;
         }
-        return "http";
+        return ProxyHttpConstants.SCHEME_HTTP;
     }
 
     private String host(ServerRequest request) {

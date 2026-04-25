@@ -1,6 +1,7 @@
 package com.dt.gatepilot.agent.application.dto;
 
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import java.time.Instant;
 import lombok.Data;
 
@@ -13,7 +14,7 @@ public class AgentApplyResult {
     /**
      * 节点命名空间。
      */
-    private String namespace = "default";
+    private String namespace = ResourceMetadataConstants.DEFAULT_NAMESPACE;
 
     /**
      * 节点标识。

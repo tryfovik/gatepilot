@@ -1,6 +1,4 @@
 package com.dt.gatepilot.apiserver.infrastructure.config;
-
-import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 

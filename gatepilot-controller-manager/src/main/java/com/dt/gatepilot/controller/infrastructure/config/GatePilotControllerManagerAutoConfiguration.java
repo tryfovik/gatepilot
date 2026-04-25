@@ -1,14 +1,13 @@
 package com.dt.gatepilot.controller.infrastructure.config;
 
-import com.dt.gatepilot.controller.infrastructure.config.GatePilotControllerManagerProperties;
-import com.dt.gatepilot.controller.infrastructure.scheduling.ReleaseReconcileScheduler;
+import com.dt.gatepilot.controller.application.service.PublishedConfigReconciler;
+import com.dt.gatepilot.controller.application.service.ReleaseReconcileController;
 import com.dt.gatepilot.controller.domain.port.ControllerLeaderElector;
 import com.dt.gatepilot.controller.domain.port.GatewayDesiredStateReader;
 import com.dt.gatepilot.controller.domain.port.ReconcileResultSink;
 import com.dt.gatepilot.controller.domain.port.ReleaseIntentSource;
 import com.dt.gatepilot.controller.infrastructure.leader.LocalControllerLeaderElector;
-import com.dt.gatepilot.controller.application.service.PublishedConfigReconciler;
-import com.dt.gatepilot.controller.application.service.ReleaseReconcileController;
+import com.dt.gatepilot.controller.infrastructure.scheduling.ReleaseReconcileScheduler;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -32,6 +31,7 @@ public class GatePilotControllerManagerAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public PublishedConfigReconciler publishedConfigReconciler() {
+        // reconciler 保持无状态，方便多副本复用
         return new PublishedConfigReconciler();
     }
 
@@ -44,6 +44,7 @@ public class GatePilotControllerManagerAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ControllerLeaderElector controllerLeaderElector(GatePilotControllerManagerProperties properties) {
+        // 本地选举只用于开发和单体模式，生产会替换成分布式实现
         return new LocalControllerLeaderElector(properties.getControllerId());
     }
 
@@ -64,6 +65,7 @@ public class GatePilotControllerManagerAutoConfiguration {
                                                                  ReleaseIntentSource intentSource,
                                                                  GatewayDesiredStateReader desiredStateReader,
                                                                  ReconcileResultSink resultSink) {
+        // 控制器只依赖端口，不直接依赖 apiserver 实现
         return new ReleaseReconcileController(reconciler, leaderElector, intentSource, desiredStateReader, resultSink);
     }
 
@@ -78,6 +80,7 @@ public class GatePilotControllerManagerAutoConfiguration {
     @ConditionalOnBean(ReleaseReconcileController.class)
     public ReleaseReconcileScheduler releaseReconcileScheduler(GatePilotControllerManagerProperties properties,
                                                                ReleaseReconcileController reconcileController) {
+        // 调度器只触发 reconcile，不承载发布逻辑
         return new ReleaseReconcileScheduler(properties, reconcileController);
     }
 }

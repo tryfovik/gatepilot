@@ -1,11 +1,13 @@
 package com.dt.gatepilot.apiserver.application.service;
 
 import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResult;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,14 +66,17 @@ public class GatePilotConfigSnapshotService {
         PublishedConfig.PublishedConfigSpec publishedSpec = publishedConfig.getSpec();
         String namespace = publishedConfig.getMetadata().getNamespace();
         String name = snapshotName(publishedSpec.getVersion(), publishedSpec.getConfigShard());
+        // 快照名由版本和分片决定，方便回滚按版本查找
         snapshot.getMetadata().setName(name);
         snapshot.getMetadata().setNamespace(namespace);
-        snapshot.getMetadata().getLabels().put("gatepilot.io/version", publishedSpec.getVersion());
+        snapshot.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_VERSION, publishedSpec.getVersion());
         if (StringUtils.hasText(publishedSpec.getConfigShard())) {
-            snapshot.getMetadata().getLabels().put("gatepilot.io/config-shard", publishedSpec.getConfigShard());
+            snapshot.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_CONFIG_SHARD,
+                    publishedSpec.getConfigShard());
         }
         if (publishedSpec.getProjectRef() != null) {
-            snapshot.getMetadata().getLabels().put("gatepilot.io/project", publishedSpec.getProjectRef().getName());
+            snapshot.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_PROJECT,
+                    publishedSpec.getProjectRef().getName());
         }
         GatewayConfigSnapshot.GatewayConfigSnapshotSpec spec = snapshot.getSpec();
         spec.setProjectRef(publishedSpec.getProjectRef());
@@ -115,7 +120,8 @@ public class GatePilotConfigSnapshotService {
      * @return 快照
      */
     public Optional<GatewayConfigSnapshot> findSnapshot(String namespace, String version, String configShard) {
-        CursorPage<Object> page = resourceService.list("config-snapshots", namespace, null, LOOKUP_LIMIT);
+        CursorPage<Object> page = resourceService.list(GatePilotResourcePaths.CONFIG_SNAPSHOTS, namespace, null,
+                LOOKUP_LIMIT);
         return page.getItems()
                 .stream()
                 .map(GatewayConfigSnapshot.class::cast)
@@ -142,12 +148,13 @@ public class GatePilotConfigSnapshotService {
         PublishedConfig baseConfig = base.getSpec().getPublishedConfig();
         PublishedConfig targetConfig = target.getSpec().getPublishedConfig();
         ConfigDiffResult response = new ConfigDiffResult();
+        // diff 只比较快照中的 PublishedConfig 内容
         response.setNamespace(namespace);
         response.setBaseVersion(baseVersion);
         response.setTargetVersion(targetVersion);
         response.setConfigShard(configShard);
 
-        DiffStats routeStats = appendDiffItems(response, "route",
+        DiffStats routeStats = appendDiffItems(response, ConfigDiffConstants.RESOURCE_ROUTE,
                 baseConfig.getSpec().getRoutes(),
                 targetConfig.getSpec().getRoutes(),
                 this::routeKey);
@@ -155,7 +162,7 @@ public class GatePilotConfigSnapshotService {
         response.setRemovedRoutes(routeStats.removed());
         response.setChangedRoutes(routeStats.changed());
 
-        DiffStats upstreamStats = appendDiffItems(response, "upstream",
+        DiffStats upstreamStats = appendDiffItems(response, ConfigDiffConstants.RESOURCE_UPSTREAM,
                 baseConfig.getSpec().getUpstreams(),
                 targetConfig.getSpec().getUpstreams(),
                 PublishedConfig.PublishedUpstream::getName);
@@ -163,7 +170,7 @@ public class GatePilotConfigSnapshotService {
         response.setRemovedUpstreams(upstreamStats.removed());
         response.setChangedUpstreams(upstreamStats.changed());
 
-        DiffStats policyStats = appendDiffItems(response, "policy",
+        DiffStats policyStats = appendDiffItems(response, ConfigDiffConstants.RESOURCE_POLICY,
                 baseConfig.getSpec().getPolicies(),
                 targetConfig.getSpec().getPolicies(),
                 this::policyKey);
@@ -188,20 +195,25 @@ public class GatePilotConfigSnapshotService {
             T baseItem = baseIndex.get(targetEntry.getKey());
             String targetHash = hash(targetEntry.getValue());
             if (baseItem == null) {
+                // 新版本有、旧版本没有，标记新增
                 added++;
-                response.getItems().add(diffItem(resourceType, targetEntry.getKey(), "ADDED", null, targetHash));
+                response.getItems().add(diffItem(resourceType, targetEntry.getKey(),
+                        ConfigDiffConstants.CHANGE_ADDED, null, targetHash));
                 continue;
             }
             String baseHash = hash(baseItem);
             if (!Objects.equals(baseHash, targetHash)) {
+                // 同名资源 hash 不一致，标记变更
                 changed++;
-                response.getItems().add(diffItem(resourceType, targetEntry.getKey(), "CHANGED", baseHash, targetHash));
+                response.getItems().add(diffItem(resourceType, targetEntry.getKey(),
+                        ConfigDiffConstants.CHANGE_CHANGED, baseHash, targetHash));
             }
         }
         for (Map.Entry<String, T> baseEntry : baseIndex.entrySet()) {
             if (!targetIndex.containsKey(baseEntry.getKey())) {
+                // 旧版本有、新版本没有，标记删除
                 removed++;
-                response.getItems().add(diffItem(resourceType, baseEntry.getKey(), "REMOVED",
+                response.getItems().add(diffItem(resourceType, baseEntry.getKey(), ConfigDiffConstants.CHANGE_REMOVED,
                         hash(baseEntry.getValue()), null));
             }
         }
@@ -211,7 +223,8 @@ public class GatePilotConfigSnapshotService {
     private <T> Map<String, T> indexByKey(List<T> items, Function<T, String> keyMapper) {
         Map<String, T> index = new LinkedHashMap<>();
         for (T item : items) {
-            index.put(Objects.toString(keyMapper.apply(item), "unknown"), item);
+            // key 为空时兜底成 unknown，避免 diff 过程 NPE
+            index.put(Objects.toString(keyMapper.apply(item), ConfigDiffConstants.UNKNOWN_NAME), item);
         }
         return index;
     }
@@ -222,6 +235,7 @@ public class GatePilotConfigSnapshotService {
                                                        String baseHash,
                                                        String targetHash) {
         ConfigDiffResult.ConfigDiffItem item = new ConfigDiffResult.ConfigDiffItem();
+        // diff item 只保留摘要，详情后续按需再查询快照
         item.setResourceType(resourceType);
         item.setName(name);
         item.setChangeType(changeType);
@@ -233,18 +247,21 @@ public class GatePilotConfigSnapshotService {
     private String routeKey(PublishedConfig.PublishedRoute route) {
         ResourceReference sourceRef = route.getSourceRef();
         if (sourceRef != null && StringUtils.hasText(sourceRef.getName())) {
-            return sourceRef.getNamespace() + "/" + sourceRef.getName();
+            // 优先使用来源资源名，避免 routeId 变化影响 diff
+            return sourceRef.getNamespace() + ConfigDiffConstants.RESOURCE_KEY_SEPARATOR + sourceRef.getName();
         }
         return route.getRouteId();
     }
 
     private String policyKey(PublishedConfig.PublishedPolicy policy) {
-        return policy.getType() + "/" + policy.getName();
+        // 策略名需要带类型，避免不同策略同名冲突
+        return policy.getType() + ConfigDiffConstants.RESOURCE_KEY_SEPARATOR + policy.getName();
     }
 
     private String hash(Object value) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            // 用规范 JSON 生成摘要，避免对象引用差异影响比较
+            MessageDigest digest = MessageDigest.getInstance(ConfigDiffConstants.DIGEST_SHA_256);
             String json = objectMapper.writeValueAsString(value);
             return java.util.HexFormat.of().formatHex(digest.digest(json.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException | JsonProcessingException exception) {
@@ -254,6 +271,7 @@ public class GatePilotConfigSnapshotService {
 
     private ResourceReference publishedConfigRef(PublishedConfig publishedConfig) {
         ResourceReference reference = new ResourceReference();
+        // 快照保留 PublishedConfig 引用，便于控制台串联展示
         reference.setKind(ResourceKind.PUBLISHED_CONFIG);
         reference.setNamespace(publishedConfig.getMetadata().getNamespace());
         reference.setName(publishedConfig.getMetadata().getName());
@@ -265,15 +283,19 @@ public class GatePilotConfigSnapshotService {
         if (!StringUtils.hasText(configShard)) {
             return version;
         }
-        return (version + "-" + configShard).replaceAll("[^a-zA-Z0-9._-]", "-");
+        // 资源名只能保留安全字符
+        return (version + ConfigDiffConstants.SNAPSHOT_NAME_SEPARATOR + configShard)
+                .replaceAll(ConfigDiffConstants.SAFE_NAME_REGEX, ConfigDiffConstants.SNAPSHOT_NAME_SEPARATOR);
     }
 
     private boolean projectMatches(GatewayConfigSnapshot snapshot, String projectName) {
         ResourceReference projectRef = snapshot.getSpec().getProjectRef();
+        // 老快照没有 projectRef 时先兼容通过
         return projectRef == null || Objects.equals(projectRef.getName(), projectName);
     }
 
     private BusinessException notFound(String message) {
+        // 统一使用 getboot 异常能力
         return BusinessException.of(CommonErrorCode.NOT_FOUND.code(), message);
     }
 

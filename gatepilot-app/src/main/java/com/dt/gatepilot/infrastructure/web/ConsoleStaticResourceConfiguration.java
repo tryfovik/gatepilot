@@ -16,7 +16,7 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 @Configuration
 public class ConsoleStaticResourceConfiguration {
 
-    private static final ClassPathResource INDEX_HTML = new ClassPathResource("static/index.html");
+    private static final ClassPathResource INDEX_HTML = new ClassPathResource(ConsoleWebConstants.INDEX_HTML_PATH);
 
     /**
      * Console 前端路由 fallback。
@@ -25,13 +25,15 @@ public class ConsoleStaticResourceConfiguration {
      */
     @Bean
     public RouterFunction<ServerResponse> consoleIndexRouter() {
-        return RouterFunctions.route(RequestPredicates.GET("/"), this::index)
-                .andRoute(RequestPredicates.GET("/{path:^(?!api|assets|actuator).*$}"), this::index)
-                .andRoute(RequestPredicates.GET("/{path:^(?!api|assets|actuator).*$}/**"), this::index);
+        // Vue history 路由统一回落到 index.html
+        return RouterFunctions.route(RequestPredicates.GET(ConsoleWebConstants.ROOT_ROUTE), this::index)
+                .andRoute(RequestPredicates.GET(ConsoleWebConstants.TOP_LEVEL_FALLBACK_ROUTE), this::index)
+                .andRoute(RequestPredicates.GET(ConsoleWebConstants.NESTED_FALLBACK_ROUTE), this::index);
     }
 
     private reactor.core.publisher.Mono<ServerResponse> index(
             org.springframework.web.reactive.function.server.ServerRequest request) {
+        // 静态资源不存在时让前端路由自己接管
         return ServerResponse.ok()
                 .contentType(MediaType.TEXT_HTML)
                 .body(BodyInserters.fromResource(INDEX_HTML));

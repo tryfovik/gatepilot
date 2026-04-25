@@ -90,7 +90,7 @@ public class PublishedConfigCompiler {
         Map<RouteMatchKey, CompiledRoute> index = new LinkedHashMap<>();
         for (CompiledRoute route : routes) {
             if (route.getHosts().isEmpty()) {
-                putRoute(index, new RouteMatchKey("*", route.getPathPrefix()), route);
+                putRoute(index, new RouteMatchKey(ProxyPathConstants.WILDCARD_HOST, route.getPathPrefix()), route);
                 continue;
             }
             for (String host : route.getHosts()) {
@@ -104,7 +104,8 @@ public class PublishedConfigCompiler {
         // 同一个 host + path 只能有一个路由
         CompiledRoute previous = index.putIfAbsent(key, route);
         if (previous != null) {
-            throw new IllegalArgumentException("duplicate route match key: " + key.host() + key.pathPrefix());
+            throw new IllegalArgumentException(ProxyPathConstants.ERROR_DUPLICATE_ROUTE_MATCH_KEY
+                    + key.host() + key.pathPrefix());
         }
     }
 
@@ -129,7 +130,7 @@ public class PublishedConfigCompiler {
             return null;
         }
         String normalized = host.trim().toLowerCase(Locale.ROOT);
-        int portIndex = normalized.indexOf(':');
+        int portIndex = normalized.indexOf(ProxyPathConstants.HOST_PORT_SEPARATOR);
         if (portIndex > 0) {
             normalized = normalized.substring(0, portIndex);
         }
@@ -139,15 +140,17 @@ public class PublishedConfigCompiler {
     private String normalizePath(String path) {
         // 入口 path 是必填项，缺失时直接让发布失败
         if (path == null || path.isBlank()) {
-            throw new IllegalArgumentException("route path must not be blank");
+            throw new IllegalArgumentException(ProxyPathConstants.ERROR_ROUTE_PATH_BLANK);
         }
         String normalized = path.trim();
-        normalized = normalized.startsWith("/") ? normalized : "/" + normalized;
-        int queryIndex = normalized.indexOf('?');
+        normalized = normalized.startsWith(ProxyPathConstants.PATH_SEPARATOR)
+                ? normalized
+                : ProxyPathConstants.PATH_SEPARATOR + normalized;
+        int queryIndex = normalized.indexOf(ProxyPathConstants.QUERY_SEPARATOR);
         if (queryIndex >= 0) {
             normalized = normalized.substring(0, queryIndex);
         }
-        while (normalized.length() > 1 && normalized.endsWith("/")) {
+        while (normalized.length() > 1 && normalized.endsWith(ProxyPathConstants.PATH_SEPARATOR)) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
@@ -159,8 +162,10 @@ public class PublishedConfigCompiler {
             return null;
         }
         String normalized = path.trim();
-        normalized = normalized.startsWith("/") ? normalized : "/" + normalized;
-        while (normalized.length() > 1 && normalized.endsWith("/")) {
+        normalized = normalized.startsWith(ProxyPathConstants.PATH_SEPARATOR)
+                ? normalized
+                : ProxyPathConstants.PATH_SEPARATOR + normalized;
+        while (normalized.length() > 1 && normalized.endsWith(ProxyPathConstants.PATH_SEPARATOR)) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;

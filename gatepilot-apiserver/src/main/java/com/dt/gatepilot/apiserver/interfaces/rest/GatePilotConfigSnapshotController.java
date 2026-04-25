@@ -13,7 +13,7 @@ import reactor.core.publisher.Mono;
  * 配置版本快照 API。
  */
 @RestController
-@RequestMapping("/api/gatepilot/v1/config-snapshots")
+@RequestMapping(GatePilotApiPaths.CONFIG_SNAPSHOTS)
 public class GatePilotConfigSnapshotController {
 
     private final GatePilotConfigSnapshotService snapshotService;
@@ -36,11 +36,12 @@ public class GatePilotConfigSnapshotController {
      * @param configShard 配置分片
      * @return diff 响应
      */
-    @GetMapping("/diff")
+    @GetMapping(GatePilotApiPaths.CONFIG_SNAPSHOT_DIFF)
     public Mono<ApiResponse<ConfigDiffResult>> diff(@RequestParam String namespace,
                                                       @RequestParam String baseVersion,
                                                       @RequestParam String targetVersion,
                                                       @RequestParam(required = false) String configShard) {
+        // diff 基于持久化快照，不读取 proxy 本地运行态
         return Mono.just(ApiResponse.success(snapshotService.diff(namespace, baseVersion, targetVersion, configShard)));
     }
 }

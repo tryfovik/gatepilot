@@ -1,0 +1,69 @@
+package com.dt.gatepilot.proxy.interfaces.web;
+
+import java.util.Set;
+
+/**
+ * proxy HTTP 转发常量。
+ */
+public final class ProxyHttpConstants {
+
+    /**
+     * HTTP 协议。
+     */
+    public static final String SCHEME_HTTP = "http";
+
+    /**
+     * HTTPS 协议。
+     */
+    public static final String SCHEME_HTTPS = "https";
+
+    /**
+     * 根路径。
+     */
+    public static final String ROOT_PATH = "/";
+
+    /**
+     * 路径分隔符。
+     */
+    public static final String PATH_SEPARATOR = "/";
+
+    /**
+     * 查询串分隔符。
+     */
+    public static final String QUERY_SEPARATOR = "?";
+
+    /**
+     * 管理 API 路径。
+     */
+    public static final String GATEPILOT_API_PREFIX = "/api/gatepilot/";
+
+    /**
+     * 业务 API 代理路径。
+     */
+    public static final String API_PROXY_PATH = "/api/**";
+
+    /**
+     * 本机内部代理路径。
+     */
+    public static final String INTERNAL_PROXY_PATH = "/internal/**";
+
+    /**
+     * 逐跳请求头。
+     */
+    public static final Set<String> HOP_BY_HOP_HEADERS = Set.of(
+            "connection",
+            "keep-alive",
+            "proxy-authenticate",
+            "proxy-authorization",
+            "te",
+            "trailer",
+            "transfer-encoding",
+            "upgrade",
+            "host",
+            "content-length"
+    );
+
+    private ProxyHttpConstants() {
+        // HTTP 转发常量不允许实例化
+    }
+}

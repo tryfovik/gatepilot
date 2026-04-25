@@ -1,6 +1,8 @@
 package com.dt.gatepilot.proxy.domain.runtime;
 
 import com.dt.gatepilot.domain.enums.AuthType;
+import com.dt.gatepilot.domain.enums.HttpMethod;
+import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -36,7 +38,8 @@ public class RouteAccessEvaluator {
         if (route.getMethods().isEmpty() || method == null || method.isBlank()) {
             return true;
         }
-        if (route.getMethods().stream().anyMatch(methodValue -> "ANY".equals(methodValue.name()))) {
+        // ANY 表示不限制 HTTP 方法
+        if (route.getMethods().stream().anyMatch(methodValue -> HttpMethod.ANY == methodValue)) {
             return true;
         }
         String normalizedMethod = method.trim().toUpperCase(Locale.ROOT);
@@ -44,21 +47,24 @@ public class RouteAccessEvaluator {
     }
 
     private List<String> allowedMethods(CompiledRoute route) {
-        if (route.getMethods().stream().anyMatch(method -> "ANY".equals(method.name()))) {
+        // 没有明确限制时不返回 Allow 头
+        if (route.getMethods().stream().anyMatch(method -> HttpMethod.ANY == method)) {
             return List.of();
         }
         return route.getMethods().stream().map(Enum::name).toList();
     }
 
     private boolean authenticationRequired(CompiledProxyRuntime runtime, CompiledRoute route, String requestPath) {
-        for (CompiledPolicy policy : policiesByType(runtime, route, "AuthPolicy")) {
+        for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_AUTH)) {
             if (publicPath(route, policy, requestPath)) {
                 continue;
             }
-            if (Boolean.TRUE.equals(booleanValue(policy.getConfig().get("anonymousAllowed")))) {
+            if (Boolean.TRUE.equals(booleanValue(policy.getConfig().get(
+                    PublishedConfigConstants.KEY_ANONYMOUS_ALLOWED)))) {
                 continue;
             }
-            if (AuthType.NONE.name().equalsIgnoreCase(Objects.toString(policy.getConfig().get("type"), ""))) {
+            if (AuthType.NONE.name().equalsIgnoreCase(Objects.toString(
+                    policy.getConfig().get(PublishedConfigConstants.KEY_TYPE), ""))) {
                 continue;
             }
             return true;
@@ -67,19 +73,21 @@ public class RouteAccessEvaluator {
     }
 
     private boolean publicPath(CompiledRoute route, CompiledPolicy policy, String requestPath) {
-        Object publicPaths = policy.getConfig().get("publicPaths");
+        Object publicPaths = policy.getConfig().get(PublishedConfigConstants.KEY_PUBLIC_PATHS);
         if (!(publicPaths instanceof Iterable<?> iterable) || requestPath == null) {
             return false;
         }
         String normalizedRequestPath = normalizePath(requestPath);
         String routePrefix = normalizePath(route.getPathPrefix());
         for (Object item : iterable) {
+            // publicPath 是相对路由前缀的白名单路径
             String publicPath = normalizeRelativePath(Objects.toString(item, null));
             if (publicPath == null) {
                 continue;
             }
-            String fullPath = "/".equals(publicPath) ? routePrefix : routePrefix + publicPath;
-            if (normalizedRequestPath.equals(fullPath) || normalizedRequestPath.startsWith(fullPath + "/")) {
+            String fullPath = ProxyPathConstants.ROOT_PATH.equals(publicPath) ? routePrefix : routePrefix + publicPath;
+            if (normalizedRequestPath.equals(fullPath)
+                    || normalizedRequestPath.startsWith(fullPath + ProxyPathConstants.PATH_SEPARATOR)) {
                 return true;
             }
         }
@@ -89,6 +97,7 @@ public class RouteAccessEvaluator {
     private List<CompiledPolicy> policiesByType(CompiledProxyRuntime runtime, CompiledRoute route, String type) {
         List<CompiledPolicy> policies = new ArrayList<>();
         for (String policyName : route.getPolicyNames()) {
+            // 路由只保存策略名，运行态通过索引取策略
             CompiledPolicy policy = runtime.getPoliciesByName().get(policyName);
             if (policy != null && type.equalsIgnoreCase(Objects.toString(policy.getType(), ""))) {
                 policies.add(policy);
@@ -101,6 +110,7 @@ public class RouteAccessEvaluator {
         if (value instanceof Boolean booleanValue) {
             return booleanValue;
         }
+        // JSON 载荷里可能出现字符串形式的布尔值
         return value == null ? null : Boolean.valueOf(value.toString());
     }
 
@@ -109,7 +119,8 @@ public class RouteAccessEvaluator {
         if (normalized == null) {
             return null;
         }
-        while (normalized.length() > 1 && normalized.endsWith("/")) {
+        // 白名单路径统一去掉末尾斜杠
+        while (normalized.length() > 1 && normalized.endsWith(ProxyPathConstants.PATH_SEPARATOR)) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
@@ -119,12 +130,15 @@ public class RouteAccessEvaluator {
         if (path == null || path.isBlank()) {
             return null;
         }
-        String normalized = path.startsWith("/") ? path : "/" + path;
-        int queryIndex = normalized.indexOf('?');
+        // 路径比较只看 path，不带 query
+        String normalized = path.startsWith(ProxyPathConstants.PATH_SEPARATOR)
+                ? path
+                : ProxyPathConstants.PATH_SEPARATOR + path;
+        int queryIndex = normalized.indexOf(ProxyPathConstants.QUERY_SEPARATOR);
         if (queryIndex >= 0) {
             normalized = normalized.substring(0, queryIndex);
         }
-        while (normalized.length() > 1 && normalized.endsWith("/")) {
+        while (normalized.length() > 1 && normalized.endsWith(ProxyPathConstants.PATH_SEPARATOR)) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;

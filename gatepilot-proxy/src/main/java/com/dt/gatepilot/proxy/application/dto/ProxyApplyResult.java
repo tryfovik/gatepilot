@@ -55,12 +55,13 @@ public class ProxyApplyResult {
      */
     public static ProxyApplyResult applied(String version, String configHash, Instant startedAt) {
         ProxyApplyResult result = new ProxyApplyResult();
+        // 成功结果只表达 proxy 已切换运行态
         result.setVersion(version);
         result.setConfigHash(configHash);
         result.setState(ConfigApplyState.APPLIED);
         result.setStartedAt(startedAt);
         result.setFinishedAt(Instant.now());
-        result.setMessage("配置已应用");
+        result.setMessage(ProxyApplyConstants.MESSAGE_APPLIED);
         return result;
     }
 
@@ -80,6 +81,7 @@ public class ProxyApplyResult {
                                           String message,
                                           Instant startedAt) {
         ProxyApplyResult result = new ProxyApplyResult();
+        // 失败结果保留版本和 hash，便于回溯发布产物
         result.setVersion(version);
         result.setConfigHash(configHash);
         result.setState(ConfigApplyState.FAILED);

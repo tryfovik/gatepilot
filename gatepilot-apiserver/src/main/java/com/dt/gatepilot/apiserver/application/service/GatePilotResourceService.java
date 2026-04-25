@@ -4,6 +4,7 @@ import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.repository.GatePilotResourceStore;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,6 +52,7 @@ public class GatePilotResourceService {
      * @return 保存后的资源
      */
     public Object save(String resourcePath, String namespace, String name, JsonNode body) {
+        // 入站 JSON 先转成注册表里的资源类型
         GatePilotResourceType resourceType = requireResourceType(resourcePath);
         Object resource = objectMapper.convertValue(body, resourceType.getJavaType());
         return save(resourceType, namespace, name, resource);
@@ -67,6 +69,7 @@ public class GatePilotResourceService {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Object save(GatePilotResourceType resourceType, String namespace, String name, Object resource) {
+        // 写入统一经过资源存储端口，业务层不关心具体介质
         return resourceStore.save(resourceType.getKind(), namespace, name, resource, (Class) resourceType.getJavaType());
     }
 
@@ -83,6 +86,7 @@ public class GatePilotResourceService {
     public CursorPage<Object> list(String resourcePath, String namespace, String cursor, Integer limit) {
         GatePilotResourceType resourceType = requireResourceType(resourcePath);
         int effectiveLimit = Optional.ofNullable(limit).orElse(DEFAULT_LIMIT);
+        // 这里保持 cursor 分页，不返回全量资源
         return (CursorPage) resourceStore.list(
                 resourceType.getKind(),
                 namespace,
@@ -103,6 +107,7 @@ public class GatePilotResourceService {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Object get(String resourcePath, String namespace, String name) {
         GatePilotResourceType resourceType = requireResourceType(resourcePath);
+        // 资源类型决定反序列化目标，避免接口层分散判断
         Object resource = resourceStore.find(resourceType.getKind(), namespace, name, (Class) resourceType.getJavaType())
                 .orElse(null);
         if (resource == null) {
@@ -120,6 +125,7 @@ public class GatePilotResourceService {
      */
     public void delete(String resourcePath, String namespace, String name) {
         GatePilotResourceType resourceType = requireResourceType(resourcePath);
+        // 删除也只按资源类型和主键定位
         resourceStore.delete(resourceType.getKind(), namespace, name);
     }
 
@@ -131,20 +137,21 @@ public class GatePilotResourceService {
      */
     public GatePilotResourceType requireResourceType(ResourceKind kind) {
         return switch (kind) {
-            case GATEWAY_PROJECT -> requireResourceType("projects");
-            case GATEWAY_ROUTE -> requireResourceType("routes");
-            case TRAFFIC_POLICY -> requireResourceType("traffic-policies");
-            case RELEASE_POLICY -> requireResourceType("release-policies");
-            case AUTH_POLICY -> requireResourceType("auth-policies");
-            case UPSTREAM -> requireResourceType("upstreams");
-            case PUBLISHED_CONFIG -> requireResourceType("published-configs");
-            case CONFIG_SNAPSHOT -> requireResourceType("config-snapshots");
-            case GATEWAY_NODE -> requireResourceType("nodes");
-            case GATEWAY_EVENT -> requireResourceType("events");
+            case GATEWAY_PROJECT -> requireResourceType(GatePilotResourcePaths.PROJECTS);
+            case GATEWAY_ROUTE -> requireResourceType(GatePilotResourcePaths.ROUTES);
+            case TRAFFIC_POLICY -> requireResourceType(GatePilotResourcePaths.TRAFFIC_POLICIES);
+            case RELEASE_POLICY -> requireResourceType(GatePilotResourcePaths.RELEASE_POLICIES);
+            case AUTH_POLICY -> requireResourceType(GatePilotResourcePaths.AUTH_POLICIES);
+            case UPSTREAM -> requireResourceType(GatePilotResourcePaths.UPSTREAMS);
+            case PUBLISHED_CONFIG -> requireResourceType(GatePilotResourcePaths.PUBLISHED_CONFIGS);
+            case CONFIG_SNAPSHOT -> requireResourceType(GatePilotResourcePaths.CONFIG_SNAPSHOTS);
+            case GATEWAY_NODE -> requireResourceType(GatePilotResourcePaths.NODES);
+            case GATEWAY_EVENT -> requireResourceType(GatePilotResourcePaths.EVENTS);
         };
     }
 
     private GatePilotResourceType requireResourceType(String resourcePath) {
+        // 未注册资源直接拒绝，避免控制面写入未知结构
         return resourceRegistry.findByPath(resourcePath)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "未知资源类型: " + resourcePath));
     }

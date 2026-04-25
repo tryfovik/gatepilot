@@ -2,6 +2,7 @@ package com.dt.gatepilot.agent.application.dto;
 
 import com.dt.gatepilot.domain.enums.NodeRole;
 import com.dt.gatepilot.domain.resource.meta.LabelSelector;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,7 +18,7 @@ public class AgentNodeProfile {
     /**
      * 节点命名空间。
      */
-    private String namespace = "default";
+    private String namespace = ResourceMetadataConstants.DEFAULT_NAMESPACE;
 
     /**
      * 节点标识。

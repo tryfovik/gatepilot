@@ -50,8 +50,41 @@ class AgentRuntimeCoordinatorTest {
                 assertThat(config.getSpec().getVersion()).isEqualTo("v1"));
     }
 
+    @Test
+    void shouldPromoteLastGoodWhenProxyApplySucceeded() {
+        AgentNodeProfile profile = new AgentNodeProfile();
+        profile.setNamespace("default");
+        profile.setNodeId("node-1");
+        InMemoryLocalConfigStore localConfigStore = new InMemoryLocalConfigStore();
+        StubControlPlaneClient controlPlaneClient = new StubControlPlaneClient(config("v2", "hash-v2"));
+        AgentRuntimeCoordinator coordinator = new AgentRuntimeCoordinator(
+                profile,
+                controlPlaneClient,
+                localConfigStore,
+                config -> {
+                    AgentApplyResult result = new AgentApplyResult();
+                    // 成功结果只模拟 proxy 已应用状态
+                    result.setState(ConfigApplyState.APPLIED);
+                    return result;
+                }
+        );
+
+        Optional<AgentApplyResult> result = coordinator.pullAndApply();
+
+        assertThat(result).hasValueSatisfying(applyResult -> {
+            assertThat(applyResult.getState()).isEqualTo(ConfigApplyState.APPLIED);
+            assertThat(applyResult.getNodeId()).isEqualTo("node-1");
+            assertThat(applyResult.getVersion()).isEqualTo("v2");
+        });
+        assertThat(localConfigStore.loadLastGood()).hasValueSatisfying(config ->
+                assertThat(config.getSpec().getVersion()).isEqualTo("v2"));
+        assertThat(controlPlaneClient.reportedResult).isNotNull();
+        assertThat(controlPlaneClient.reportedResult.getState()).isEqualTo(ConfigApplyState.APPLIED);
+    }
+
     private PublishedConfig config(String version, String configHash) {
         PublishedConfig config = new PublishedConfig();
+        // 测试配置只填 agent 游标和 apply 必需字段
         config.getSpec().setVersion(version);
         config.getSpec().setConfigHash(configHash);
         config.getSpec().setSequence(version.endsWith("1") ? 1L : 2L);

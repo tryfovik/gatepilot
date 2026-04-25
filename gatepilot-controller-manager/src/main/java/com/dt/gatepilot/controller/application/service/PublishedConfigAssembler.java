@@ -2,12 +2,14 @@ package com.dt.gatepilot.controller.application.service;
 
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
+import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
 import com.dt.gatepilot.domain.resource.route.GatewayRoute;
 import com.dt.gatepilot.domain.resource.upstream.Upstream;
 import com.dt.gatepilot.controller.application.command.ReconcileRequest;
@@ -37,11 +39,13 @@ public class PublishedConfigAssembler {
      */
     public PublishedConfig assemble(ReconcileRequest request, GatewayDesiredState desiredState) {
         PublishedConfig config = new PublishedConfig();
+        // PublishedConfig 是 agent 和 proxy 的唯一发布产物
         config.getMetadata().setName(publishedConfigName(request.getVersion(), request.getConfigShard()));
         config.getMetadata().setNamespace(request.getNamespace());
-        config.getMetadata().getLabels().put("gatepilot.io/project", request.getProjectName());
+        config.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_PROJECT, request.getProjectName());
         if (request.getConfigShard() != null) {
-            config.getMetadata().getLabels().put("gatepilot.io/config-shard", request.getConfigShard());
+            config.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_CONFIG_SHARD,
+                    request.getConfigShard());
         }
         PublishedConfig.PublishedConfigSpec spec = config.getSpec();
         spec.setProjectRef(projectRef(request));
@@ -64,6 +68,7 @@ public class PublishedConfigAssembler {
 
     private ResourceReference projectRef(ReconcileRequest request) {
         ResourceReference reference = new ResourceReference();
+        // 发布产物里保留项目引用，方便控制面反查来源
         reference.setKind(ResourceKind.GATEWAY_PROJECT);
         reference.setNamespace(request.getNamespace());
         reference.setName(request.getProjectName());
@@ -74,11 +79,15 @@ public class PublishedConfigAssembler {
         if (configShard == null) {
             return version;
         }
-        return (version + "-" + configShard).replaceAll("[^a-zA-Z0-9._-]", "-");
+        // 资源名需要清理成 Kubernetes 风格的安全字符
+        return (version + PublishedConfigAssemblerConstants.NAME_SEPARATOR + configShard)
+                .replaceAll(PublishedConfigAssemblerConstants.SAFE_NAME_REGEX,
+                        PublishedConfigAssemblerConstants.NAME_SEPARATOR);
     }
 
     private ResourceReference nodeRef(GatewayNode node) {
         ResourceReference reference = new ResourceReference();
+        // targetNodeRefs 只保存节点资源引用，不复制节点状态
         reference.setKind(ResourceKind.GATEWAY_NODE);
         reference.setNamespace(node.getMetadata().getNamespace());
         reference.setName(node.getMetadata().getName());
@@ -115,6 +124,7 @@ public class PublishedConfigAssembler {
 
     private PublishedConfig.PublishedUpstream upstreamSnapshot(Upstream upstream) {
         PublishedConfig.PublishedUpstream snapshot = new PublishedConfig.PublishedUpstream();
+        // 上游发布快照只保留转发所需字段
         snapshot.setName(upstream.getMetadata().getName());
         snapshot.setSourceRef(ref(ResourceKind.UPSTREAM, upstream.getMetadata().getNamespace(),
                 upstream.getMetadata().getName(), upstream.getMetadata().getUid()));
@@ -126,6 +136,7 @@ public class PublishedConfigAssembler {
 
     private PublishedConfig.PublishedEndpoint endpointSnapshot(Upstream.UpstreamEndpoint endpoint) {
         PublishedConfig.PublishedEndpoint snapshot = new PublishedConfig.PublishedEndpoint();
+        // endpoint 不携带健康状态，健康由 agent 另行上报
         snapshot.setHost(endpoint.getHost());
         snapshot.setPort(endpoint.getPort());
         snapshot.setWeight(endpoint.getWeight());
@@ -133,6 +144,7 @@ public class PublishedConfigAssembler {
     }
 
     private List<PublishedConfig.PublishedPolicy> policySnapshots(GatewayDesiredState desiredState) {
+        // 三类策略合并成 PublishedPolicy 列表，proxy 按 type 识别
         return Stream.of(
                         desiredState.getTrafficPolicies().stream().map(this::trafficPolicySnapshot),
                         desiredState.getReleasePolicies().stream().map(this::releasePolicySnapshot),
@@ -143,40 +155,46 @@ public class PublishedConfigAssembler {
     }
 
     private PublishedConfig.PublishedPolicy trafficPolicySnapshot(TrafficPolicy policy) {
-        PublishedConfig.PublishedPolicy snapshot = basePolicySnapshot("TrafficPolicy", ResourceKind.TRAFFIC_POLICY,
-                policy.getMetadata().getNamespace(), policy.getMetadata().getName(), policy.getMetadata().getUid());
-        snapshot.getConfig().put("targetRefs", policy.getSpec().getTargetRefs());
-        snapshot.getConfig().put("targetSelector", policy.getSpec().getTargetSelector());
-        snapshot.getConfig().put("timeout", policy.getSpec().getTimeout());
-        snapshot.getConfig().put("retry", policy.getSpec().getRetry());
-        snapshot.getConfig().put("circuitBreaker", policy.getSpec().getCircuitBreaker());
-        snapshot.getConfig().put("rateLimit", policy.getSpec().getRateLimit());
-        snapshot.getConfig().put("colorRules", policy.getSpec().getColorRules());
+        PublishedConfig.PublishedPolicy snapshot = basePolicySnapshot(PublishedConfigConstants.POLICY_TYPE_TRAFFIC,
+                ResourceKind.TRAFFIC_POLICY, policy.getMetadata().getNamespace(), policy.getMetadata().getName(),
+                policy.getMetadata().getUid());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_TARGET_REFS, policy.getSpec().getTargetRefs());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_TARGET_SELECTOR, policy.getSpec().getTargetSelector());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_TIMEOUT, policy.getSpec().getTimeout());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_RETRY, policy.getSpec().getRetry());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_CIRCUIT_BREAKER, policy.getSpec().getCircuitBreaker());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_RATE_LIMIT, policy.getSpec().getRateLimit());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_COLOR_RULES, policy.getSpec().getColorRules());
         return snapshot;
     }
 
     private PublishedConfig.PublishedPolicy releasePolicySnapshot(ReleasePolicy policy) {
-        PublishedConfig.PublishedPolicy snapshot = basePolicySnapshot("ReleasePolicy", ResourceKind.RELEASE_POLICY,
-                policy.getMetadata().getNamespace(), policy.getMetadata().getName(), policy.getMetadata().getUid());
-        snapshot.getConfig().put("strategy", policy.getSpec().getStrategy());
-        snapshot.getConfig().put("stableUpstreamRef", policy.getSpec().getStableUpstreamRef());
-        snapshot.getConfig().put("candidateUpstreamRef", policy.getSpec().getCandidateUpstreamRef());
-        snapshot.getConfig().put("trafficSplits", policy.getSpec().getTrafficSplits());
-        snapshot.getConfig().put("steps", policy.getSpec().getSteps());
-        snapshot.getConfig().put("autoRollback", policy.getSpec().getAutoRollback());
+        PublishedConfig.PublishedPolicy snapshot = basePolicySnapshot(PublishedConfigConstants.POLICY_TYPE_RELEASE,
+                ResourceKind.RELEASE_POLICY, policy.getMetadata().getNamespace(), policy.getMetadata().getName(),
+                policy.getMetadata().getUid());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_STRATEGY, policy.getSpec().getStrategy());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_STABLE_UPSTREAM_REF,
+                policy.getSpec().getStableUpstreamRef());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_CANDIDATE_UPSTREAM_REF,
+                policy.getSpec().getCandidateUpstreamRef());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_TRAFFIC_SPLITS, policy.getSpec().getTrafficSplits());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_STEPS, policy.getSpec().getSteps());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_AUTO_ROLLBACK, policy.getSpec().getAutoRollback());
         return snapshot;
     }
 
     private PublishedConfig.PublishedPolicy authPolicySnapshot(AuthPolicy policy) {
-        PublishedConfig.PublishedPolicy snapshot = basePolicySnapshot("AuthPolicy", ResourceKind.AUTH_POLICY,
-                policy.getMetadata().getNamespace(), policy.getMetadata().getName(), policy.getMetadata().getUid());
-        snapshot.getConfig().put("type", policy.getSpec().getType());
-        snapshot.getConfig().put("targetRefs", policy.getSpec().getTargetRefs());
-        snapshot.getConfig().put("targetSelector", policy.getSpec().getTargetSelector());
-        snapshot.getConfig().put("anonymousAllowed", policy.getSpec().getAnonymousAllowed());
-        snapshot.getConfig().put("credentialRefs", policy.getSpec().getCredentialRefs());
-        snapshot.getConfig().put("jwt", policy.getSpec().getJwt());
-        snapshot.getConfig().put("apiKey", policy.getSpec().getApiKey());
+        PublishedConfig.PublishedPolicy snapshot = basePolicySnapshot(PublishedConfigConstants.POLICY_TYPE_AUTH,
+                ResourceKind.AUTH_POLICY, policy.getMetadata().getNamespace(), policy.getMetadata().getName(),
+                policy.getMetadata().getUid());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_TYPE, policy.getSpec().getType());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_TARGET_REFS, policy.getSpec().getTargetRefs());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_TARGET_SELECTOR, policy.getSpec().getTargetSelector());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_ANONYMOUS_ALLOWED,
+                policy.getSpec().getAnonymousAllowed());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_CREDENTIAL_REFS, policy.getSpec().getCredentialRefs());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_JWT, policy.getSpec().getJwt());
+        snapshot.getConfig().put(PublishedConfigConstants.KEY_API_KEY, policy.getSpec().getApiKey());
         return snapshot;
     }
 
@@ -186,6 +204,7 @@ public class PublishedConfigAssembler {
                                                               String name,
                                                               String uid) {
         PublishedConfig.PublishedPolicy snapshot = new PublishedConfig.PublishedPolicy();
+        // policy type 是 proxy 识别策略的稳定契约
         snapshot.setName(name);
         snapshot.setType(type);
         snapshot.setSourceRef(ref(kind, namespace, name, uid));
@@ -194,6 +213,7 @@ public class PublishedConfigAssembler {
 
     private ResourceReference ref(ResourceKind kind, String namespace, String name, String uid) {
         ResourceReference reference = new ResourceReference();
+        // 只放资源引用，不复制完整资源对象
         reference.setKind(kind);
         reference.setNamespace(namespace);
         reference.setName(name);
@@ -202,21 +222,26 @@ public class PublishedConfigAssembler {
     }
 
     private String hash(PublishedConfig.PublishedConfigSpec spec) {
-        String canonical = String.join("|",
-                Objects.toString(spec.getProjectRef().getNamespace(), ""),
-                Objects.toString(spec.getProjectRef().getName(), ""),
-                Objects.toString(spec.getVersion(), ""),
-                Objects.toString(spec.getConfigShard(), ""),
-                Objects.toString(spec.getSequence(), ""),
+        // hash 只取影响运行态的关键字段，避免状态字段扰动发布
+        String canonical = String.join(PublishedConfigAssemblerConstants.HASH_FIELD_SEPARATOR,
+                Objects.toString(spec.getProjectRef().getNamespace(),
+                        PublishedConfigAssemblerConstants.EMPTY_HASH_PART),
+                Objects.toString(spec.getProjectRef().getName(), PublishedConfigAssemblerConstants.EMPTY_HASH_PART),
+                Objects.toString(spec.getVersion(), PublishedConfigAssemblerConstants.EMPTY_HASH_PART),
+                Objects.toString(spec.getConfigShard(), PublishedConfigAssemblerConstants.EMPTY_HASH_PART),
+                Objects.toString(spec.getSequence(), PublishedConfigAssemblerConstants.EMPTY_HASH_PART),
                 spec.getRoutes().stream().map(PublishedConfig.PublishedRoute::getRouteId).sorted()
-                        .reduce("", (left, right) -> left + "," + right),
+                        .reduce(PublishedConfigAssemblerConstants.EMPTY_HASH_PART,
+                                (left, right) -> left + PublishedConfigAssemblerConstants.HASH_LIST_SEPARATOR + right),
                 spec.getUpstreams().stream().map(PublishedConfig.PublishedUpstream::getName).sorted()
-                        .reduce("", (left, right) -> left + "," + right),
+                        .reduce(PublishedConfigAssemblerConstants.EMPTY_HASH_PART,
+                                (left, right) -> left + PublishedConfigAssemblerConstants.HASH_LIST_SEPARATOR + right),
                 spec.getPolicies().stream().map(PublishedConfig.PublishedPolicy::getName).sorted()
-                        .reduce("", (left, right) -> left + "," + right)
+                        .reduce(PublishedConfigAssemblerConstants.EMPTY_HASH_PART,
+                                (left, right) -> left + PublishedConfigAssemblerConstants.HASH_LIST_SEPARATOR + right)
         );
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            MessageDigest digest = MessageDigest.getInstance(PublishedConfigAssemblerConstants.DIGEST_SHA_256);
             return HexFormat.of().formatHex(digest.digest(canonical.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 digest is not available", exception);

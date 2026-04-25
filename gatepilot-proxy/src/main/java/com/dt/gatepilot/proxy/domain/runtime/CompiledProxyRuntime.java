@@ -64,7 +64,7 @@ public class CompiledProxyRuntime {
         if (exactHostRoute != null) {
             return exactHostRoute;
         }
-        return matchByHost("*", normalizedPath);
+        return matchByHost(ProxyPathConstants.WILDCARD_HOST, normalizedPath);
     }
 
     /**
@@ -111,9 +111,9 @@ public class CompiledProxyRuntime {
     }
 
     private String parentPath(String path) {
-        int lastSlash = path.lastIndexOf('/');
+        int lastSlash = path.lastIndexOf(ProxyPathConstants.PATH_SEPARATOR);
         if (lastSlash <= 0) {
-            return "/".equals(path) ? null : "/";
+            return ProxyPathConstants.ROOT_PATH.equals(path) ? null : ProxyPathConstants.ROOT_PATH;
         }
         return path.substring(0, lastSlash);
     }
@@ -122,12 +122,14 @@ public class CompiledProxyRuntime {
         if (path == null || path.isBlank()) {
             return null;
         }
-        String normalized = path.startsWith("/") ? path : "/" + path;
-        int queryIndex = normalized.indexOf('?');
+        String normalized = path.startsWith(ProxyPathConstants.PATH_SEPARATOR)
+                ? path
+                : ProxyPathConstants.PATH_SEPARATOR + path;
+        int queryIndex = normalized.indexOf(ProxyPathConstants.QUERY_SEPARATOR);
         if (queryIndex >= 0) {
             normalized = normalized.substring(0, queryIndex);
         }
-        while (normalized.length() > 1 && normalized.endsWith("/")) {
+        while (normalized.length() > 1 && normalized.endsWith(ProxyPathConstants.PATH_SEPARATOR)) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
@@ -138,7 +140,7 @@ public class CompiledProxyRuntime {
             return null;
         }
         String normalized = host.trim().toLowerCase(Locale.ROOT);
-        int portIndex = normalized.indexOf(':');
+        int portIndex = normalized.indexOf(ProxyPathConstants.HOST_PORT_SEPARATOR);
         if (portIndex > 0) {
             return normalized.substring(0, portIndex);
         }

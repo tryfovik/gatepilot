@@ -22,6 +22,7 @@
 - agent 负责节点注册、配置同步、last-good 和状态上报，不做发布决策。
 - 公共能力先查 getboot；getboot 有就接入和配置，getboot 没有也不能在 GatePilot 临时补，必须先回 getboot 补能力，再让 GatePilot 依赖。
 - Java 注释统一使用展开式 Javadoc，不新增 `/** xxx */` 这种单行 Javadoc。
+- 禁止硬编码业务路径、Header、label、reason、配置 key 和默认值；常量按上下文收敛到明确命名的常量类，不能建全局垃圾常量包。
 
 目标模块：
 
@@ -120,6 +121,7 @@ console
 - [x] 对齐 getboot `ApiResponse`、`X-Trace-Id`、MDC `traceId` 和 HTTP 出站透传约定。
 - [x] 写入并执行 GatePilot Java 展开式 Javadoc 注释格式。
 - [x] 写入方法内中文注释规则：注释要短、核心、像人写，末尾不加句号。
+- [x] 写入硬编码禁止规则：路径、Header、label、reason、配置 key、默认值必须进入上下文常量类。
 - [x] 清理旧模块收敛过程中的半成品状态，保证工作区重新回到可编译、可测试状态。
 - [x] 将 GatePilot 模块包结构调整为 DDD 分层，移除内部 `api / spi / support` 包口径。
 - [x] 从父级 Maven reactor 摘掉历史模块，主构建只保留 GatePilot 新模块。

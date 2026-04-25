@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * GatePilot controller-manager 配置。
  */
 @Data
-@ConfigurationProperties(prefix = "gatepilot.controller-manager")
+@ConfigurationProperties(prefix = ControllerManagerConstants.CONFIG_PREFIX)
 public class GatePilotControllerManagerProperties {
 
     /**
@@ -18,7 +18,7 @@ public class GatePilotControllerManagerProperties {
     /**
      * controller-manager 实例标识。
      */
-    private String controllerId = "local-controller";
+    private String controllerId = ControllerManagerConstants.DEFAULT_CONTROLLER_ID;
 
     /**
      * 单次 reconcile 最大处理数量。

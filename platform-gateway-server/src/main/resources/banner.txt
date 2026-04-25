@@ -4,5 +4,5 @@
 / /_/ / / ____// ____/
 \\____/ /_/    /_/
 
-:: Platform Gateway ::
+:: GatePilot ::
 :: ${spring.application.name} ::

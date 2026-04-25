@@ -5,6 +5,7 @@ import com.dt.gatepilot.agent.application.dto.AgentConfigCursor;
 import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
 import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
 import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
+import com.dt.gatepilot.agent.infrastructure.config.AgentRuntimeConstants;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
@@ -23,10 +24,11 @@ import org.springframework.web.reactive.function.client.WebClient;
  * <p>Trace Header 透传由 getboot-http-client 自动挂载到 WebClient.Builder，不在这里手写。</p>
  */
 @Component
-@ConditionalOnProperty(prefix = "gatepilot.agent", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = AgentRuntimeConstants.CONFIG_PREFIX,
+        name = AgentRuntimeConstants.ENABLED_PROPERTY,
+        havingValue = "true",
+        matchIfMissing = true)
 public class WebClientAgentControlPlaneClient implements AgentControlPlaneClient {
-
-    private static final String API_PREFIX = "/api/gatepilot/v1/agents";
 
     private final WebClient webClient;
 
@@ -42,20 +44,21 @@ public class WebClientAgentControlPlaneClient implements AgentControlPlaneClient
 
     @Override
     public void register(AgentNodeProfile profile) {
-        post("/register", profile, new ParameterizedTypeReference<ApiResponse<GatewayNode>>() {
+        post(AgentControlPlaneApiPaths.REGISTER, profile, new ParameterizedTypeReference<ApiResponse<GatewayNode>>() {
         });
     }
 
     @Override
     public void heartbeat(AgentHeartbeatSnapshot heartbeat) {
-        post("/heartbeat", heartbeat, new ParameterizedTypeReference<ApiResponse<GatewayNode>>() {
+        post(AgentControlPlaneApiPaths.HEARTBEAT, heartbeat,
+                new ParameterizedTypeReference<ApiResponse<GatewayNode>>() {
         });
     }
 
     @Override
     public Optional<PublishedConfig> pullConfig(AgentConfigCursor cursor) {
         ApiResponse<ControlPlaneConfigPullResponse> response = post(
-                "/configs/pull",
+                AgentControlPlaneApiPaths.CONFIG_PULL,
                 cursor,
                 new ParameterizedTypeReference<ApiResponse<ControlPlaneConfigPullResponse>>() {
                 }
@@ -69,13 +72,15 @@ public class WebClientAgentControlPlaneClient implements AgentControlPlaneClient
 
     @Override
     public void reportApplyResult(AgentApplyResult result) {
-        post("/apply-results", result, new ParameterizedTypeReference<ApiResponse<GatewayNode>>() {
+        post(AgentControlPlaneApiPaths.APPLY_RESULTS, result,
+                new ParameterizedTypeReference<ApiResponse<GatewayNode>>() {
         });
     }
 
     private <T> ApiResponse<T> post(String path, Object body, ParameterizedTypeReference<ApiResponse<T>> type) {
+        // 统一走 Spring 管理的 WebClient，Trace 透传交给 getboot-http-client
         ApiResponse<T> response = webClient.post()
-                .uri(API_PREFIX + path)
+                .uri(AgentControlPlaneApiPaths.API_PREFIX + path)
                 .bodyValue(body)
                 .retrieve()
                 .bodyToMono(type)

@@ -2,7 +2,9 @@ package com.dt.gatepilot.apiserver.infrastructure.controller;
 
 import com.dt.gatepilot.domain.enums.EventSeverity;
 import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.resource.event.GatewayEventConstants;
 import com.dt.gatepilot.domain.resource.meta.LabelSelector;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
@@ -15,6 +17,7 @@ import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.domain.resource.route.GatewayRoute;
 import com.dt.gatepilot.domain.resource.upstream.Upstream;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.dt.gatepilot.apiserver.application.service.GatePilotConfigSnapshotService;
 import com.dt.gatepilot.apiserver.application.service.GatePilotResourceService;
@@ -40,22 +43,6 @@ public class GatePilotControllerResourceAdapter
 
     private static final int LIST_LIMIT = 500;
 
-    private static final String EVENT_TYPE_LABEL = "gatepilot.io/event-type";
-
-    private static final String RECONCILE_STATE_LABEL = "gatepilot.io/reconcile-state";
-
-    private static final String RECONCILE_CONTROLLER_LABEL = "gatepilot.io/reconcile-controller";
-
-    private static final String RELEASE_REQUEST = "release-request";
-
-    private static final String STATE_PENDING = "pending";
-
-    private static final String STATE_PROCESSING = "processing";
-
-    private static final String STATE_COMPLETED = "completed";
-
-    private static final String STATE_FAILED = "failed";
-
     private final GatePilotResourceService resourceService;
 
     private final GatePilotConfigSnapshotService snapshotService;
@@ -75,7 +62,8 @@ public class GatePilotControllerResourceAdapter
     @Override
     public List<ReleaseIntent> listPending(int limit) {
         int effectiveLimit = Math.min(limit, LIST_LIMIT);
-        return list("events", null, GatewayEvent.class)
+        // controller 每轮只领取有限数量，避免单副本长时间占用
+        return list(GatePilotResourcePaths.EVENTS, null, GatewayEvent.class)
                 .stream()
                 .filter(this::isPendingCreateReleaseCommand)
                 .limit(effectiveLimit)
@@ -89,10 +77,12 @@ public class GatePilotControllerResourceAdapter
         if (!isPendingCreateReleaseCommand(event)) {
             return false;
         }
-        event.getMetadata().getLabels().put(RECONCILE_STATE_LABEL, STATE_PROCESSING);
-        event.getMetadata().getLabels().put(RECONCILE_CONTROLLER_LABEL, controllerId);
-        event.getSpec().getAttributes().put("claimedBy", controllerId);
-        event.getSpec().getAttributes().put("claimedAt", Instant.now().toString());
+        // claim 通过事件标签表达，后续数据库乐观锁会继续加强
+        event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_RECONCILE_STATE,
+                GatewayEventConstants.RECONCILE_STATE_PROCESSING);
+        event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_RECONCILE_CONTROLLER, controllerId);
+        event.getSpec().getAttributes().put(GatewayEventConstants.ATTRIBUTE_CLAIMED_BY, controllerId);
+        event.getSpec().getAttributes().put(GatewayEventConstants.ATTRIBUTE_CLAIMED_AT, Instant.now().toString());
         event.getSpec().setLastObservedAt(Instant.now());
         intent.setSequence(nextSequence(intent.getNamespace(), intent.getConfigShard()));
         saveEvent(event);
@@ -103,34 +93,41 @@ public class GatePilotControllerResourceAdapter
     public void markCompleted(ReleaseIntent intent, ReconcileResult result) {
         GatewayEvent event = loadSourceEvent(intent);
         PublishedConfig publishedConfig = result.getPublishedConfig();
-        event.getMetadata().getLabels().put(RECONCILE_STATE_LABEL, STATE_COMPLETED);
-        event.getMetadata().getLabels().put("gatepilot.io/version", publishedConfig.getSpec().getVersion());
-        event.getSpec().setReason("ReleaseReconciled");
+        // reconcile 成功后把版本写回原始事件，控制台直接查事件即可展示进度
+        event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_RECONCILE_STATE,
+                GatewayEventConstants.RECONCILE_STATE_COMPLETED);
+        event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_VERSION,
+                publishedConfig.getSpec().getVersion());
+        event.getSpec().setReason(GatewayEventConstants.REASON_RELEASE_RECONCILED);
         event.getSpec().setMessage("controller-manager 已生成 PublishedConfig 并保存快照");
         event.getSpec().setSeverity(EventSeverity.INFO);
         event.getSpec().setLastObservedAt(Instant.now());
-        event.getSpec().getAttributes().put("publishedConfigName", publishedConfig.getMetadata().getName());
-        event.getSpec().getAttributes().put("configHash", publishedConfig.getSpec().getConfigHash());
-        event.getSpec().getAttributes().put("completedAt", Instant.now().toString());
+        event.getSpec().getAttributes().put(GatewayEventConstants.ATTRIBUTE_PUBLISHED_CONFIG_NAME,
+                publishedConfig.getMetadata().getName());
+        event.getSpec().getAttributes().put(GatewayEventConstants.ATTRIBUTE_CONFIG_HASH,
+                publishedConfig.getSpec().getConfigHash());
+        event.getSpec().getAttributes().put(GatewayEventConstants.ATTRIBUTE_COMPLETED_AT, Instant.now().toString());
         saveEvent(event);
     }
 
     @Override
     public void markFailed(ReleaseIntent intent, String reason, String message) {
         GatewayEvent event = loadSourceEvent(intent);
-        event.getMetadata().getLabels().put(RECONCILE_STATE_LABEL, STATE_FAILED);
+        // 失败原因保留在事件上，方便控制台按发布单追踪
+        event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_RECONCILE_STATE,
+                GatewayEventConstants.RECONCILE_STATE_FAILED);
         event.getSpec().setReason(reason);
         event.getSpec().setMessage(message);
         event.getSpec().setSeverity(EventSeverity.ERROR);
         event.getSpec().setLastObservedAt(Instant.now());
-        event.getSpec().getAttributes().put("failedAt", Instant.now().toString());
+        event.getSpec().getAttributes().put(GatewayEventConstants.ATTRIBUTE_FAILED_AT, Instant.now().toString());
         saveEvent(event);
     }
 
     @Override
     public GatewayDesiredState read(ReleaseIntent intent) {
         GatewayProject project = (GatewayProject) resourceService.get(
-                "projects",
+                GatePilotResourcePaths.PROJECTS,
                 intent.getNamespace(),
                 intent.getProjectName()
         );
@@ -159,42 +156,42 @@ public class GatePilotControllerResourceAdapter
     }
 
     private List<GatewayRoute> projectRoutes(ReleaseIntent intent) {
-        return list("routes", intent.getNamespace(), GatewayRoute.class)
+        return list(GatePilotResourcePaths.ROUTES, intent.getNamespace(), GatewayRoute.class)
                 .stream()
                 .filter(route -> projectMatches(route.getSpec().getProjectRef(), intent.getProjectName()))
                 .toList();
     }
 
     private List<Upstream> projectUpstreams(ReleaseIntent intent) {
-        return list("upstreams", intent.getNamespace(), Upstream.class)
+        return list(GatePilotResourcePaths.UPSTREAMS, intent.getNamespace(), Upstream.class)
                 .stream()
                 .filter(upstream -> projectMatches(upstream.getSpec().getProjectRef(), intent.getProjectName()))
                 .toList();
     }
 
     private List<TrafficPolicy> projectTrafficPolicies(ReleaseIntent intent) {
-        return list("traffic-policies", intent.getNamespace(), TrafficPolicy.class)
+        return list(GatePilotResourcePaths.TRAFFIC_POLICIES, intent.getNamespace(), TrafficPolicy.class)
                 .stream()
                 .filter(policy -> projectMatches(policy.getSpec().getProjectRef(), intent.getProjectName()))
                 .toList();
     }
 
     private List<ReleasePolicy> projectReleasePolicies(ReleaseIntent intent) {
-        return list("release-policies", intent.getNamespace(), ReleasePolicy.class)
+        return list(GatePilotResourcePaths.RELEASE_POLICIES, intent.getNamespace(), ReleasePolicy.class)
                 .stream()
                 .filter(policy -> projectMatches(policy.getSpec().getProjectRef(), intent.getProjectName()))
                 .toList();
     }
 
     private List<AuthPolicy> projectAuthPolicies(ReleaseIntent intent) {
-        return list("auth-policies", intent.getNamespace(), AuthPolicy.class)
+        return list(GatePilotResourcePaths.AUTH_POLICIES, intent.getNamespace(), AuthPolicy.class)
                 .stream()
                 .filter(policy -> projectMatches(policy.getSpec().getProjectRef(), intent.getProjectName()))
                 .toList();
     }
 
     private List<GatewayNode> targetNodes(ReleaseIntent intent, GatewayProject project) {
-        return list("nodes", intent.getNamespace(), GatewayNode.class)
+        return list(GatePilotResourcePaths.NODES, intent.getNamespace(), GatewayNode.class)
                 .stream()
                 .filter(node -> shardMatches(node, intent.getConfigShard()))
                 .filter(node -> isolationGroupMatches(node, project))
@@ -205,6 +202,7 @@ public class GatePilotControllerResourceAdapter
     @SuppressWarnings("unchecked")
     private <T> List<T> list(String resourcePath, String namespace, Class<T> resourceType) {
         CursorPage<Object> page = resourceService.list(resourcePath, namespace, null, LIST_LIMIT);
+        // adapter 只做类型转换，不在这里改写资源内容
         return page.getItems()
                 .stream()
                 .map(resource -> (T) resourceType.cast(resource))
@@ -213,31 +211,34 @@ public class GatePilotControllerResourceAdapter
 
     private boolean isPendingCreateReleaseCommand(GatewayEvent event) {
         Map<String, String> labels = event.getMetadata().getLabels();
-        return RELEASE_REQUEST.equals(labels.get(EVENT_TYPE_LABEL))
-                && STATE_PENDING.equals(labels.get(RECONCILE_STATE_LABEL));
+        return GatewayEventConstants.EVENT_TYPE_RELEASE_REQUEST.equals(
+                labels.get(ResourceMetadataConstants.LABEL_EVENT_TYPE))
+                && GatewayEventConstants.RECONCILE_STATE_PENDING.equals(
+                labels.get(ResourceMetadataConstants.LABEL_RECONCILE_STATE));
     }
 
     private ReleaseIntent toReleaseIntent(GatewayEvent event) {
         Map<String, String> attributes = event.getSpec().getAttributes();
         ReleaseIntent intent = new ReleaseIntent();
-        intent.setReleaseId(attributes.get("releaseId"));
+        // ReleaseIntent 是 controller-manager 的内部发布意图视图
+        intent.setReleaseId(attributes.get(GatewayEventConstants.ATTRIBUTE_RELEASE_ID));
         intent.setNamespace(event.getMetadata().getNamespace());
-        intent.setProjectName(attributes.get("projectName"));
+        intent.setProjectName(attributes.get(GatewayEventConstants.ATTRIBUTE_PROJECT_NAME));
         if (!StringUtils.hasText(intent.getProjectName()) && event.getSpec().getInvolvedObject() != null) {
             intent.setProjectName(event.getSpec().getInvolvedObject().getName());
         }
-        intent.setVersion(attributes.get("version"));
-        intent.setConfigShard(event.getMetadata().getLabels().get("gatepilot.io/config-shard"));
-        intent.setTrigger("publish");
-        intent.setRequestedBy(attributes.get("createdBy"));
-        intent.setDescription(attributes.get("description"));
+        intent.setVersion(attributes.get(GatewayEventConstants.ATTRIBUTE_VERSION));
+        intent.setConfigShard(event.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_CONFIG_SHARD));
+        intent.setTrigger(GatewayEventConstants.TRIGGER_PUBLISH);
+        intent.setRequestedBy(attributes.get(GatewayEventConstants.ATTRIBUTE_CREATED_BY));
+        intent.setDescription(attributes.get(GatewayEventConstants.ATTRIBUTE_DESCRIPTION));
         intent.setRequestedAt(event.getSpec().getFirstObservedAt());
         intent.setSourceEventName(event.getMetadata().getName());
         return intent;
     }
 
     private long nextSequence(String namespace, String configShard) {
-        return list("published-configs", namespace, PublishedConfig.class)
+        return list(GatePilotResourcePaths.PUBLISHED_CONFIGS, namespace, PublishedConfig.class)
                 .stream()
                 .filter(config -> shardEquals(config.getSpec().getConfigShard(), configShard))
                 .map(PublishedConfig::getSpec)
@@ -309,7 +310,8 @@ public class GatePilotControllerResourceAdapter
     }
 
     private GatewayEvent loadSourceEvent(ReleaseIntent intent) {
-        return (GatewayEvent) resourceService.get("events", intent.getNamespace(), intent.getSourceEventName());
+        return (GatewayEvent) resourceService.get(GatePilotResourcePaths.EVENTS, intent.getNamespace(),
+                intent.getSourceEventName());
     }
 
     private void saveEvent(GatewayEvent event) {

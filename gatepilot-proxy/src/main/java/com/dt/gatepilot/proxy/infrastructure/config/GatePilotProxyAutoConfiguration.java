@@ -6,6 +6,7 @@ import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
 import com.dt.gatepilot.proxy.interfaces.web.GatePilotProxyHandler;
+import com.dt.gatepilot.proxy.interfaces.web.ProxyHttpConstants;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -119,8 +120,8 @@ public class GatePilotProxyAutoConfiguration {
 
     private RequestPredicate proxyPath() {
         // GatePilot 管理 API 不走数据面代理
-        return RequestPredicates.path("/api/**")
-                .or(RequestPredicates.path("/internal/**"))
-                .and(request -> !request.path().startsWith("/api/gatepilot/"));
+        return RequestPredicates.path(ProxyHttpConstants.API_PROXY_PATH)
+                .or(RequestPredicates.path(ProxyHttpConstants.INTERNAL_PROXY_PATH))
+                .and(request -> !request.path().startsWith(ProxyHttpConstants.GATEPILOT_API_PREFIX));
     }
 }

@@ -3,6 +3,7 @@ package com.dt.gatepilot.apiserver.application.service;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.NodePhase;
 import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.node.GatewayNodeStatus;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
@@ -12,6 +13,7 @@ import com.dt.gatepilot.apiserver.application.command.AgentHeartbeatCommand;
 import com.dt.gatepilot.apiserver.application.command.RegisterAgentCommand;
 import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResult;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import java.time.Instant;
 import java.util.Comparator;
@@ -43,10 +45,11 @@ public class GatePilotAgentService {
      */
     public GatewayNode register(RegisterAgentCommand request) {
         GatewayNode node = new GatewayNode();
+        // 节点资源名和 nodeId 保持一致，便于控制台排查
         node.getMetadata().setName(request.getNodeId());
         node.getMetadata().setNamespace(request.getNamespace());
-        node.getMetadata().getLabels().put("gatepilot.io/node-id", request.getNodeId());
-        node.getMetadata().getLabels().put("gatepilot.io/role", request.getRole().name());
+        node.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_NODE_ID, request.getNodeId());
+        node.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_ROLE, request.getRole().name());
         node.getSpec().setNodeId(request.getNodeId());
         node.getSpec().setRole(request.getRole());
         node.getSpec().setZone(request.getZone());
@@ -72,6 +75,7 @@ public class GatePilotAgentService {
     public GatewayNode heartbeat(AgentHeartbeatCommand request) {
         GatewayNode node = loadOrCreateNode(request.getNamespace(), request.getNodeId());
         GatewayNodeStatus status = node.getStatus();
+        // 心跳以最新快照覆盖节点状态
         status.setNodePhase(Objects.requireNonNullElse(request.getNodePhase(), NodePhase.READY));
         status.setLastHeartbeatAt(Instant.now());
         status.setCurrentConfigVersion(request.getCurrentConfigVersion());
@@ -100,7 +104,8 @@ public class GatePilotAgentService {
      * @return 拉取响应
      */
     public AgentConfigPullResult pullConfig(PullAgentConfigCommand request) {
-        CursorPage<Object> page = resourceService.list("published-configs", request.getNamespace(), null, 500);
+        CursorPage<Object> page = resourceService.list(GatePilotResourcePaths.PUBLISHED_CONFIGS,
+                request.getNamespace(), null, 500);
         PublishedConfig latest = page.getItems()
                 .stream()
                 .map(PublishedConfig.class::cast)
@@ -110,6 +115,7 @@ public class GatePilotAgentService {
                 .orElse(null);
         AgentConfigPullResult response = new AgentConfigPullResult();
         if (latest == null) {
+            // 没有目标配置时让 agent 保持当前 last-good
             response.setChanged(false);
             response.setMessage("暂无可拉取的 PublishedConfig");
             return response;
@@ -132,6 +138,7 @@ public class GatePilotAgentService {
     public GatewayNode reportApplyResult(ReportAgentApplyResultCommand request) {
         GatewayNode node = loadOrCreateNode(request.getNamespace(), request.getNodeId());
         GatewayNodeStatus status = node.getStatus();
+        // agent 上报的 apply 结果是节点状态的事实来源
         status.setApplyState(Objects.requireNonNullElse(request.getState(), ConfigApplyState.APPLIED));
         status.setCurrentConfigVersion(request.getVersion());
         status.setLastHeartbeatAt(Instant.now());
@@ -152,8 +159,9 @@ public class GatePilotAgentService {
 
     private GatewayNode loadOrCreateNode(String namespace, String nodeId) {
         try {
-            return (GatewayNode) resourceService.get("nodes", namespace, nodeId);
+            return (GatewayNode) resourceService.get(GatePilotResourcePaths.NODES, namespace, nodeId);
         } catch (RuntimeException exception) {
+            // 心跳先到时自动补节点，避免部署顺序影响状态上报
             RegisterAgentCommand request = new RegisterAgentCommand();
             request.setNamespace(namespace);
             request.setNodeId(nodeId);

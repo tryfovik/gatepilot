@@ -18,7 +18,7 @@ import reactor.core.publisher.Mono;
  * GatePilot 声明式资源 API。
  */
 @RestController
-@RequestMapping("/api/gatepilot/v1/resources")
+@RequestMapping(GatePilotApiPaths.RESOURCES)
 public class GatePilotResourceController {
 
     private final GatePilotResourceService resourceService;
@@ -46,6 +46,7 @@ public class GatePilotResourceController {
                                                               @RequestParam(required = false) String namespace,
                                                               @RequestParam(required = false) String cursor,
                                                               @RequestParam(required = false) Integer limit) {
+        // 列表必须走分页，避免大资源一次性打满接口
         return Mono.just(ApiResponse.success(resourceService.list(resourceType, namespace, cursor, limit)));
     }
 
@@ -61,6 +62,7 @@ public class GatePilotResourceController {
     public Mono<ApiResponse<Object>> get(@PathVariable String resourceType,
                                          @PathVariable String namespace,
                                          @PathVariable String name) {
+        // 单资源查询只从 apiserver 存储读取
         return Mono.just(ApiResponse.success(resourceService.get(resourceType, namespace, name)));
     }
 
@@ -78,6 +80,7 @@ public class GatePilotResourceController {
                                           @PathVariable String namespace,
                                           @PathVariable String name,
                                           @RequestBody JsonNode body) {
+        // 保存走资源服务统一做类型解析和 generation 处理
         return Mono.just(ApiResponse.success(resourceService.save(resourceType, namespace, name, body), "保存成功"));
     }
 
@@ -93,6 +96,7 @@ public class GatePilotResourceController {
     public Mono<ApiResponse<Void>> delete(@PathVariable String resourceType,
                                           @PathVariable String namespace,
                                           @PathVariable String name) {
+        // 删除动作统一收敛在资源服务
         resourceService.delete(resourceType, namespace, name);
         return Mono.just(ApiResponse.success(null, "删除成功"));
     }

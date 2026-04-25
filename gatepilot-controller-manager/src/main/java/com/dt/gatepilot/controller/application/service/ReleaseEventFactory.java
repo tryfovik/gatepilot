@@ -2,8 +2,10 @@ package com.dt.gatepilot.controller.application.service;
 
 import com.dt.gatepilot.domain.enums.EventSeverity;
 import com.dt.gatepilot.domain.enums.ResourceKind;
-import com.dt.gatepilot.domain.resource.meta.ResourceReference;
+import com.dt.gatepilot.domain.resource.event.GatewayEventConstants;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
+import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import java.time.Instant;
 
@@ -20,27 +22,33 @@ public class ReleaseEventFactory {
      */
     public GatewayEvent publishedConfigGenerated(PublishedConfig publishedConfig) {
         GatewayEvent event = new GatewayEvent();
+        // 事件名跟版本绑定，便于按发布版本排查
         event.getMetadata().setNamespace(publishedConfig.getMetadata().getNamespace());
         event.getMetadata().setName("event-" + publishedConfig.getSpec().getVersion());
-        event.getMetadata().getLabels().put("gatepilot.io/event-type", "published-config-generated");
-        event.getMetadata().getLabels().put("gatepilot.io/version", publishedConfig.getSpec().getVersion());
+        event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_EVENT_TYPE,
+                GatewayEventConstants.EVENT_TYPE_PUBLISHED_CONFIG_GENERATED);
+        event.getMetadata().getLabels().put(ResourceMetadataConstants.LABEL_VERSION,
+                publishedConfig.getSpec().getVersion());
         GatewayEvent.GatewayEventSpec spec = event.getSpec();
         spec.setSeverity(EventSeverity.INFO);
-        spec.setSource("controller-manager");
-        spec.setReason("PublishedConfigGenerated");
+        spec.setSource(GatewayEventConstants.SOURCE_CONTROLLER_MANAGER);
+        spec.setReason(GatewayEventConstants.REASON_PUBLISHED_CONFIG_GENERATED);
         spec.setMessage("controller-manager 已生成 PublishedConfig");
         spec.setFirstObservedAt(Instant.now());
         spec.setLastObservedAt(spec.getFirstObservedAt());
         spec.setCount(1);
         ResourceReference involvedObject = new ResourceReference();
+        // involvedObject 指向刚生成的 PublishedConfig
         involvedObject.setKind(ResourceKind.PUBLISHED_CONFIG);
         involvedObject.setNamespace(publishedConfig.getMetadata().getNamespace());
         involvedObject.setName(publishedConfig.getMetadata().getName());
         involvedObject.setUid(publishedConfig.getMetadata().getUid());
         spec.setInvolvedObject(involvedObject);
-        spec.getAttributes().put("version", publishedConfig.getSpec().getVersion());
-        spec.getAttributes().put("configHash", publishedConfig.getSpec().getConfigHash());
-        spec.getAttributes().put("configShard", publishedConfig.getSpec().getConfigShard());
+        spec.getAttributes().put(GatewayEventConstants.ATTRIBUTE_VERSION, publishedConfig.getSpec().getVersion());
+        spec.getAttributes().put(GatewayEventConstants.ATTRIBUTE_CONFIG_HASH,
+                publishedConfig.getSpec().getConfigHash());
+        spec.getAttributes().put(GatewayEventConstants.ATTRIBUTE_CONFIG_SHARD,
+                publishedConfig.getSpec().getConfigShard());
         return event;
     }
 }

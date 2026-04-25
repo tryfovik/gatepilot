@@ -30,6 +30,9 @@ Java 代码注释格式：
 - 类、字段、枚举项和公开方法使用展开式 Javadoc。
 - 禁止新增单行 Javadoc，例如 `/** 发布版本。 */`。
 - 方法内中文注释只写关键原因和关键转换，短一点，像人写，末尾不加句号。
+- 禁止在业务代码里散落硬编码字符串、路径、Header、label、reason、配置 key 和默认值。
+- 常量必须按上下文收敛到明确命名的常量类，例如资源路径放 apiserver 资源上下文，PublishedConfig 配置 key 放发布配置上下文，proxy HTTP Header 放 proxy HTTP 上下文。
+- 禁止为了收常量新建 `common`、`shared`、`core` 这类垃圾包，也禁止把所有模块常量塞进一个全局大杂烩。
 - 正确格式如下：
 
 ```java

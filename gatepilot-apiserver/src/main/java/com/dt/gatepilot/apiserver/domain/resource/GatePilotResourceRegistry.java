@@ -28,16 +28,17 @@ public class GatePilotResourceRegistry {
      * 初始化资源注册表。
      */
     public GatePilotResourceRegistry() {
-        register("projects", ResourceKind.GATEWAY_PROJECT, GatewayProject.class);
-        register("routes", ResourceKind.GATEWAY_ROUTE, GatewayRoute.class);
-        register("traffic-policies", ResourceKind.TRAFFIC_POLICY, TrafficPolicy.class);
-        register("release-policies", ResourceKind.RELEASE_POLICY, ReleasePolicy.class);
-        register("auth-policies", ResourceKind.AUTH_POLICY, AuthPolicy.class);
-        register("upstreams", ResourceKind.UPSTREAM, Upstream.class);
-        register("published-configs", ResourceKind.PUBLISHED_CONFIG, PublishedConfig.class);
-        register("config-snapshots", ResourceKind.CONFIG_SNAPSHOT, GatewayConfigSnapshot.class);
-        register("nodes", ResourceKind.GATEWAY_NODE, GatewayNode.class);
-        register("events", ResourceKind.GATEWAY_EVENT, GatewayEvent.class);
+        // 注册表是资源 path 到资源类型的唯一入口
+        register(GatePilotResourcePaths.PROJECTS, ResourceKind.GATEWAY_PROJECT, GatewayProject.class);
+        register(GatePilotResourcePaths.ROUTES, ResourceKind.GATEWAY_ROUTE, GatewayRoute.class);
+        register(GatePilotResourcePaths.TRAFFIC_POLICIES, ResourceKind.TRAFFIC_POLICY, TrafficPolicy.class);
+        register(GatePilotResourcePaths.RELEASE_POLICIES, ResourceKind.RELEASE_POLICY, ReleasePolicy.class);
+        register(GatePilotResourcePaths.AUTH_POLICIES, ResourceKind.AUTH_POLICY, AuthPolicy.class);
+        register(GatePilotResourcePaths.UPSTREAMS, ResourceKind.UPSTREAM, Upstream.class);
+        register(GatePilotResourcePaths.PUBLISHED_CONFIGS, ResourceKind.PUBLISHED_CONFIG, PublishedConfig.class);
+        register(GatePilotResourcePaths.CONFIG_SNAPSHOTS, ResourceKind.CONFIG_SNAPSHOT, GatewayConfigSnapshot.class);
+        register(GatePilotResourcePaths.NODES, ResourceKind.GATEWAY_NODE, GatewayNode.class);
+        register(GatePilotResourcePaths.EVENTS, ResourceKind.GATEWAY_EVENT, GatewayEvent.class);
     }
 
     /**
@@ -51,6 +52,7 @@ public class GatePilotResourceRegistry {
     }
 
     private void register(String path, ResourceKind kind, Class<?> javaType) {
+        // 使用 LinkedHashMap 保持资源展示顺序稳定
         resourcesByPath.put(path, new GatePilotResourceType(path, kind, javaType));
     }
 }

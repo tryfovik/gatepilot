@@ -2,8 +2,10 @@ package com.dt.gatepilot.apiserver.infrastructure.persistence.memory;
 
 import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
+import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverConstants;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.repository.GatePilotResourceStore;
+import com.dt.gatepilot.apiserver.domain.repository.ResourceStoreConstants;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,7 +24,9 @@ import org.springframework.util.StringUtils;
  * 内存版资源存储，仅用于开发期和单机验证，生产环境需要替换为持久化实现。
  */
 @Repository
-@ConditionalOnProperty(prefix = "gatepilot.apiserver.store", name = "type", havingValue = "memory",
+@ConditionalOnProperty(prefix = GatePilotApiserverConstants.STORE_CONFIG_PREFIX,
+        name = GatePilotApiserverConstants.STORE_TYPE_PROPERTY,
+        havingValue = GatePilotApiserverConstants.STORE_TYPE_MEMORY,
         matchIfMissing = true)
 public class InMemoryGatePilotResourceStore implements GatePilotResourceStore {
 
@@ -128,7 +132,7 @@ public class InMemoryGatePilotResourceStore implements GatePilotResourceStore {
          * @return 游标
          */
         String cursor() {
-            return namespace + "/" + name;
+            return namespace + ResourceStoreConstants.CURSOR_SEPARATOR + name;
         }
     }
 }

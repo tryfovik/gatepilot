@@ -1,5 +1,6 @@
 package com.dt.gatepilot.agent.application.dto;
 
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
@@ -13,7 +14,7 @@ public class AgentConfigCursor {
     /**
      * 节点命名空间。
      */
-    private String namespace = "default";
+    private String namespace = ResourceMetadataConstants.DEFAULT_NAMESPACE;
 
     /**
      * 节点标识。

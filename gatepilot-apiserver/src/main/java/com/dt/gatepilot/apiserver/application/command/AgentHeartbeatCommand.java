@@ -2,6 +2,7 @@ package com.dt.gatepilot.apiserver.application.command;
 
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.NodePhase;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.node.GatewayNodeStatus;
 import jakarta.validation.constraints.NotBlank;
 import java.util.ArrayList;
@@ -19,7 +20,7 @@ public class AgentHeartbeatCommand {
     /**
      * 节点命名空间。
      */
-    private String namespace = "default";
+    private String namespace = ResourceMetadataConstants.DEFAULT_NAMESPACE;
 
     /**
      * 节点标识。

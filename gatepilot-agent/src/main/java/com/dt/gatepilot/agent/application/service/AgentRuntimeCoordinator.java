@@ -96,11 +96,16 @@ public class AgentRuntimeCoordinator {
         try {
             result = proxyApplyClient.apply(config);
         } catch (RuntimeException exception) {
-            result = failedResult(config, "ProxyApplyFailed", exception.getMessage(), startedAt);
+            // proxy 异常要收敛成可上报的节点结果
+            result = failedResult(config, AgentApplyConstants.REASON_PROXY_APPLY_FAILED,
+                    exception.getMessage(), startedAt);
         }
         if (result == null) {
-            result = failedResult(config, "ProxyApplyEmptyResult", "proxy apply 未返回结果", startedAt);
+            // 空结果按失败处理，避免控制面误判发布成功
+            result = failedResult(config, AgentApplyConstants.REASON_PROXY_APPLY_EMPTY_RESULT,
+                    AgentApplyConstants.MESSAGE_PROXY_APPLY_EMPTY_RESULT, startedAt);
         }
+        // 上报字段统一以当前节点和当前配置为准
         result.setNamespace(nodeProfile.getNamespace());
         result.setNodeId(nodeProfile.getNodeId());
         result.setVersion(config.getSpec().getVersion());
@@ -113,10 +118,11 @@ public class AgentRuntimeCoordinator {
         }
         if (result.getState() == null) {
             result.setState(ConfigApplyState.FAILED);
-            result.setReason("MissingApplyState");
-            result.setMessage("proxy apply 结果缺少状态");
+            result.setReason(AgentApplyConstants.REASON_MISSING_APPLY_STATE);
+            result.setMessage(AgentApplyConstants.MESSAGE_MISSING_APPLY_STATE);
         }
         if (result.getState() == ConfigApplyState.APPLIED) {
+            // 只有 proxy 真正接住配置后才晋升 last-good
             localConfigStore.promoteLastGood(config);
         }
         return result;
@@ -127,6 +133,7 @@ public class AgentRuntimeCoordinator {
                                           String message,
                                           Instant startedAt) {
         AgentApplyResult result = new AgentApplyResult();
+        // 失败结果保留版本和 hash，方便控制面排障
         result.setVersion(config.getSpec().getVersion());
         result.setConfigHash(config.getSpec().getConfigHash());
         result.setState(ConfigApplyState.FAILED);
@@ -139,6 +146,7 @@ public class AgentRuntimeCoordinator {
 
     private AgentConfigCursor buildCursor() {
         AgentConfigCursor cursor = new AgentConfigCursor();
+        // cursor 只描述本节点当前消费进度
         cursor.setNamespace(nodeProfile.getNamespace());
         cursor.setNodeId(nodeProfile.getNodeId());
         cursor.setZone(nodeProfile.getZone());

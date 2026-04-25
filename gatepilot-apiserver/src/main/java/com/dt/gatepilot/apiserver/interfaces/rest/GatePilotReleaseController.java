@@ -17,7 +17,7 @@ import reactor.core.publisher.Mono;
  * GatePilot 发布请求 API。
  */
 @RestController
-@RequestMapping("/api/gatepilot/v1/releases")
+@RequestMapping(GatePilotApiPaths.RELEASES)
 public class GatePilotReleaseController {
 
     private final GatePilotReleaseService releaseService;
@@ -39,6 +39,7 @@ public class GatePilotReleaseController {
      */
     @PostMapping
     public Mono<ApiResponse<ReleaseResult>> createRelease(@Valid @RequestBody CreateReleaseCommand request) {
+        // apiserver 只创建发布意图，推进交给 controller-manager
         return Mono.just(ApiResponse.success(releaseService.createRelease(request), "发布请求已创建"));
     }
 
@@ -48,8 +49,9 @@ public class GatePilotReleaseController {
      * @param request 发布请求
      * @return dry-run 响应
      */
-    @PostMapping("/dry-run")
+    @PostMapping(GatePilotApiPaths.RELEASE_DRY_RUN)
     public Mono<ApiResponse<ReleaseDryRunResult>> dryRun(@Valid @RequestBody CreateReleaseCommand request) {
+        // dry-run 只做控制面校验，不生成发布事件
         return Mono.just(ApiResponse.success(releaseService.dryRun(request), "dry-run 校验完成"));
     }
 
@@ -59,8 +61,9 @@ public class GatePilotReleaseController {
      * @param request 回滚请求
      * @return 回滚发布响应
      */
-    @PostMapping("/rollback")
+    @PostMapping(GatePilotApiPaths.RELEASE_ROLLBACK)
     public Mono<ApiResponse<ReleaseResult>> rollback(@Valid @RequestBody CreateRollbackCommand request) {
+        // 回滚也是发布意图，后续异步 reconcile
         return Mono.just(ApiResponse.success(releaseService.createRollback(request), "回滚请求已创建"));
     }
 }

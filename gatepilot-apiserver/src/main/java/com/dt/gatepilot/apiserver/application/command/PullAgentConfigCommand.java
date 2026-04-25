@@ -1,5 +1,6 @@
 package com.dt.gatepilot.apiserver.application.command;
 
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import jakarta.validation.constraints.NotBlank;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +15,7 @@ public class PullAgentConfigCommand {
     /**
      * 节点命名空间。
      */
-    private String namespace = "default";
+    private String namespace = ResourceMetadataConstants.DEFAULT_NAMESPACE;
 
     /**
      * 节点标识。

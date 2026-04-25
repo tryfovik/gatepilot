@@ -1,0 +1,71 @@
+package com.dt.gatepilot.apiserver.interfaces.rest;
+
+/**
+ * apiserver REST 路径常量。
+ */
+public final class GatePilotApiPaths {
+
+    /**
+     * v1 API 前缀。
+     */
+    public static final String API_V1_PREFIX = "/api/gatepilot/v1";
+
+    /**
+     * 资源 API 路径。
+     */
+    public static final String RESOURCES = API_V1_PREFIX + "/resources";
+
+    /**
+     * 发布 API 路径。
+     */
+    public static final String RELEASES = API_V1_PREFIX + "/releases";
+
+    /**
+     * 配置快照 API 路径。
+     */
+    public static final String CONFIG_SNAPSHOTS = API_V1_PREFIX + "/config-snapshots";
+
+    /**
+     * agent API 路径。
+     */
+    public static final String AGENTS = API_V1_PREFIX + "/agents";
+
+    /**
+     * agent 注册路径。
+     */
+    public static final String AGENT_REGISTER = "/register";
+
+    /**
+     * agent 心跳路径。
+     */
+    public static final String AGENT_HEARTBEAT = "/heartbeat";
+
+    /**
+     * agent 配置拉取路径。
+     */
+    public static final String AGENT_CONFIG_PULL = "/configs/pull";
+
+    /**
+     * agent 应用结果上报路径。
+     */
+    public static final String AGENT_APPLY_RESULTS = "/apply-results";
+
+    /**
+     * 发布 dry-run 路径。
+     */
+    public static final String RELEASE_DRY_RUN = "/dry-run";
+
+    /**
+     * 回滚发布路径。
+     */
+    public static final String RELEASE_ROLLBACK = "/rollback";
+
+    /**
+     * 配置快照 diff 路径。
+     */
+    public static final String CONFIG_SNAPSHOT_DIFF = "/diff";
+
+    private GatePilotApiPaths() {
+        // REST 路径常量不允许实例化
+    }
+}
