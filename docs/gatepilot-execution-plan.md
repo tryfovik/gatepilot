@@ -194,6 +194,7 @@ console
 - [x] 实现调用本机 proxy apply。
 - [x] 实现 apply result 上报。
 - [x] 实现节点健康、上游健康和指标摘要上报。
+- [x] 实现 agent 生命周期调度，启动注册、last-good 启动、定时 pull 和定时心跳。
 
 ### Phase 6：proxy
 

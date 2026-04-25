@@ -16,6 +16,26 @@ public final class AgentRuntimeConstants {
     public static final String ENABLED_PROPERTY = "enabled";
 
     /**
+     * 配置拉取周期配置名。
+     */
+    public static final String PULL_INTERVAL_PROPERTY = "pull-interval-ms";
+
+    /**
+     * 配置拉取初始延迟配置名。
+     */
+    public static final String PULL_INITIAL_DELAY_PROPERTY = "pull-initial-delay-ms";
+
+    /**
+     * 心跳周期配置名。
+     */
+    public static final String HEARTBEAT_INTERVAL_PROPERTY = "heartbeat-interval-ms";
+
+    /**
+     * 心跳初始延迟配置名。
+     */
+    public static final String HEARTBEAT_INITIAL_DELAY_PROPERTY = "heartbeat-initial-delay-ms";
+
+    /**
      * 默认 apiserver 地址。
      */
     public static final String DEFAULT_APISERVER_BASE_URL = "http://127.0.0.1:18080";
@@ -24,6 +44,53 @@ public final class AgentRuntimeConstants {
      * 本地默认节点标识。
      */
     public static final String DEFAULT_NODE_ID = "local-node";
+
+    /**
+     * 默认配置拉取周期。
+     */
+    public static final long DEFAULT_PULL_INTERVAL_MS = 5_000L;
+
+    /**
+     * 默认配置拉取初始延迟。
+     */
+    public static final long DEFAULT_PULL_INITIAL_DELAY_MS = 1_000L;
+
+    /**
+     * 默认心跳周期。
+     */
+    public static final long DEFAULT_HEARTBEAT_INTERVAL_MS = 10_000L;
+
+    /**
+     * 默认心跳初始延迟。
+     */
+    public static final long DEFAULT_HEARTBEAT_INITIAL_DELAY_MS = 2_000L;
+
+    /**
+     * 配置拉取调度周期占位符。
+     */
+    public static final String PULL_INTERVAL_PLACEHOLDER =
+            "${" + CONFIG_PREFIX + "." + PULL_INTERVAL_PROPERTY + ":" + DEFAULT_PULL_INTERVAL_MS + "}";
+
+    /**
+     * 配置拉取调度初始延迟占位符。
+     */
+    public static final String PULL_INITIAL_DELAY_PLACEHOLDER =
+            "${" + CONFIG_PREFIX + "." + PULL_INITIAL_DELAY_PROPERTY + ":"
+                    + DEFAULT_PULL_INITIAL_DELAY_MS + "}";
+
+    /**
+     * 心跳调度周期占位符。
+     */
+    public static final String HEARTBEAT_INTERVAL_PLACEHOLDER =
+            "${" + CONFIG_PREFIX + "." + HEARTBEAT_INTERVAL_PROPERTY + ":"
+                    + DEFAULT_HEARTBEAT_INTERVAL_MS + "}";
+
+    /**
+     * 心跳调度初始延迟占位符。
+     */
+    public static final String HEARTBEAT_INITIAL_DELAY_PLACEHOLDER =
+            "${" + CONFIG_PREFIX + "." + HEARTBEAT_INITIAL_DELAY_PROPERTY + ":"
+                    + DEFAULT_HEARTBEAT_INITIAL_DELAY_MS + "}";
 
     private AgentRuntimeConstants() {
         // agent 配置常量不允许实例化

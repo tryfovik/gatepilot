@@ -6,17 +6,20 @@ import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.domain.port.LocalConfigStore;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
 import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
+import com.dt.gatepilot.agent.infrastructure.scheduling.AgentLifecycleManager;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * GatePilot agent 自动配置。
  */
 @Configuration
+@EnableScheduling
 @EnableConfigurationProperties(GatePilotAgentProperties.class)
 @ConditionalOnProperty(prefix = AgentRuntimeConstants.CONFIG_PREFIX,
         name = AgentRuntimeConstants.ENABLED_PROPERTY,
@@ -79,5 +82,21 @@ public class GatePilotAgentAutoConfiguration {
                                                            ProxyApplyClient proxyApplyClient) {
         // 编排器只拼端口，不关心端口背后是 HTTP 还是进程内
         return new AgentRuntimeCoordinator(nodeProfile, controlPlaneClient, localConfigStore, proxyApplyClient);
+    }
+
+    /**
+     * 创建 agent 生命周期调度器。
+     *
+     * @param coordinator agent 运行编排器
+     * @param properties agent 配置
+     * @return agent 生命周期调度器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(AgentRuntimeCoordinator.class)
+    public AgentLifecycleManager agentLifecycleManager(AgentRuntimeCoordinator coordinator,
+                                                       GatePilotAgentProperties properties) {
+        // 生命周期调度只触发编排器，不承载配置发布和转发逻辑
+        return new AgentLifecycleManager(coordinator, properties);
     }
 }

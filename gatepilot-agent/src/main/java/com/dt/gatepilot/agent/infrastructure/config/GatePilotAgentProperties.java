@@ -81,4 +81,49 @@ public class GatePilotAgentProperties {
      * 节点能力。
      */
     private Map<String, String> capabilities = new LinkedHashMap<>();
+
+    /**
+     * 是否启用 agent 生命周期调度。
+     */
+    private boolean lifecycleEnabled = true;
+
+    /**
+     * 启动时是否注册节点。
+     */
+    private boolean registerOnStartup = true;
+
+    /**
+     * 启动时是否尝试使用 last-good 配置启动 proxy。
+     */
+    private boolean startWithLastGoodOnStartup = true;
+
+    /**
+     * 是否启用配置定时拉取。
+     */
+    private boolean pullEnabled = true;
+
+    /**
+     * 配置拉取周期，单位毫秒。
+     */
+    private long pullIntervalMs = AgentRuntimeConstants.DEFAULT_PULL_INTERVAL_MS;
+
+    /**
+     * 配置拉取初始延迟，单位毫秒。
+     */
+    private long pullInitialDelayMs = AgentRuntimeConstants.DEFAULT_PULL_INITIAL_DELAY_MS;
+
+    /**
+     * 是否启用心跳上报。
+     */
+    private boolean heartbeatEnabled = true;
+
+    /**
+     * 心跳上报周期，单位毫秒。
+     */
+    private long heartbeatIntervalMs = AgentRuntimeConstants.DEFAULT_HEARTBEAT_INTERVAL_MS;
+
+    /**
+     * 心跳上报初始延迟，单位毫秒。
+     */
+    private long heartbeatInitialDelayMs = AgentRuntimeConstants.DEFAULT_HEARTBEAT_INITIAL_DELAY_MS;
 }
