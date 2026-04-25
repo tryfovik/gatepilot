@@ -53,6 +53,26 @@ public final class AgentRuntimeConstants {
     public static final String AUDIT_FLUSH_INITIAL_DELAY_PROPERTY = "flush-initial-delay-ms";
 
     /**
+     * 文件本地配置存储类型。
+     */
+    public static final String LOCAL_CONFIG_STORE_TYPE_FILE = "file";
+
+    /**
+     * 内存本地配置存储类型。
+     */
+    public static final String LOCAL_CONFIG_STORE_TYPE_MEMORY = "memory";
+
+    /**
+     * 默认本地配置目录。
+     */
+    public static final String DEFAULT_LOCAL_CONFIG_DIRECTORY = "./data/gatepilot/agent/local-config";
+
+    /**
+     * 不支持的本地配置存储类型提示。
+     */
+    public static final String MESSAGE_UNSUPPORTED_LOCAL_CONFIG_STORE_TYPE = "不支持的 agent 本地配置存储类型";
+
+    /**
      * 默认 apiserver 地址。
      */
     public static final String DEFAULT_APISERVER_BASE_URL = "http://127.0.0.1:18080";

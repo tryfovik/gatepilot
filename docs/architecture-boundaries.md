@@ -221,6 +221,7 @@ controller-manager 与 apiserver 的关系：
 - 拉取或 watch `PublishedConfig`。
 - 校验配置版本、hash、签名和兼容性。
 - 写入本地 last-good 配置。
+- last-good 默认使用文件持久化，生产部署必须挂载本地卷或等价持久卷；`store-type`、`directory` 等配置项可以由 Nacos 下发，但 last-good 数据本身不能只放 Nacos。
 - 写入 staged config。
 - 通知本机 proxy apply 配置。
 - 上报 apply 成功或失败原因。

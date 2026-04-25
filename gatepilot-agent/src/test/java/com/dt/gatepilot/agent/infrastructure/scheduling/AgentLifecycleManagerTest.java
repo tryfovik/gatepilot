@@ -9,11 +9,15 @@ import com.dt.gatepilot.agent.application.service.AgentRuntimeCoordinator;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
 import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
+import com.dt.gatepilot.agent.infrastructure.persistence.file.FileLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.file.Path;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.DefaultApplicationArguments;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,6 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AgentLifecycleManagerTest {
 
+    @TempDir
+    private Path tempDir;
+
     @Test
     void shouldRegisterAndStartWithLastGoodOnStartup() {
         StubControlPlaneClient controlPlaneClient = new StubControlPlaneClient(Optional.empty());
@@ -31,6 +38,25 @@ class AgentLifecycleManagerTest {
         CountingProxyApplyClient proxyApplyClient = new CountingProxyApplyClient();
         AgentRuntimeCoordinator coordinator = new AgentRuntimeCoordinator(
                 profile(), controlPlaneClient, localConfigStore, proxyApplyClient);
+        GatePilotAgentProperties properties = new GatePilotAgentProperties();
+        AgentLifecycleManager manager = new AgentLifecycleManager(coordinator, properties);
+
+        manager.run(new DefaultApplicationArguments());
+
+        assertThat(controlPlaneClient.registerCount).isEqualTo(1);
+        assertThat(proxyApplyClient.applyCount).isEqualTo(1);
+    }
+
+    @Test
+    void shouldStartWithPersistedLastGoodWhenControlPlaneUnavailable() {
+        FileLocalConfigStore firstStore = new FileLocalConfigStore(objectMapper(), tempDir);
+        firstStore.promoteLastGood(config());
+        FileLocalConfigStore reloadedStore = new FileLocalConfigStore(objectMapper(), tempDir);
+        StubControlPlaneClient controlPlaneClient = new StubControlPlaneClient(Optional.empty());
+        controlPlaneClient.failRegister = true;
+        CountingProxyApplyClient proxyApplyClient = new CountingProxyApplyClient();
+        AgentRuntimeCoordinator coordinator = new AgentRuntimeCoordinator(
+                profile(), controlPlaneClient, reloadedStore, proxyApplyClient);
         GatePilotAgentProperties properties = new GatePilotAgentProperties();
         AgentLifecycleManager manager = new AgentLifecycleManager(coordinator, properties);
 
@@ -96,6 +122,13 @@ class AgentLifecycleManagerTest {
         return config;
     }
 
+    private ObjectMapper objectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        // 测试映射器保持和自动配置一致
+        objectMapper.findAndRegisterModules();
+        return objectMapper;
+    }
+
     private static class StubControlPlaneClient implements AgentControlPlaneClient {
 
         private final Optional<PublishedConfig> config;
@@ -108,6 +141,8 @@ class AgentLifecycleManagerTest {
 
         private int reportCount;
 
+        private boolean failRegister;
+
         StubControlPlaneClient(Optional<PublishedConfig> config) {
             this.config = config;
         }
@@ -115,6 +150,9 @@ class AgentLifecycleManagerTest {
         @Override
         public void register(AgentNodeProfile profile) {
             registerCount++;
+            if (failRegister) {
+                throw new IllegalStateException("control plane unavailable");
+            }
         }
 
         @Override

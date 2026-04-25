@@ -6,8 +6,10 @@ import com.dt.gatepilot.agent.application.service.AgentRuntimeCoordinator;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.domain.port.LocalConfigStore;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
+import com.dt.gatepilot.agent.infrastructure.persistence.file.FileLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.scheduling.AgentLifecycleManager;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -16,6 +18,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.util.StringUtils;
 
 /**
  * GatePilot agent 自动配置。
@@ -57,13 +60,47 @@ public class GatePilotAgentAutoConfiguration {
     /**
      * 创建本地配置存储。
      *
+     * @param properties agent 配置
+     * @param objectMapper JSON 映射器
      * @return 本地配置存储
      */
     @Bean
     @ConditionalOnMissingBean
-    public LocalConfigStore localConfigStore() {
-        // 先用内存实现跑通主链路，磁盘持久化后续替换这个 Bean
-        return new InMemoryLocalConfigStore();
+    public LocalConfigStore localConfigStore(GatePilotAgentProperties properties, ObjectMapper objectMapper) {
+        String storeType = localConfigStoreType(properties);
+        if (AgentRuntimeConstants.LOCAL_CONFIG_STORE_TYPE_MEMORY.equals(storeType)) {
+            // memory 仅用于测试或临时开发，生产应使用 file 并挂载持久卷
+            return new InMemoryLocalConfigStore();
+        }
+        if (AgentRuntimeConstants.LOCAL_CONFIG_STORE_TYPE_FILE.equals(storeType)) {
+            // file store 负责 staged 和 last-good 的本地持久化
+            return new FileLocalConfigStore(objectMapper, properties.getLocalConfig().getDirectory());
+        }
+        throw new IllegalArgumentException(AgentRuntimeConstants.MESSAGE_UNSUPPORTED_LOCAL_CONFIG_STORE_TYPE
+                + ": " + storeType);
+    }
+
+    /**
+     * 创建默认 JSON 映射器。
+     *
+     * @return JSON 映射器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public ObjectMapper objectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        // 注册 JavaTime 等模块，保证 PublishedConfig 可直接落盘
+        objectMapper.findAndRegisterModules();
+        return objectMapper;
+    }
+
+    private String localConfigStoreType(GatePilotAgentProperties properties) {
+        String storeType = properties.getLocalConfig().getStoreType();
+        if (!StringUtils.hasText(storeType)) {
+            return AgentRuntimeConstants.LOCAL_CONFIG_STORE_TYPE_FILE;
+        }
+        // 配置项统一小写，避免部署时大小写差异导致启动失败
+        return storeType.trim().toLowerCase();
     }
 
     /**

@@ -4,6 +4,7 @@ import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditConstants;
 import com.dt.gatepilot.domain.enums.NodeRole;
 import com.dt.gatepilot.domain.resource.meta.LabelSelector;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,6 +83,11 @@ public class GatePilotAgentProperties {
      * 节点能力。
      */
     private Map<String, String> capabilities = new LinkedHashMap<>();
+
+    /**
+     * 本地配置存储配置。
+     */
+    private LocalConfig localConfig = new LocalConfig();
 
     /**
      * 是否启用 agent 生命周期调度。
@@ -163,5 +169,22 @@ public class GatePilotAgentProperties {
          * 审计上报初始延迟，单位毫秒。
          */
         private long flushInitialDelayMs = AgentRuntimeAuditConstants.DEFAULT_FLUSH_INITIAL_DELAY_MS;
+    }
+
+    /**
+     * 本地配置存储配置。
+     */
+    @Data
+    public static class LocalConfig {
+
+        /**
+         * 本地配置存储类型。
+         */
+        private String storeType = AgentRuntimeConstants.LOCAL_CONFIG_STORE_TYPE_FILE;
+
+        /**
+         * 本地配置存储目录。
+         */
+        private Path directory = Path.of(AgentRuntimeConstants.DEFAULT_LOCAL_CONFIG_DIRECTORY);
     }
 }

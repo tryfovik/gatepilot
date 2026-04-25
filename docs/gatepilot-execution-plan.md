@@ -290,7 +290,7 @@ console
 - [x] apiserver 不再依赖 controller-manager，app 不再承载进程内适配实现。
 - [ ] 分服务模式最小链路验证通过。
 - [ ] 配置发布链路端到端验证通过。
-- [ ] proxy 控制面不可用时 last-good 启动验证通过。
+- [x] proxy 控制面不可用时 last-good 启动验证通过。
 - [ ] 多 proxy 副本注册、拉取配置、应用发布和状态聚合验证通过。
 - [ ] controller-manager 多副本 leader / standby 行为验证通过。
 - [ ] 1000 项目资源装载、配置生成和分页查询压测通过。
@@ -308,7 +308,7 @@ console
 - [ ] CR embedded 资源读取的 500 条上限扫描，改成按 label / namespace / cursor 精准分页，避免 1000 项目后 reconcile 漏数据。
 - [ ] CR 发布版本号生成策略，评估是否接入 getboot 统一 ID 能力或单独版本序列，避免继续依赖本地时间。
 - [ ] CR MyBatis-Plus 资源表索引、乐观锁和发布事件 claim 原子性，避免多 controller-manager 抢占时只靠内存判断。
-- [ ] CR agent last-good 存储当前仍是内存实现的问题，补文件或外部卷持久化，保证 proxy 控制面不可用时可恢复启动。
+- [x] CR agent last-good 存储当前仍是内存实现的问题，补文件或外部卷持久化，保证 proxy 控制面不可用时可恢复启动。
 - [ ] CR proxy 运行态策略解析中的 Map 兼容逻辑，确认大配置下没有反射/转换热点拖慢转发路径。
 
 ## 5. 打勾规则
