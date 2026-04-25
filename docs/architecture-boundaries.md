@@ -618,3 +618,45 @@ Envoy 是业界常用的高性能代理数据面，xDS 是控制面向 Envoy 动
 - 不再向 management/admin-server 增加数据面转发能力。
 - 不再新增 `core/common/shared` 这类泛化模块。
 - 新代码优先按目标模块职责落位。
+
+## 12. 旧实现迁移清单
+
+旧 `platform-gateway-*` 模块里已经实现了不少能力，后续不是重写一遍，而是在 GatePilot 边界稳定后按能力归属迁移。迁移时只能拿“领域逻辑、算法、测试用例和工程经验”，不能把旧包结构和旧职责混杂关系原样搬过来。
+
+### 可迁移能力
+
+| 旧实现位置 | 已有能力 | 迁移目标 | 迁移要求 |
+| --- | --- | --- | --- |
+| `platform-gateway-legacy-config/GatewayProperties` | 旧 YAML 配置模型，包含项目、路由、认证、CORS、健康检查、上下文头、染色、审计、治理策略 | `gatepilot-domain` 资源模型和 `gatepilot-apiserver` admission 校验 | 只能作为字段设计参考，不能继续让生产依赖本地 YAML 作为事实来源 |
+| `platform-gateway-legacy-config/GatewayRouteDefinitionLocator` | 路由编译和路由命中 | `gatepilot-proxy/domain/runtime` | 改成从 `PublishedConfig` 预编译，不再从 `GatewayProperties` 读取 |
+| `platform-gateway-legacy-config/GatewayTrafficColorResolver` | Header、Cookie、Query、IP 等染色解析 | `gatepilot-proxy/domain/runtime` | 保留解析规则，输入改成 proxy 运行态请求上下文和已发布策略 |
+| `platform-gateway-legacy-config/GatewayPropertiesValidator` | 配置合法性校验 | `gatepilot-apiserver/application` 和 `gatepilot-controller-manager/application` | 拆成资源 admission 校验、发布 dry-run 校验、PublishedConfig 编译校验 |
+| `platform-gateway-runtime/GatewayAuthenticationFilter` | 路由级认证 | `gatepilot-proxy` | 继续复用 getboot-auth，策略来自 `PublishedConfig`，失败响应使用 getboot 统一规则 |
+| `platform-gateway-runtime/GatewayMethodAccessFilter` | HTTP 方法白名单 | `gatepilot-proxy` | 改为读取编译后的 route policy，热路径不能访问控制面 |
+| `platform-gateway-runtime/InternalRouteAccessFilter` | 内部运维入口保护 | `gatepilot-proxy` 或 `gatepilot-apiserver` 各自入口保护 | 按入口分开，proxy 保护本机 apply / health / state，apiserver 保护管理 API |
+| `platform-gateway-runtime/GatewayTrafficColorFilter` | 流量染色执行和响应头回写 | `gatepilot-proxy` | 与灰度、蓝绿选择统一走运行态策略快照 |
+| `platform-gateway-runtime/GatewayCircuitBreakerFilter` | 轻量熔断和 fallback | `gatepilot-proxy` | 优先评估 getboot-governance / Sentinel 能力，缺失能力先补 getboot |
+| `platform-gateway-runtime/GatewayAccessAuditFilter` | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
+| `platform-gateway-runtime/UpstreamHealthIndicator` | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |
+| `platform-gateway-server/GatewaySentinelRuleRegistrar` | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 规则由 `PublishedConfig` 编译生成，不再从旧 YAML 全量注册 |
+| `platform-gateway-management/GatewayDiagnosticsService` | 路由诊断、策略诊断、染色和发布变体解释 | `gatepilot-apiserver/application` 和 `gatepilot-console` 页面 | 诊断基于已发布配置、节点状态和审计数据，不直接读取 proxy 内存 |
+| `platform-gateway-management/GatewayManagementService` | 配置导出、dry-run、diff、版本快照 | `gatepilot-apiserver` 和 `gatepilot-controller-manager` | 管理 API 和发布编排拆开，快照和版本必须持久化到数据库 |
+| `platform-gateway-management/GatewayAccessAuditController` | 审计查询 API | `gatepilot-apiserver/interfaces/rest` | 查询 apiserver 持久化审计，不查 proxy 本地内存 |
+| `platform-gateway-management/GatewayRouteCatalogEndpoint` | 当前路由目录展示 | `gatepilot-apiserver` 查询 API 和 `gatepilot-console` | 展示资源、PublishedConfig 和节点 apply 状态，不再做 Actuator 私有端点 |
+
+### 迁移顺序
+
+1. 先迁 `GatewayRouteDefinitionLocator` 和 `GatewayTrafficColorResolver` 的核心算法到 proxy 运行态编译链路。
+2. 再迁认证、方法白名单、染色、熔断、审计采集这些数据面过滤器。
+3. 然后迁 `GatewayPropertiesValidator`，拆成资源校验、发布 dry-run 和 PublishedConfig 编译校验。
+4. 再迁诊断、diff、快照、审计查询到 apiserver 和 console。
+5. 最后迁 Sentinel、健康检查、压测和分片发布能力。
+
+### 迁移红线
+
+- 不把旧 `platform-gateway-runtime` 的配置查看、版本快照、Web 管理、审计查询搬进 `gatepilot-proxy`。
+- 不把旧 `platform-gateway-management` 的内存快照仓库作为生产实现。
+- 不把旧 YAML 配置模型作为 GatePilot 生产事实来源。
+- 不按旧 package 结构搬代码，必须按 DDD 归属重新落位。
+- 迁移公共能力前仍然先查 getboot，不能因为旧模块里有实现就直接复制成 GatePilot 公共能力。
+- 每迁一个能力，必须同时迁对应测试或补新的边界测试。

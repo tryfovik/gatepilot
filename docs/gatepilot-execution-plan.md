@@ -55,6 +55,8 @@ infrastructure  出站实现：数据库、HTTP 客户端、Spring 配置、调�
 - [GatePilot 架构边界规范](architecture-boundaries.md)
 - [GatePilot Console 设计规范](console-design-guidelines.md)
 
+旧 `platform-gateway-*` 不是废弃代码池，里面的路由编译、过滤器、染色、熔断、审计、诊断、校验和 Sentinel 注册都可以迁移。迁移前必须先看 [旧实现迁移清单](architecture-boundaries.md#12-旧实现迁移清单)，只迁能力和测试，不迁旧职责混杂关系。
+
 后端开发还必须参考上层 getboot 规范：
 
 - `../../DEVELOPMENT.md`
@@ -196,6 +198,13 @@ console
 - [x] proxy 支持失败保留 last-good。
 - [x] proxy 支持 `PublishedConfig` 预编译为运行态快照。
 - [x] proxy 热路径运行态使用本地内存索引，不访问控制面。
+- [ ] 从旧 `GatewayRouteDefinitionLocator` 迁移路由编译和命中算法。
+- [ ] 从旧 `GatewayTrafficColorResolver` / `GatewayTrafficColorFilter` 迁移流量染色执行能力。
+- [ ] 从旧 `GatewayAuthenticationFilter` 迁移路由级认证能力。
+- [ ] 从旧 `GatewayMethodAccessFilter` 迁移 HTTP 方法白名单能力。
+- [ ] 从旧 `GatewayCircuitBreakerFilter` 迁移熔断和 fallback 能力。
+- [ ] 从旧 `GatewaySentinelRuleRegistrar` 迁移 Sentinel 规则注册能力。
+- [ ] 从旧审计过滤器迁移访问审计采集能力。
 - [ ] 保留并验证路由、转发、限流、熔断、重试、染色、灰度、蓝绿执行能力。
 - [x] 运行审计事件只采集并上报，不在 proxy 内做管理查询。
 
@@ -218,6 +227,14 @@ console
 - [x] 实现 Diagnostics 基础列表页。
 - [x] 实现 Audits 基础列表页。
 - [x] 实现 Settings 基础列表页。
+
+### Phase 7.5：旧管理能力收敛
+
+- [ ] 从旧 `GatewayDiagnosticsService` 迁移路由诊断能力到 apiserver 查询用例和 console 页面。
+- [ ] 从旧 `GatewayManagementService` 迁移 dry-run、diff、配置摘要能力到 apiserver / controller-manager。
+- [ ] 从旧 `GatewayConfigSnapshotRepository` 迁移快照概念到数据库持久化版本表。
+- [ ] 从旧 `GatewayAccessAuditController` 迁移审计查询能力到 apiserver 持久化查询 API。
+- [ ] 从旧 `GatewayRouteCatalogEndpoint` 迁移路由目录展示到 console，不再依赖 Actuator 私有端点。
 
 ### Phase 8：app 合包
 
