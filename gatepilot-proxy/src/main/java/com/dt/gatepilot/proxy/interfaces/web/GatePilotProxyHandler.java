@@ -1,12 +1,19 @@
 package com.dt.gatepilot.proxy.interfaces.web;
 
 import com.dt.gatepilot.domain.enums.Protocol;
+import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledCircuitBreakerPolicy;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledProxyRuntime;
+import com.dt.gatepilot.proxy.domain.runtime.CompiledRateLimitPolicy;
+import com.dt.gatepilot.proxy.domain.runtime.CompiledRateLimitRule;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledRoute;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledUpstream;
+import com.dt.gatepilot.proxy.domain.runtime.ProxyRateLimitConstants;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
+import com.dt.gatepilot.proxy.domain.runtime.RateLimitAcquireResult;
+import com.dt.gatepilot.proxy.domain.runtime.RateLimitPolicyResolver;
+import com.dt.gatepilot.proxy.domain.runtime.RateLimitRequest;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessDecision;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessRequest;
@@ -67,6 +74,16 @@ public class GatePilotProxyHandler {
     private final RouteCircuitBreaker routeCircuitBreaker;
 
     /**
+     * 限流策略解析器。
+     */
+    private final RateLimitPolicyResolver rateLimitPolicyResolver;
+
+    /**
+     * 运行时限流器。
+     */
+    private final RuntimeRateLimiter runtimeRateLimiter;
+
+    /**
      * 上游 HTTP 客户端。
      */
     private final WebClient webClient;
@@ -79,6 +96,8 @@ public class GatePilotProxyHandler {
      * @param trafficColorResolver 流量染色解析器
      * @param circuitBreakerPolicyResolver 熔断策略解析器
      * @param routeCircuitBreaker 路由熔断器
+     * @param rateLimitPolicyResolver 限流策略解析器
+     * @param runtimeRateLimiter 运行时限流器
      * @param webClient WebClient
      */
     public GatePilotProxyHandler(ProxyRuntimeState runtimeState,
@@ -86,12 +105,16 @@ public class GatePilotProxyHandler {
                                  TrafficColorResolver trafficColorResolver,
                                  CircuitBreakerPolicyResolver circuitBreakerPolicyResolver,
                                  RouteCircuitBreaker routeCircuitBreaker,
+                                 RateLimitPolicyResolver rateLimitPolicyResolver,
+                                 RuntimeRateLimiter runtimeRateLimiter,
                                  WebClient webClient) {
         this.runtimeState = runtimeState;
         this.accessEvaluator = accessEvaluator;
         this.trafficColorResolver = trafficColorResolver;
         this.circuitBreakerPolicyResolver = circuitBreakerPolicyResolver;
         this.routeCircuitBreaker = routeCircuitBreaker;
+        this.rateLimitPolicyResolver = rateLimitPolicyResolver;
+        this.runtimeRateLimiter = runtimeRateLimiter;
         this.webClient = webClient;
     }
 
@@ -132,6 +155,12 @@ public class GatePilotProxyHandler {
         if (upstream == null || upstream.getEndpoints().isEmpty()) {
             // 上游缺失说明发布产物不可用，不能继续转发
             return ServerResponse.status(HttpStatus.BAD_GATEWAY).build();
+        }
+        Optional<CompiledRateLimitPolicy> rateLimit = rateLimitPolicyResolver.resolve(runtime, accessDecision.route());
+        Optional<Mono<ServerResponse>> rateLimitRejection = rateLimit
+                .flatMap(policy -> rateLimitRejection(policy, rateLimitRequest(request)));
+        if (rateLimitRejection.isPresent()) {
+            return rateLimitRejection.get();
         }
         Optional<CompiledCircuitBreakerPolicy> circuitBreaker = circuitBreakerPolicyResolver.resolve(
                 runtime, accessDecision.route());
@@ -175,6 +204,46 @@ public class GatePilotProxyHandler {
                 queryName -> request.queryParam(queryName).orElse(null),
                 remoteAddress(request)
         );
+    }
+
+    /**
+     * 创建限流请求。
+     *
+     * @param request WebFlux 请求
+     * @return 限流请求
+     */
+    private RateLimitRequest rateLimitRequest(ServerRequest request) {
+        // 限流参数只按需要读取，不提前展开请求
+        return new RateLimitRequest(
+                host(request),
+                headerName -> request.headers().firstHeader(headerName),
+                cookieName -> request.cookies().getFirst(cookieName) == null
+                        ? null
+                        : request.cookies().getFirst(cookieName).getValue(),
+                queryName -> request.queryParam(queryName).orElse(null),
+                remoteAddress(request)
+        );
+    }
+
+    /**
+     * 判断是否需要返回限流响应。
+     *
+     * @param policy 限流策略
+     * @param request 限流请求
+     * @return 限流响应
+     */
+    private Optional<Mono<ServerResponse>> rateLimitRejection(CompiledRateLimitPolicy policy, RateLimitRequest request) {
+        for (CompiledRateLimitRule rule : policy.matchingRules(request)) {
+            String limiterName = rule.limiterName(request);
+            RateLimitAcquireResult result = runtimeRateLimiter.tryAcquire(limiterName, rule);
+            if (result == RateLimitAcquireResult.REJECTED) {
+                return Optional.of(rateLimitFallback(policy));
+            }
+            if (result == RateLimitAcquireResult.UNAVAILABLE) {
+                return Optional.of(rateLimitUnavailable(policy));
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -495,20 +564,47 @@ public class GatePilotProxyHandler {
      */
     private Mono<ServerResponse> circuitBreakerFallback(CompiledCircuitBreakerPolicy circuitBreaker) {
         return ServerResponse.status(HttpStatusCode.valueOf(circuitBreaker.getFallbackStatus()))
-                .contentType(contentType(circuitBreaker))
+                .contentType(contentType(circuitBreaker.getContentType()))
                 .bodyValue(ApiResponse.fail(circuitBreaker.getFallbackCode(), circuitBreaker.getFallbackMessage()));
     }
 
     /**
-     * 解析 fallback 响应类型。
+     * 创建限流 fallback 响应。
      *
-     * @param circuitBreaker 熔断策略
+     * @param rateLimit 限流策略
+     * @return WebFlux 响应
+     */
+    private Mono<ServerResponse> rateLimitFallback(CompiledRateLimitPolicy rateLimit) {
+        return ServerResponse.status(HttpStatusCode.valueOf(rateLimit.getRejectStatus()))
+                .contentType(contentType(rateLimit.getContentType()))
+                .bodyValue(ApiResponse.fail(rateLimit.getRejectCode(), rateLimit.getRejectMessage()));
+    }
+
+    /**
+     * 创建限流组件不可用响应。
+     *
+     * @param rateLimit 限流策略
+     * @return WebFlux 响应
+     */
+    private Mono<ServerResponse> rateLimitUnavailable(CompiledRateLimitPolicy rateLimit) {
+        return ServerResponse.status(HttpStatusCode.valueOf(ProxyRateLimitConstants.UNAVAILABLE_STATUS))
+                .contentType(contentType(rateLimit.getContentType()))
+                .bodyValue(ApiResponse.fail(
+                        ProxyRateLimitConstants.UNAVAILABLE_CODE,
+                        ProxyRateLimitConstants.UNAVAILABLE_MESSAGE
+                ));
+    }
+
+    /**
+     * 解析响应类型。
+     *
+     * @param contentType 响应类型
      * @return 响应类型
      */
-    private MediaType contentType(CompiledCircuitBreakerPolicy circuitBreaker) {
+    private MediaType contentType(String contentType) {
         try {
             // 配置异常时保持 JSON，避免 fallback 自己再失败
-            return MediaType.parseMediaType(circuitBreaker.getContentType());
+            return MediaType.parseMediaType(contentType);
         } catch (RuntimeException exception) {
             return MediaType.APPLICATION_JSON;
         }

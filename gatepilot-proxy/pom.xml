@@ -36,6 +36,16 @@
             </exclusions>
         </dependency>
         <dependency>
+            <groupId>com.dt</groupId>
+            <artifactId>getboot-limiter</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.dt</groupId>
+                    <artifactId>getboot-coordination</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>

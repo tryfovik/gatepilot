@@ -1,14 +1,19 @@
 package com.dt.gatepilot.proxy.infrastructure.config;
 
+import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
+import com.dt.gatepilot.proxy.domain.runtime.RateLimitPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
+import com.dt.gatepilot.proxy.infrastructure.limiter.GetbootRuntimeRateLimiter;
 import com.dt.gatepilot.proxy.interfaces.web.GatePilotProxyHandler;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyHttpConstants;
+import com.getboot.limiter.api.registry.RateLimiterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -114,6 +119,31 @@ public class GatePilotProxyAutoConfiguration {
     }
 
     /**
+     * 创建限流策略解析器。
+     *
+     * @return 限流策略解析器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public RateLimitPolicyResolver rateLimitPolicyResolver() {
+        // 限流策略解析只消费已编译策略快照
+        return new RateLimitPolicyResolver();
+    }
+
+    /**
+     * 创建运行时限流器。
+     *
+     * @param registryProvider getboot 限流注册表提供器
+     * @return 运行时限流器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public RuntimeRateLimiter runtimeRateLimiter(ObjectProvider<RateLimiterRegistry> registryProvider) {
+        // 具体限流算法交给 getboot-limiter，proxy 只做策略适配
+        return new GetbootRuntimeRateLimiter(registryProvider);
+    }
+
+    /**
      * 创建 proxy WebFlux 入口处理器。
      *
      * @param runtimeState proxy 运行态
@@ -121,6 +151,8 @@ public class GatePilotProxyAutoConfiguration {
      * @param trafficColorResolver 流量染色解析器
      * @param circuitBreakerPolicyResolver 熔断策略解析器
      * @param routeCircuitBreaker 路由熔断器
+     * @param rateLimitPolicyResolver 限流策略解析器
+     * @param runtimeRateLimiter 运行时限流器
      * @param webClientBuilder WebClient 构造器
      * @return proxy WebFlux 入口处理器
      */
@@ -131,6 +163,8 @@ public class GatePilotProxyAutoConfiguration {
                                                        TrafficColorResolver trafficColorResolver,
                                                        CircuitBreakerPolicyResolver circuitBreakerPolicyResolver,
                                                        RouteCircuitBreaker routeCircuitBreaker,
+                                                       RateLimitPolicyResolver rateLimitPolicyResolver,
+                                                       RuntimeRateLimiter runtimeRateLimiter,
                                                        WebClient.Builder webClientBuilder) {
         // WebClient.Builder 由 getboot-http-client 增强时可自动继承 Trace 透传
         return new GatePilotProxyHandler(
@@ -139,6 +173,8 @@ public class GatePilotProxyAutoConfiguration {
                 trafficColorResolver,
                 circuitBreakerPolicyResolver,
                 routeCircuitBreaker,
+                rateLimitPolicyResolver,
+                runtimeRateLimiter,
                 webClientBuilder.build()
         );
     }

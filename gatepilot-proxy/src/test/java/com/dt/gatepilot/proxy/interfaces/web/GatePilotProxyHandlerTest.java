@@ -6,9 +6,12 @@ import com.dt.gatepilot.domain.enums.TrafficColorSource;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
+import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
+import com.dt.gatepilot.proxy.domain.runtime.RateLimitAcquireResult;
+import com.dt.gatepilot.proxy.domain.runtime.RateLimitPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
@@ -147,6 +150,56 @@ class GatePilotProxyHandlerTest {
     }
 
     /**
+     * 应在限流拒绝时不再转发上游。
+     */
+    @Test
+    void shouldRejectBeforeForwardingWhenRateLimited() {
+        AtomicInteger forwardedCount = new AtomicInteger();
+        GatePilotProxyHandler handler = handler(
+                runtimeWithRateLimit(),
+                forwardedCount,
+                HttpStatus.OK,
+                (limiterName, rule) -> RateLimitAcquireResult.REJECTED
+        );
+        WebTestClient client = client(handler);
+
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("请求过于频繁"));
+
+        assertThat(forwardedCount.get()).isZero();
+    }
+
+    /**
+     * 应在限流组件不可用时拒绝请求。
+     */
+    @Test
+    void shouldRejectWhenRateLimiterUnavailable() {
+        AtomicInteger forwardedCount = new AtomicInteger();
+        GatePilotProxyHandler handler = handler(
+                runtimeWithRateLimit(),
+                forwardedCount,
+                HttpStatus.OK,
+                (limiterName, rule) -> RateLimitAcquireResult.UNAVAILABLE
+        );
+        WebTestClient client = client(handler);
+
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("网关限流组件未就绪"));
+
+        assertThat(forwardedCount.get()).isZero();
+    }
+
+    /**
      * 创建 WebTestClient。
      *
      * @param handler proxy 入口处理器
@@ -178,6 +231,8 @@ class GatePilotProxyHandlerTest {
                 new TrafficColorResolver(),
                 new CircuitBreakerPolicyResolver(),
                 new RouteCircuitBreaker(),
+                new RateLimitPolicyResolver(),
+                allowRateLimiter(),
                 webClient
         );
     }
@@ -193,6 +248,22 @@ class GatePilotProxyHandlerTest {
     private GatePilotProxyHandler handler(ProxyRuntimeState runtimeState,
                                           AtomicInteger forwardedCount,
                                           HttpStatus status) {
+        return handler(runtimeState, forwardedCount, status, allowRateLimiter());
+    }
+
+    /**
+     * 创建固定状态转发处理器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param forwardedCount 转发计数器
+     * @param status 上游状态
+     * @param rateLimiter 运行时限流器
+     * @return proxy 入口处理器
+     */
+    private GatePilotProxyHandler handler(ProxyRuntimeState runtimeState,
+                                          AtomicInteger forwardedCount,
+                                          HttpStatus status,
+                                          RuntimeRateLimiter rateLimiter) {
         WebClient webClient = WebClient.builder()
                 .exchangeFunction(request -> {
                     forwardedCount.incrementAndGet();
@@ -205,6 +276,8 @@ class GatePilotProxyHandlerTest {
                 new TrafficColorResolver(),
                 new CircuitBreakerPolicyResolver(),
                 new RouteCircuitBreaker(),
+                new RateLimitPolicyResolver(),
+                rateLimiter,
                 webClient
         );
     }
@@ -229,8 +302,19 @@ class GatePilotProxyHandlerTest {
                 new TrafficColorResolver(),
                 new CircuitBreakerPolicyResolver(),
                 new RouteCircuitBreaker(),
+                new RateLimitPolicyResolver(),
+                allowRateLimiter(),
                 webClient
         );
+    }
+
+    /**
+     * 创建放行限流器。
+     *
+     * @return 运行时限流器
+     */
+    private RuntimeRateLimiter allowRateLimiter() {
+        return (limiterName, rule) -> RateLimitAcquireResult.ALLOWED;
     }
 
     /**
@@ -252,6 +336,17 @@ class GatePilotProxyHandlerTest {
     private ProxyRuntimeState runtimeWithCircuitBreaker() {
         ProxyRuntimeState state = new ProxyRuntimeState();
         state.switchTo(new PublishedConfigCompiler().compile(configWithCircuitBreaker()));
+        return state;
+    }
+
+    /**
+     * 创建带限流的运行态。
+     *
+     * @return proxy 运行态
+     */
+    private ProxyRuntimeState runtimeWithRateLimit() {
+        ProxyRuntimeState state = new ProxyRuntimeState();
+        state.switchTo(new PublishedConfigCompiler().compile(configWithRateLimit()));
         return state;
     }
 
@@ -279,6 +374,18 @@ class GatePilotProxyHandlerTest {
         PublishedConfig config = config();
         config.getSpec().getPolicies().clear();
         config.getSpec().getPolicies().add(trafficPolicyWithCircuitBreaker());
+        return config;
+    }
+
+    /**
+     * 创建带限流的发布配置。
+     *
+     * @return 发布配置
+     */
+    private PublishedConfig configWithRateLimit() {
+        PublishedConfig config = config();
+        config.getSpec().getPolicies().clear();
+        config.getSpec().getPolicies().add(trafficPolicyWithRateLimit());
         return config;
     }
 
@@ -356,6 +463,20 @@ class GatePilotProxyHandlerTest {
         circuitBreaker.setFallbackCode(90001);
         circuitBreaker.setFallbackMessage("服务临时不可用");
         policy.getConfig().put(PublishedConfigConstants.KEY_CIRCUIT_BREAKER, circuitBreaker);
+        return policy;
+    }
+
+    /**
+     * 创建带限流的流量策略。
+     *
+     * @return 发布策略
+     */
+    private PublishedConfig.PublishedPolicy trafficPolicyWithRateLimit() {
+        PublishedConfig.PublishedPolicy policy = trafficPolicy();
+        TrafficPolicy.RateLimitPolicy rateLimit = new TrafficPolicy.RateLimitPolicy();
+        rateLimit.setEnabled(true);
+        rateLimit.setRequestsPerSecond(1);
+        policy.getConfig().put(PublishedConfigConstants.KEY_RATE_LIMIT, rateLimit);
         return policy;
     }
 }

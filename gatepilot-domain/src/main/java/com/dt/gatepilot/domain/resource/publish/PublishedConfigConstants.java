@@ -257,6 +257,21 @@ public final class PublishedConfigConstants {
     public static final String KEY_CONTENT_TYPE = "contentType";
 
     /**
+     * requestsPerSecond 配置键。
+     */
+    public static final String KEY_REQUESTS_PER_SECOND = "requestsPerSecond";
+
+    /**
+     * burstCapacity 配置键。
+     */
+    public static final String KEY_BURST_CAPACITY = "burstCapacity";
+
+    /**
+     * paramRules 配置键。
+     */
+    public static final String KEY_PARAM_RULES = "paramRules";
+
+    /**
      * 隐藏工具类构造器。
      */
     private PublishedConfigConstants() {

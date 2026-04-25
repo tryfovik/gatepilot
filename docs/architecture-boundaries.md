@@ -251,6 +251,12 @@ controller-manager 与 apiserver 的关系：
 - 运行指标采集。
 - 向 agent 暴露本机 apply / health / state 能力。
 
+限流执行规则：
+
+- GatePilot 不自造通用限流算法，运行时通过 `getboot-limiter` 编程式入口申请许可。
+- proxy 默认只依赖 getboot-limiter API，不把 `getboot-coordination` / Redisson 运行实现强制带入合包，避免未配置 Redis 时启动即连接本地 Redis。
+- 需要分布式限流的部署形态必须显式引入和配置 getboot-coordination，未就绪时 proxy 对启用限流的路由返回限流组件不可用。
+
 禁止放：
 
 - 配置编辑。
@@ -705,7 +711,7 @@ Client
 | `platform-gateway-runtime/GatewayCircuitBreakerFilter` | 轻量熔断和 fallback | `gatepilot-proxy` | 已覆盖本机滑动窗口状态机、OPEN / HALF_OPEN / CLOSED 转换和 getboot `ApiResponse` fallback，Sentinel / getboot-governance 仍未接入 | 策略来自 `PublishedConfig`，状态只存在 proxy 本机内存，后续限流和治理公共能力仍优先接 getboot |
 | `platform-gateway-runtime/GatewayAccessAuditFilter` | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | 只有端口占位，采集 / 上报 / 查询未完成 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
 | `platform-gateway-runtime/UpstreamHealthIndicator` | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | agent 上报模型已预留，主动探测未完成 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |
-| `platform-gateway-server/GatewaySentinelRuleRegistrar` | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 未覆盖 | 规则由 `PublishedConfig` 编译生成，不再从旧 YAML 全量注册 |
+| `platform-gateway-server/GatewaySentinelRuleRegistrar` | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 基础限流已改为 `PublishedConfig` -> getboot-limiter 运行时适配，Sentinel 网关规则注册未覆盖 | 当前不直接迁移旧 YAML Sentinel 注册器；后续若接 Sentinel，仍由 `PublishedConfig` 编译生成规则 |
 | `platform-gateway-management/GatewayDiagnosticsService` | 路由诊断、策略诊断、染色和发布变体解释 | `gatepilot-apiserver/application` 和 `gatepilot-console` 页面 | Console 页面骨架已有，诊断用例未完成 | 诊断基于已发布配置、节点状态和审计数据，不直接读取 proxy 内存 |
 | `platform-gateway-management/GatewayManagementService` | 配置导出、dry-run、diff、版本快照 | `gatepilot-apiserver` 和 `gatepilot-controller-manager` | 资源查询、diff、快照基础已覆盖，配置摘要和完整 dry-run 仍缺 | 管理 API 和发布编排拆开，快照和版本必须持久化到数据库 |
 | `platform-gateway-management/GatewayAccessAuditController` | 审计查询 API | `gatepilot-apiserver/interfaces/rest` | 未覆盖 | 查询 apiserver 持久化审计，不查 proxy 本地内存 |

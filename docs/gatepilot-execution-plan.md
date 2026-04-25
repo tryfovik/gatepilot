@@ -217,6 +217,7 @@ console
 - [x] 接入 proxy WebFlux 过滤链执行染色解析、请求头透传和响应头回写。
 - [x] 改造 Query / IP 染色规则。
 - [x] 参考旧 `GatewayCircuitBreakerFilter` 改造熔断和 fallback 能力。
+- [x] 接入 getboot-limiter 执行基础路由级 / 参数级限流。
 - [ ] 参考旧 `GatewaySentinelRuleRegistrar` 改造 Sentinel 规则注册能力。
 - [ ] 参考旧审计过滤器改造访问审计采集能力。
 - [ ] 改造内部运维入口保护。
