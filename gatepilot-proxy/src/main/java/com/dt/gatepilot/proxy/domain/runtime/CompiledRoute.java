@@ -1,5 +1,6 @@
 package com.dt.gatepilot.proxy.domain.runtime;
 
+import com.dt.gatepilot.domain.enums.HttpMethod;
 import com.dt.gatepilot.domain.enums.Protocol;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +31,11 @@ public class CompiledRoute {
      * 路径前缀。
      */
     private String pathPrefix;
+
+    /**
+     * 允许的 HTTP 方法，为空表示不限制。
+     */
+    private List<HttpMethod> methods = new ArrayList<>();
 
     /**
      * 目标上游名称。

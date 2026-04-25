@@ -200,8 +200,10 @@ console
 - [x] proxy 热路径运行态使用本地内存索引，不访问控制面。
 - [x] 从旧 `GatewayRouteDefinitionLocator` 迁移路由编译和命中算法。
 - [x] 从旧 `GatewayTrafficColorResolver` / `GatewayTrafficColorFilter` 迁移流量染色执行能力。
-- [ ] 从旧 `GatewayAuthenticationFilter` 迁移路由级认证能力。
-- [ ] 从旧 `GatewayMethodAccessFilter` 迁移 HTTP 方法白名单能力。
+- [x] 从旧 `GatewayAuthenticationFilter` 迁移路由级认证策略判断能力。
+- [ ] 接入 getboot-auth 执行路由级认证。
+- [x] 从旧 `GatewayMethodAccessFilter` 迁移 HTTP 方法白名单判断能力。
+- [ ] 接入 proxy WebFlux 过滤链执行 HTTP 方法白名单。
 - [ ] 从旧 `GatewayCircuitBreakerFilter` 迁移熔断和 fallback 能力。
 - [ ] 从旧 `GatewaySentinelRuleRegistrar` 迁移 Sentinel 规则注册能力。
 - [ ] 从旧审计过滤器迁移访问审计采集能力。

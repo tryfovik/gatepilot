@@ -1,6 +1,7 @@
 package com.dt.gatepilot.domain.resource.publish;
 
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
+import com.dt.gatepilot.domain.enums.HttpMethod;
 import com.dt.gatepilot.domain.enums.Protocol;
 import com.dt.gatepilot.domain.resource.common.LabelSelector;
 import com.dt.gatepilot.domain.resource.common.ResourceMetadata;
@@ -152,6 +153,11 @@ public class PublishedConfig {
          * 路径匹配表达式。
          */
         private String path;
+
+        /**
+         * 允许的 HTTP 方法，为空表示不限制。
+         */
+        private List<HttpMethod> methods = new ArrayList<>();
 
         /**
          * 目标上游名称。

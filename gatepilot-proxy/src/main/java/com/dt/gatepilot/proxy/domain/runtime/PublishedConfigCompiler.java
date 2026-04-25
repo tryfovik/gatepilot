@@ -35,6 +35,7 @@ public class PublishedConfigCompiler {
         route.setProtocols(source.getProtocols());
         route.setHosts(normalizeHosts(source.getHosts()));
         route.setPathPrefix(normalizePath(source.getPath()));
+        route.setMethods(source.getMethods());
         route.setUpstreamName(source.getUpstreamName());
         route.setPolicyNames(source.getPolicyNames());
         return route;

@@ -94,6 +94,7 @@ public class PublishedConfigAssembler {
         snapshot.setHosts(route.getSpec().getHosts());
         snapshot.setPath(Optional.ofNullable(route.getSpec().getPath()).map(GatewayRoute.RoutePathMatch::getValue)
                 .orElse(null));
+        snapshot.setMethods(route.getSpec().getMethods());
         snapshot.setUpstreamName(Optional.ofNullable(route.getSpec().getUpstreamRef()).map(ResourceReference::getName)
                 .orElse(null));
         snapshot.setPolicyNames(route.getSpec().getPolicyRefs().stream().map(ResourceReference::getName).toList());
