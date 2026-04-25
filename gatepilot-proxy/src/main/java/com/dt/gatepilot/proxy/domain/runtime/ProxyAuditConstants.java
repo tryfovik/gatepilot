@@ -61,6 +61,11 @@ public final class ProxyAuditConstants {
     public static final String REASON_UPSTREAM_RESPONSE = "upstream_response";
 
     /**
+     * 内部入口访问拒绝。
+     */
+    public static final String REASON_INTERNAL_ACCESS_DENIED = "internal_access_denied";
+
+    /**
      * 上游异常。
      */
     public static final String REASON_UPSTREAM_ERROR = "upstream_error";

@@ -41,6 +41,26 @@ public final class PublishedConfigConstants {
     public static final String KEY_RETRY = "retry";
 
     /**
+     * maxAttempts 配置键。
+     */
+    public static final String KEY_MAX_ATTEMPTS = "maxAttempts";
+
+    /**
+     * statuses 配置键。
+     */
+    public static final String KEY_STATUSES = "statuses";
+
+    /**
+     * firstBackoff 配置键。
+     */
+    public static final String KEY_FIRST_BACKOFF = "firstBackoff";
+
+    /**
+     * maxBackoff 配置键。
+     */
+    public static final String KEY_MAX_BACKOFF = "maxBackoff";
+
+    /**
      * circuitBreaker 配置键。
      */
     public static final String KEY_CIRCUIT_BREAKER = "circuitBreaker";
@@ -74,6 +94,11 @@ public final class PublishedConfigConstants {
      * trafficSplits 配置键。
      */
     public static final String KEY_TRAFFIC_SPLITS = "trafficSplits";
+
+    /**
+     * upstreamRef 配置键。
+     */
+    public static final String KEY_UPSTREAM_REF = "upstreamRef";
 
     /**
      * steps 配置键。

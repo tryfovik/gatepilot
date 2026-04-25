@@ -206,8 +206,8 @@ console
 ### Phase 6：proxy
 
 - [ ] 将旧数据面模块能力按 GatePilot 运行模型收敛到 `gatepilot-proxy`。
-- [ ] 移除 proxy 中的配置查看、版本快照、Web 管理、审计查询职责。
-- [ ] proxy 只从 agent 获取 `PublishedConfig`。
+- [x] 移除 proxy 中的配置查看、版本快照、Web 管理、审计查询职责。
+- [x] proxy 只从 agent 获取 `PublishedConfig`。
 - [x] proxy 支持原子切换运行状态。
 - [x] proxy 支持失败保留 last-good。
 - [x] proxy 支持 `PublishedConfig` 预编译为运行态快照。
@@ -215,19 +215,22 @@ console
 - [x] 基于旧 `GatewayRouteDefinitionLocator` 的能力样本重建路由编译和命中算法。
 - [x] 基于旧 `GatewayTrafficColorResolver` / `GatewayTrafficColorFilter` 的能力样本重建流量染色执行能力。
 - [x] 参考旧 `GatewayAuthenticationFilter` 改造路由级认证策略判断能力。
-- [ ] 接入 getboot-auth 执行路由级认证。
+- [x] 接入 getboot-auth 执行路由级认证。
 - [x] 参考旧 `GatewayMethodAccessFilter` 改造 HTTP 方法白名单判断能力。
 - [x] 接入 proxy WebFlux 过滤链执行 HTTP 方法白名单。
 - [x] 接入 proxy WebFlux 过滤链执行路由转发。
 - [x] 接入 proxy WebFlux 过滤链执行染色解析、请求头透传和响应头回写。
+- [x] 接入 ReleasePolicy `trafficSplits`，按灰度 / 蓝绿命中的颜色切换实际上游。
+- [x] 接入上游多端点轮询和加权轮询选择，避免所有流量固定打第一个 endpoint。
 - [x] 改造 Query / IP 染色规则。
+- [x] 接入 TrafficPolicy `retry` 执行幂等请求重试，重试时重新选择上游端点。
 - [x] 参考旧 `GatewayCircuitBreakerFilter` 改造熔断和 fallback 能力。
 - [x] 接入 getboot-limiter 执行基础路由级 / 参数级限流。
 - [ ] 参考旧 `GatewaySentinelRuleRegistrar` 改造 Sentinel 规则注册能力。
 - [x] 参考旧审计过滤器改造访问审计采集能力。
-- [ ] 改造内部运维入口保护。
+- [x] 改造内部运维入口保护。
 - [ ] 改造上游健康主动探测。
-- [ ] 保留并验证路由、转发、限流、熔断、重试、染色、灰度、蓝绿执行能力。
+- [x] 保留并验证路由、转发、限流、熔断、重试、染色、灰度、蓝绿执行能力。
 - [x] 运行审计事件只采集并上报，不在 proxy 内做管理查询。
 
 ### Phase 7：console

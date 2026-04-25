@@ -1,6 +1,7 @@
 package com.dt.gatepilot.proxy.infrastructure.config;
 
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
+import com.dt.gatepilot.proxy.domain.port.RuntimeAuthChecker;
 import com.dt.gatepilot.proxy.domain.port.RuntimeMetricsSink;
 import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
@@ -8,13 +9,18 @@ import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
 import com.dt.gatepilot.proxy.domain.runtime.RateLimitPolicyResolver;
+import com.dt.gatepilot.proxy.domain.runtime.ReleaseUpstreamResolver;
+import com.dt.gatepilot.proxy.domain.runtime.RetryPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
+import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointSelector;
+import com.dt.gatepilot.proxy.infrastructure.auth.GetbootRuntimeAuthChecker;
 import com.dt.gatepilot.proxy.infrastructure.limiter.GetbootRuntimeRateLimiter;
 import com.dt.gatepilot.proxy.interfaces.web.GatePilotProxyHandler;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyHttpConstants;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyRuntimeAuditRecorder;
+import com.getboot.auth.spi.SaTokenWebFluxAuthChecker;
 import com.getboot.limiter.api.registry.RateLimiterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -134,6 +140,42 @@ public class GatePilotProxyAutoConfiguration {
     }
 
     /**
+     * 创建重试策略解析器。
+     *
+     * @return 重试策略解析器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public RetryPolicyResolver retryPolicyResolver() {
+        // 重试策略解析只消费已编译策略快照
+        return new RetryPolicyResolver();
+    }
+
+    /**
+     * 创建发布上游解析器。
+     *
+     * @return 发布上游解析器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public ReleaseUpstreamResolver releaseUpstreamResolver() {
+        // 发布策略只影响上游选择，不改变路由命中规则
+        return new ReleaseUpstreamResolver();
+    }
+
+    /**
+     * 创建上游端点选择器。
+     *
+     * @return 上游端点选择器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public UpstreamEndpointSelector upstreamEndpointSelector() {
+        // 端点选择器只维护本机轻量游标
+        return new UpstreamEndpointSelector();
+    }
+
+    /**
      * 创建运行时限流器。
      *
      * @param registryProvider getboot 限流注册表提供器
@@ -144,6 +186,19 @@ public class GatePilotProxyAutoConfiguration {
     public RuntimeRateLimiter runtimeRateLimiter(ObjectProvider<RateLimiterRegistry> registryProvider) {
         // 具体限流算法交给 getboot-limiter，proxy 只做策略适配
         return new GetbootRuntimeRateLimiter(registryProvider);
+    }
+
+    /**
+     * 创建运行时认证校验器。
+     *
+     * @param checkerProvider getboot-auth 认证校验器提供器
+     * @return 运行时认证校验器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public RuntimeAuthChecker runtimeAuthChecker(ObjectProvider<SaTokenWebFluxAuthChecker> checkerProvider) {
+        // 认证执行交给 getboot-auth，proxy 只消费结果
+        return new GetbootRuntimeAuthChecker(checkerProvider);
     }
 
     /**
@@ -197,6 +252,10 @@ public class GatePilotProxyAutoConfiguration {
      * @param routeCircuitBreaker 路由熔断器
      * @param rateLimitPolicyResolver 限流策略解析器
      * @param runtimeRateLimiter 运行时限流器
+     * @param retryPolicyResolver 重试策略解析器
+     * @param releaseUpstreamResolver 发布上游解析器
+     * @param endpointSelector 上游端点选择器
+     * @param runtimeAuthChecker 运行时认证校验器
      * @param auditRecorder 运行审计记录器
      * @param webClientBuilder WebClient 构造器
      * @return proxy WebFlux 入口处理器
@@ -210,6 +269,10 @@ public class GatePilotProxyAutoConfiguration {
                                                        RouteCircuitBreaker routeCircuitBreaker,
                                                        RateLimitPolicyResolver rateLimitPolicyResolver,
                                                        RuntimeRateLimiter runtimeRateLimiter,
+                                                       RetryPolicyResolver retryPolicyResolver,
+                                                       ReleaseUpstreamResolver releaseUpstreamResolver,
+                                                       UpstreamEndpointSelector endpointSelector,
+                                                       RuntimeAuthChecker runtimeAuthChecker,
                                                        ProxyRuntimeAuditRecorder auditRecorder,
                                                        WebClient.Builder webClientBuilder) {
         // WebClient.Builder 由 getboot-http-client 增强时可自动继承 Trace 透传
@@ -221,6 +284,10 @@ public class GatePilotProxyAutoConfiguration {
                 routeCircuitBreaker,
                 rateLimitPolicyResolver,
                 runtimeRateLimiter,
+                retryPolicyResolver,
+                releaseUpstreamResolver,
+                endpointSelector,
+                runtimeAuthChecker,
                 auditRecorder,
                 webClientBuilder.build()
         );

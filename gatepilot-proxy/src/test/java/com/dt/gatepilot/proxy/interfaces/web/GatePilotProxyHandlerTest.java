@@ -6,6 +6,8 @@ import com.dt.gatepilot.domain.enums.TrafficColorSource;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
+import com.dt.gatepilot.proxy.domain.port.RuntimeAuthChecker;
+import com.dt.gatepilot.proxy.domain.port.RuntimeAuthResult;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
 import com.dt.gatepilot.proxy.domain.port.RuntimeMetricsSink;
 import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
@@ -15,22 +17,32 @@ import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
 import com.dt.gatepilot.proxy.domain.runtime.RateLimitAcquireResult;
 import com.dt.gatepilot.proxy.domain.runtime.RateLimitPolicyResolver;
+import com.dt.gatepilot.proxy.domain.runtime.ReleaseUpstreamResolver;
+import com.dt.gatepilot.proxy.domain.runtime.RetryPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
+import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointSelector;
+import java.net.InetSocketAddress;
+import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.reactive.function.server.MockServerRequest;
 import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.server.RequestPredicates;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -225,6 +237,151 @@ class GatePilotProxyHandlerTest {
     }
 
     /**
+     * 应在可重试状态码上切换端点后成功。
+     */
+    @Test
+    void shouldRetryRetryableStatusWithNextEndpoint() {
+        List<ClientRequest> forwardedRequests = new ArrayList<>();
+        AtomicInteger forwardedCount = new AtomicInteger();
+        WebClient webClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    forwardedRequests.add(request);
+                    int count = forwardedCount.incrementAndGet();
+                    HttpStatus status = count == 1 ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.OK;
+                    return Mono.just(ClientResponse.create(status).body("retry-ok").build());
+                })
+                .build();
+        GatePilotProxyHandler handler = handler(runtimeWithRetry(), webClient);
+        WebTestClient client = client(handler);
+
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class).isEqualTo("retry-ok");
+
+        assertThat(forwardedRequests).hasSize(2);
+        assertThat(forwardedRequests.get(0).url().toString())
+                .isEqualTo("http://upstream.local:8080/admin/users");
+        assertThat(forwardedRequests.get(1).url().toString())
+                .isEqualTo("http://upstream-b.local:8081/admin/users");
+    }
+
+    /**
+     * 应在多端点上游中轮询转发。
+     */
+    @Test
+    void shouldRoundRobinAcrossUpstreamEndpoints() {
+        List<ClientRequest> forwardedRequests = new ArrayList<>();
+        WebClient webClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    forwardedRequests.add(request);
+                    return Mono.just(ClientResponse.create(HttpStatus.OK).body("ok").build());
+                })
+                .build();
+        GatePilotProxyHandler handler = handler(runtimeWithMultipleEndpoints(), webClient);
+        WebTestClient client = client(handler);
+
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isOk();
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isOk();
+
+        assertThat(forwardedRequests.get(0).url().toString())
+                .isEqualTo("http://upstream.local:8080/admin/users");
+        assertThat(forwardedRequests.get(1).url().toString())
+                .isEqualTo("http://upstream-b.local:8081/admin/users");
+    }
+
+    /**
+     * 应按发布分流颜色切换上游。
+     */
+    @Test
+    void shouldSwitchUpstreamByReleaseTrafficSplit() {
+        AtomicReference<ClientRequest> forwardedRequest = new AtomicReference<>();
+        WebClient webClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    forwardedRequest.set(request);
+                    return Mono.just(ClientResponse.create(HttpStatus.OK).body("candidate").build());
+                })
+                .build();
+        GatePilotProxyHandler handler = handler(runtimeWithReleaseSplit(), webClient);
+        WebTestClient client = client(handler);
+
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .header("X-User-Id", "u-10001")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("X-Traffic-Color", "canary")
+                .expectBody(String.class).isEqualTo("candidate");
+
+        assertThat(forwardedRequest.get().url().toString())
+                .isEqualTo("http://candidate.local:9090/admin/users");
+    }
+
+    /**
+     * 应在路由认证失败时拒绝转发。
+     */
+    @Test
+    void shouldRejectWhenRuntimeAuthCheckerDenied() {
+        List<ClientRequest> forwardedRequests = new ArrayList<>();
+        WebClient webClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    forwardedRequests.add(request);
+                    return Mono.just(ClientResponse.create(HttpStatus.OK).body("ok").build());
+                })
+                .build();
+        RuntimeAuthChecker deniedAuthChecker = () -> RuntimeAuthResult.denied(
+                HttpStatus.UNAUTHORIZED.value(),
+                HttpStatus.UNAUTHORIZED.value(),
+                "认证失败",
+                ProxyAuditConstants.REASON_AUTHENTICATION_REQUIRED,
+                null
+        );
+        GatePilotProxyHandler handler = handler(runtimeWithAuthRequired(), webClient, deniedAuthChecker);
+        WebTestClient client = client(handler);
+
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("认证失败"));
+
+        assertThat(forwardedRequests).isEmpty();
+    }
+
+    /**
+     * 应拒绝非本机来源访问内部入口。
+     */
+    @Test
+    void shouldRejectInternalRequestFromRemoteAddress() {
+        GatePilotProxyHandler handler = handler(runtime(), WebClient.builder()
+                .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK).body("ok").build()))
+                .build());
+        MockServerRequest request = MockServerRequest.builder()
+                .method(org.springframework.http.HttpMethod.GET)
+                .uri(URI.create("http://api.example.com/internal/actuator"))
+                .remoteAddress(InetSocketAddress.createUnresolved("10.0.0.8", 8080))
+                .build();
+
+        ServerResponse response = handler.handle(request).block(Duration.ofSeconds(1));
+
+        assertThat(response).isNotNull();
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    /**
      * 创建 WebTestClient。
      *
      * @param handler proxy 入口处理器
@@ -274,7 +431,50 @@ class GatePilotProxyHandlerTest {
                 new RouteCircuitBreaker(),
                 new RateLimitPolicyResolver(),
                 allowRateLimiter(),
+                new RetryPolicyResolver(),
+                new ReleaseUpstreamResolver(),
+                new UpstreamEndpointSelector(),
+                allowAuthChecker(),
                 new ProxyRuntimeAuditRecorder(runtimeAuditSink, runtimeMetricsSink),
+                webClient
+        );
+    }
+
+    /**
+     * 创建指定客户端的处理器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param webClient WebClient
+     * @return proxy 入口处理器
+     */
+    private GatePilotProxyHandler handler(ProxyRuntimeState runtimeState, WebClient webClient) {
+        return handler(runtimeState, webClient, allowAuthChecker());
+    }
+
+    /**
+     * 创建指定客户端和认证器的处理器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param webClient WebClient
+     * @param runtimeAuthChecker 运行时认证器
+     * @return proxy 入口处理器
+     */
+    private GatePilotProxyHandler handler(ProxyRuntimeState runtimeState,
+                                          WebClient webClient,
+                                          RuntimeAuthChecker runtimeAuthChecker) {
+        return new GatePilotProxyHandler(
+                runtimeState,
+                new RouteAccessEvaluator(),
+                new TrafficColorResolver(),
+                new CircuitBreakerPolicyResolver(),
+                new RouteCircuitBreaker(),
+                new RateLimitPolicyResolver(),
+                allowRateLimiter(),
+                new RetryPolicyResolver(),
+                new ReleaseUpstreamResolver(),
+                new UpstreamEndpointSelector(),
+                runtimeAuthChecker,
+                new ProxyRuntimeAuditRecorder(noopAuditSink(), noopMetricsSink()),
                 webClient
         );
     }
@@ -338,6 +538,10 @@ class GatePilotProxyHandlerTest {
                 new RouteCircuitBreaker(),
                 new RateLimitPolicyResolver(),
                 rateLimiter,
+                new RetryPolicyResolver(),
+                new ReleaseUpstreamResolver(),
+                new UpstreamEndpointSelector(),
+                allowAuthChecker(),
                 new ProxyRuntimeAuditRecorder(runtimeAuditSink, noopMetricsSink()),
                 webClient
         );
@@ -379,6 +583,10 @@ class GatePilotProxyHandlerTest {
                 new RouteCircuitBreaker(),
                 new RateLimitPolicyResolver(),
                 allowRateLimiter(),
+                new RetryPolicyResolver(),
+                new ReleaseUpstreamResolver(),
+                new UpstreamEndpointSelector(),
+                allowAuthChecker(),
                 new ProxyRuntimeAuditRecorder(runtimeAuditSink, noopMetricsSink()),
                 webClient
         );
@@ -391,6 +599,15 @@ class GatePilotProxyHandlerTest {
      */
     private RuntimeRateLimiter allowRateLimiter() {
         return (limiterName, rule) -> RateLimitAcquireResult.ALLOWED;
+    }
+
+    /**
+     * 创建放行认证器。
+     *
+     * @return 运行时认证器
+     */
+    private RuntimeAuthChecker allowAuthChecker() {
+        return com.dt.gatepilot.proxy.domain.port.RuntimeAuthResult::pass;
     }
 
     /**
@@ -449,6 +666,50 @@ class GatePilotProxyHandlerTest {
     }
 
     /**
+     * 创建带重试的运行态。
+     *
+     * @return proxy 运行态
+     */
+    private ProxyRuntimeState runtimeWithRetry() {
+        ProxyRuntimeState state = new ProxyRuntimeState();
+        state.switchTo(new PublishedConfigCompiler().compile(configWithRetry()));
+        return state;
+    }
+
+    /**
+     * 创建带多端点上游的运行态。
+     *
+     * @return proxy 运行态
+     */
+    private ProxyRuntimeState runtimeWithMultipleEndpoints() {
+        ProxyRuntimeState state = new ProxyRuntimeState();
+        state.switchTo(new PublishedConfigCompiler().compile(configWithMultipleEndpoints()));
+        return state;
+    }
+
+    /**
+     * 创建带认证要求的运行态。
+     *
+     * @return proxy 运行态
+     */
+    private ProxyRuntimeState runtimeWithAuthRequired() {
+        ProxyRuntimeState state = new ProxyRuntimeState();
+        state.switchTo(new PublishedConfigCompiler().compile(configWithAuthRequired()));
+        return state;
+    }
+
+    /**
+     * 创建带发布分流的运行态。
+     *
+     * @return proxy 运行态
+     */
+    private ProxyRuntimeState runtimeWithReleaseSplit() {
+        ProxyRuntimeState state = new ProxyRuntimeState();
+        state.switchTo(new PublishedConfigCompiler().compile(configWithReleaseSplit()));
+        return state;
+    }
+
+    /**
      * 创建默认发布配置。
      *
      * @return 发布配置
@@ -488,6 +749,60 @@ class GatePilotProxyHandlerTest {
     }
 
     /**
+     * 创建带重试的发布配置。
+     *
+     * @return 发布配置
+     */
+    private PublishedConfig configWithRetry() {
+        PublishedConfig config = configWithMultipleEndpoints();
+        config.getSpec().getPolicies().clear();
+        config.getSpec().getPolicies().add(trafficPolicyWithRetry());
+        return config;
+    }
+
+    /**
+     * 创建带多端点上游的发布配置。
+     *
+     * @return 发布配置
+     */
+    private PublishedConfig configWithMultipleEndpoints() {
+        PublishedConfig config = config();
+        config.getSpec().getUpstreams().clear();
+        config.getSpec().getUpstreams().add(upstreamWithMultipleEndpoints());
+        return config;
+    }
+
+    /**
+     * 创建带认证要求的发布配置。
+     *
+     * @return 发布配置
+     */
+    private PublishedConfig configWithAuthRequired() {
+        PublishedConfig config = config();
+        config.getSpec().getRoutes().get(0).getPolicyNames().add("auth-main");
+        PublishedConfig.PublishedPolicy auth = new PublishedConfig.PublishedPolicy();
+        auth.setName("auth-main");
+        auth.setType(PublishedConfigConstants.POLICY_TYPE_AUTH);
+        auth.getConfig().put(PublishedConfigConstants.KEY_TYPE, "JWT");
+        auth.getConfig().put(PublishedConfigConstants.KEY_ANONYMOUS_ALLOWED, false);
+        config.getSpec().getPolicies().add(auth);
+        return config;
+    }
+
+    /**
+     * 创建带发布分流的发布配置。
+     *
+     * @return 发布配置
+     */
+    private PublishedConfig configWithReleaseSplit() {
+        PublishedConfig config = config();
+        config.getSpec().getRoutes().get(0).getPolicyNames().add("release-main");
+        config.getSpec().getUpstreams().add(candidateUpstream());
+        config.getSpec().getPolicies().add(releasePolicy());
+        return config;
+    }
+
+    /**
      * 创建默认路由。
      *
      * @return 发布路由
@@ -516,9 +831,43 @@ class GatePilotProxyHandlerTest {
         PublishedConfig.PublishedUpstream upstream = new PublishedConfig.PublishedUpstream();
         upstream.setName("admin-upstream");
         upstream.setProtocol(Protocol.HTTP);
+        upstream.setLoadBalance("ROUND_ROBIN");
         PublishedConfig.PublishedEndpoint endpoint = new PublishedConfig.PublishedEndpoint();
         endpoint.setHost("upstream.local");
         endpoint.setPort(8080);
+        endpoint.setWeight(100);
+        upstream.getEndpoints().add(endpoint);
+        return upstream;
+    }
+
+    /**
+     * 创建多端点上游。
+     *
+     * @return 发布上游
+     */
+    private PublishedConfig.PublishedUpstream upstreamWithMultipleEndpoints() {
+        PublishedConfig.PublishedUpstream upstream = upstream();
+        PublishedConfig.PublishedEndpoint endpoint = new PublishedConfig.PublishedEndpoint();
+        endpoint.setHost("upstream-b.local");
+        endpoint.setPort(8081);
+        endpoint.setWeight(100);
+        upstream.getEndpoints().add(endpoint);
+        return upstream;
+    }
+
+    /**
+     * 创建候选版本上游。
+     *
+     * @return 发布上游
+     */
+    private PublishedConfig.PublishedUpstream candidateUpstream() {
+        PublishedConfig.PublishedUpstream upstream = new PublishedConfig.PublishedUpstream();
+        upstream.setName("candidate-upstream");
+        upstream.setProtocol(Protocol.HTTP);
+        upstream.setLoadBalance("ROUND_ROBIN");
+        PublishedConfig.PublishedEndpoint endpoint = new PublishedConfig.PublishedEndpoint();
+        endpoint.setHost("candidate.local");
+        endpoint.setPort(9090);
         endpoint.setWeight(100);
         upstream.getEndpoints().add(endpoint);
         return upstream;
@@ -575,6 +924,42 @@ class GatePilotProxyHandlerTest {
         rateLimit.setEnabled(true);
         rateLimit.setRequestsPerSecond(1);
         policy.getConfig().put(PublishedConfigConstants.KEY_RATE_LIMIT, rateLimit);
+        return policy;
+    }
+
+    /**
+     * 创建带重试的流量策略。
+     *
+     * @return 发布策略
+     */
+    private PublishedConfig.PublishedPolicy trafficPolicyWithRetry() {
+        PublishedConfig.PublishedPolicy policy = trafficPolicy();
+        TrafficPolicy.RetryPolicy retry = new TrafficPolicy.RetryPolicy();
+        retry.setEnabled(true);
+        retry.setMaxAttempts(2);
+        retry.setStatuses(List.of(HttpStatus.SERVICE_UNAVAILABLE.value()));
+        retry.setFirstBackoff(Duration.ZERO);
+        policy.getConfig().put(PublishedConfigConstants.KEY_RETRY, retry);
+        return policy;
+    }
+
+    /**
+     * 创建发布分流策略。
+     *
+     * @return 发布策略
+     */
+    private PublishedConfig.PublishedPolicy releasePolicy() {
+        PublishedConfig.PublishedPolicy policy = new PublishedConfig.PublishedPolicy();
+        policy.setName("release-main");
+        policy.setType(PublishedConfigConstants.POLICY_TYPE_RELEASE);
+        Map<String, Object> upstreamRef = new LinkedHashMap<>();
+        upstreamRef.put(PublishedConfigConstants.KEY_NAME, "candidate-upstream");
+        Map<String, Object> split = new LinkedHashMap<>();
+        split.put(PublishedConfigConstants.KEY_TARGET, "canary");
+        split.put(PublishedConfigConstants.KEY_COLOR, "canary");
+        split.put(PublishedConfigConstants.KEY_WEIGHT, 100);
+        split.put(PublishedConfigConstants.KEY_UPSTREAM_REF, upstreamRef);
+        policy.getConfig().put(PublishedConfigConstants.KEY_TRAFFIC_SPLITS, List.of(split));
         return policy;
     }
 

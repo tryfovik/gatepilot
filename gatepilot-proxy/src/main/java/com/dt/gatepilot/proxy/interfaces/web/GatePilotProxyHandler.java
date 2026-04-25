@@ -1,20 +1,27 @@
 package com.dt.gatepilot.proxy.interfaces.web;
 
 import com.dt.gatepilot.domain.enums.Protocol;
+import com.dt.gatepilot.proxy.domain.port.RuntimeAuthChecker;
+import com.dt.gatepilot.proxy.domain.port.RuntimeAuthResult;
 import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledCircuitBreakerPolicy;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledProxyRuntime;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledRateLimitPolicy;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledRateLimitRule;
+import com.dt.gatepilot.proxy.domain.runtime.CompiledRetryPolicy;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledRoute;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledUpstream;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyAuditConstants;
+import com.dt.gatepilot.proxy.domain.runtime.ProxyLoadBalanceConstants;
+import com.dt.gatepilot.proxy.domain.runtime.ProxyRetryConstants;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRateLimitConstants;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.RateLimitAcquireResult;
 import com.dt.gatepilot.proxy.domain.runtime.RateLimitPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RateLimitRequest;
+import com.dt.gatepilot.proxy.domain.runtime.ReleaseUpstreamResolver;
+import com.dt.gatepilot.proxy.domain.runtime.RetryPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessDecision;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessRequest;
@@ -22,9 +29,12 @@ import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorRequest;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorConstants;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
+import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointSelector;
 import com.getboot.web.api.response.ApiResponse;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Objects;
@@ -85,6 +95,26 @@ public class GatePilotProxyHandler {
     private final RuntimeRateLimiter runtimeRateLimiter;
 
     /**
+     * 重试策略解析器。
+     */
+    private final RetryPolicyResolver retryPolicyResolver;
+
+    /**
+     * 发布上游解析器。
+     */
+    private final ReleaseUpstreamResolver releaseUpstreamResolver;
+
+    /**
+     * 上游端点选择器。
+     */
+    private final UpstreamEndpointSelector endpointSelector;
+
+    /**
+     * 运行时认证校验器。
+     */
+    private final RuntimeAuthChecker runtimeAuthChecker;
+
+    /**
      * 运行审计记录器。
      */
     private final ProxyRuntimeAuditRecorder auditRecorder;
@@ -104,6 +134,10 @@ public class GatePilotProxyHandler {
      * @param routeCircuitBreaker 路由熔断器
      * @param rateLimitPolicyResolver 限流策略解析器
      * @param runtimeRateLimiter 运行时限流器
+     * @param retryPolicyResolver 重试策略解析器
+     * @param releaseUpstreamResolver 发布上游解析器
+     * @param endpointSelector 上游端点选择器
+     * @param runtimeAuthChecker 运行时认证校验器
      * @param auditRecorder 运行审计记录器
      * @param webClient WebClient
      */
@@ -114,6 +148,10 @@ public class GatePilotProxyHandler {
                                  RouteCircuitBreaker routeCircuitBreaker,
                                  RateLimitPolicyResolver rateLimitPolicyResolver,
                                  RuntimeRateLimiter runtimeRateLimiter,
+                                 RetryPolicyResolver retryPolicyResolver,
+                                 ReleaseUpstreamResolver releaseUpstreamResolver,
+                                 UpstreamEndpointSelector endpointSelector,
+                                 RuntimeAuthChecker runtimeAuthChecker,
                                  ProxyRuntimeAuditRecorder auditRecorder,
                                  WebClient webClient) {
         this.runtimeState = runtimeState;
@@ -123,6 +161,10 @@ public class GatePilotProxyHandler {
         this.routeCircuitBreaker = routeCircuitBreaker;
         this.rateLimitPolicyResolver = rateLimitPolicyResolver;
         this.runtimeRateLimiter = runtimeRateLimiter;
+        this.retryPolicyResolver = retryPolicyResolver;
+        this.releaseUpstreamResolver = releaseUpstreamResolver;
+        this.endpointSelector = endpointSelector;
+        this.runtimeAuthChecker = runtimeAuthChecker;
         this.auditRecorder = auditRecorder;
         this.webClient = webClient;
     }
@@ -135,6 +177,22 @@ public class GatePilotProxyHandler {
      */
     public Mono<ServerResponse> handle(ServerRequest request) {
         long startNanos = System.nanoTime();
+        if (internalRequest(request) && !loopbackRequest(request)) {
+            return statusResponse(
+                    request,
+                    null,
+                    null,
+                    null,
+                    HttpStatus.FORBIDDEN,
+                    null,
+                    true,
+                    false,
+                    false,
+                    ProxyAuditConstants.OUTCOME_BLOCKED,
+                    ProxyAuditConstants.REASON_INTERNAL_ACCESS_DENIED,
+                    startNanos
+            );
+        }
         // 没有运行态就先拒绝，避免空配置接流量
         return runtimeState.current()
                 .map(runtime -> handleWithRuntime(runtime, request, startNanos))
@@ -186,30 +244,22 @@ public class GatePilotProxyHandler {
         if (!accessDecision.methodAllowed()) {
             return methodNotAllowed(request, accessDecision, startNanos);
         }
+        // 染色结果会写入审计，放在治理动作前先算出来
+        String trafficColor = trafficColorResolver.resolve(runtime, trafficColorRequest(request));
         if (accessDecision.authenticationRequired()) {
-            // getboot-auth 还没接入前，先按策略拒绝需要认证的请求
-            return statusResponse(
-                    request,
-                    accessDecision.route(),
-                    accessDecision.route().getUpstreamName(),
-                    null,
-                    HttpStatus.UNAUTHORIZED,
-                    null,
-                    false,
-                    true,
-                    false,
-                    ProxyAuditConstants.OUTCOME_BLOCKED,
-                    ProxyAuditConstants.REASON_AUTHENTICATION_REQUIRED,
-                    startNanos
-            );
+            RuntimeAuthResult authResult = runtimeAuthChecker.check();
+            if (!authResult.allowed()) {
+                return authFailureResponse(request, accessDecision.route(), trafficColor, authResult, startNanos);
+            }
         }
-        CompiledUpstream upstream = runtime.getUpstreamsByName().get(accessDecision.route().getUpstreamName());
+        String upstreamName = releaseUpstreamResolver.resolve(runtime, accessDecision.route(), trafficColor);
+        CompiledUpstream upstream = runtime.getUpstreamsByName().get(upstreamName);
         if (upstream == null || upstream.getEndpoints().isEmpty()) {
             // 上游缺失说明发布产物不可用，不能继续转发
             return statusResponse(
                     request,
                     accessDecision.route(),
-                    accessDecision.route().getUpstreamName(),
+                    upstreamName,
                     null,
                     HttpStatus.BAD_GATEWAY,
                     null,
@@ -221,8 +271,6 @@ public class GatePilotProxyHandler {
                     startNanos
             );
         }
-        // 染色结果会写入审计，放在限流和熔断前先算出来
-        String trafficColor = trafficColorResolver.resolve(runtime, trafficColorRequest(request));
         Optional<CompiledRateLimitPolicy> rateLimit = rateLimitPolicyResolver.resolve(runtime, accessDecision.route());
         Optional<Mono<ServerResponse>> rateLimitRejection = rateLimit
                 .flatMap(policy -> rateLimitRejection(policy, rateLimitRequest(request), request,
@@ -234,12 +282,21 @@ public class GatePilotProxyHandler {
                 runtime, accessDecision.route());
         if (circuitBreaker.isPresent()
                 && !routeCircuitBreaker.tryAcquire(circuitBreaker.get(), System.nanoTime())) {
-            return circuitBreakerFallback(request, accessDecision.route(), null, trafficColor, circuitBreaker.get(),
-                    startNanos, ProxyAuditConstants.REASON_CIRCUIT_BREAKER_OPEN);
+            return circuitBreakerFallback(request, accessDecision.route(), upstream.getName(), null, trafficColor,
+                    circuitBreaker.get(), startNanos, ProxyAuditConstants.REASON_CIRCUIT_BREAKER_OPEN);
         }
-        URI targetUri = targetUri(request, accessDecision.route(), upstream);
-        return forward(request, accessDecision.route(), targetUri, trafficColor, circuitBreaker.orElse(null),
-                startNanos);
+        Optional<CompiledRetryPolicy> retryPolicy = retryPolicyResolver.resolve(runtime, accessDecision.route())
+                .filter(policy -> retryAllowed(request, policy));
+        return forwardWithRetry(
+                request,
+                accessDecision.route(),
+                upstream,
+                trafficColor,
+                circuitBreaker.orElse(null),
+                retryPolicy.orElse(null),
+                startNanos,
+                1
+        );
     }
 
     /**
@@ -362,57 +419,223 @@ public class GatePilotProxyHandler {
     }
 
     /**
-     * 转发请求到上游。
+     * 转发请求到上游，按策略执行重试。
+     *
+     * @param request WebFlux 请求
+     * @param route 已命中路由
+     * @param upstream 已命中上游
+     * @param trafficColor 流量颜色
+     * @param circuitBreaker 熔断策略
+     * @param retryPolicy 重试策略
+     * @param startNanos 请求开始时间
+     * @param attempt 当前尝试次数
+     * @return WebFlux 响应
+     */
+    private Mono<ServerResponse> forwardWithRetry(ServerRequest request,
+                                                  CompiledRoute route,
+                                                  CompiledUpstream upstream,
+                                                  String trafficColor,
+                                                  CompiledCircuitBreakerPolicy circuitBreaker,
+                                                  CompiledRetryPolicy retryPolicy,
+                                                  long startNanos,
+                                                  int attempt) {
+        URI targetUri = targetUri(request, route, upstream);
+        return forwardOnce(request, route, targetUri, trafficColor)
+                .flatMap(response -> handleUpstreamResponse(
+                        request,
+                        route,
+                        upstream,
+                        targetUri,
+                        trafficColor,
+                        circuitBreaker,
+                        retryPolicy,
+                        startNanos,
+                        attempt,
+                        response
+                ))
+                .onErrorResume(error -> {
+                    if (shouldRetryError(retryPolicy, attempt)) {
+                        return delayBeforeRetry(retryPolicy, attempt)
+                                .then(forwardWithRetry(request, route, upstream, trafficColor, circuitBreaker,
+                                        retryPolicy, startNanos, attempt + 1));
+                    }
+                    return recordForwardError(
+                            request,
+                            route,
+                            upstream.getName(),
+                            targetUri,
+                            trafficColor,
+                            circuitBreaker,
+                            startNanos,
+                            error
+                    );
+                });
+    }
+
+    /**
+     * 执行单次上游请求。
      *
      * @param request WebFlux 请求
      * @param route 已命中路由
      * @param targetUri 上游目标地址
      * @param trafficColor 流量颜色
-     * @param circuitBreaker 熔断策略
-     * @param startNanos 请求开始时间
-     * @return WebFlux 响应
+     * @return 上游响应
      */
-    private Mono<ServerResponse> forward(ServerRequest request,
-                                         CompiledRoute route,
-                                         URI targetUri,
-                                         String trafficColor,
-                                         CompiledCircuitBreakerPolicy circuitBreaker,
-                                         long startNanos) {
+    private Mono<ClientResponse> forwardOnce(ServerRequest request,
+                                             CompiledRoute route,
+                                             URI targetUri,
+                                             String trafficColor) {
         // 请求体保持流式透传，避免网关把大包读进内存
         Flux<DataBuffer> body = request.bodyToFlux(DataBuffer.class);
         return webClient.method(request.method())
                 .uri(targetUri)
                 .headers(headers -> applyRequestHeaders(request, route, headers, trafficColor))
                 .body(BodyInserters.fromDataBuffers(body))
-                .exchangeToMono(response -> {
-                    int status = response.statusCode().value();
-                    recordCircuitBreaker(circuitBreaker, status, startNanos);
-                    auditRecorder.record(
-                            request,
-                            route,
-                            route.getUpstreamName(),
-                            targetUri,
-                            status,
-                            trafficColor,
-                            true,
-                            false,
-                            false,
-                            outcome(status),
-                            ProxyAuditConstants.REASON_UPSTREAM_RESPONSE,
-                            null,
-                            startNanos
-                    );
-                    return toServerResponse(response, trafficColor);
-                })
-                .onErrorResume(error -> recordForwardError(
-                        request,
-                        route,
-                        targetUri,
-                        trafficColor,
-                        circuitBreaker,
-                        startNanos,
-                        error
-                ));
+                .exchangeToMono(Mono::just);
+    }
+
+    /**
+     * 处理上游响应。
+     *
+     * @param request WebFlux 请求
+     * @param route 已命中路由
+     * @param upstream 已命中上游
+     * @param targetUri 上游目标地址
+     * @param trafficColor 流量颜色
+     * @param circuitBreaker 熔断策略
+     * @param retryPolicy 重试策略
+     * @param startNanos 请求开始时间
+     * @param attempt 当前尝试次数
+     * @param response 上游响应
+     * @return WebFlux 响应
+     */
+    private Mono<ServerResponse> handleUpstreamResponse(ServerRequest request,
+                                                        CompiledRoute route,
+                                                        CompiledUpstream upstream,
+                                                        URI targetUri,
+                                                        String trafficColor,
+                                                        CompiledCircuitBreakerPolicy circuitBreaker,
+                                                        CompiledRetryPolicy retryPolicy,
+                                                        long startNanos,
+                                                        int attempt,
+                                                        ClientResponse response) {
+        int status = response.statusCode().value();
+        recordCircuitBreaker(circuitBreaker, status, startNanos);
+        if (shouldRetryStatus(retryPolicy, status, attempt)) {
+            // 重试前释放本次响应体，避免连接被占住
+            return response.releaseBody()
+                    .then(delayBeforeRetry(retryPolicy, attempt))
+                    .then(forwardWithRetry(request, route, upstream, trafficColor, circuitBreaker,
+                            retryPolicy, startNanos, attempt + 1));
+        }
+        auditRecorder.record(
+                request,
+                route,
+                upstream.getName(),
+                targetUri,
+                status,
+                trafficColor,
+                true,
+                false,
+                false,
+                outcome(status),
+                ProxyAuditConstants.REASON_UPSTREAM_RESPONSE,
+                null,
+                startNanos
+        );
+        return toServerResponse(response, trafficColor);
+    }
+
+    /**
+     * 判断当前请求是否允许重试。
+     *
+     * @param request WebFlux 请求
+     * @param retryPolicy 重试策略
+     * @return 是否允许重试
+     */
+    private boolean retryAllowed(ServerRequest request, CompiledRetryPolicy retryPolicy) {
+        if (retryPolicy == null || !retryPolicy.isEnabled() || retryPolicy.getMaxAttempts() <= 1) {
+            return false;
+        }
+        // 默认只重试幂等请求，避免请求体重复提交
+        return ProxyRetryConstants.DEFAULT_RETRY_METHODS.contains(
+                Objects.toString(request.methodName(), "").toUpperCase(Locale.ROOT));
+    }
+
+    /**
+     * 判断状态码是否需要重试。
+     *
+     * @param retryPolicy 重试策略
+     * @param status 状态码
+     * @param attempt 当前尝试次数
+     * @return 是否需要重试
+     */
+    private boolean shouldRetryStatus(CompiledRetryPolicy retryPolicy, int status, int attempt) {
+        return retryPolicy != null
+                && attempt < retryPolicy.getMaxAttempts()
+                && retryPolicy.getStatuses().contains(status);
+    }
+
+    /**
+     * 判断异常是否需要重试。
+     *
+     * @param retryPolicy 重试策略
+     * @param attempt 当前尝试次数
+     * @return 是否需要重试
+     */
+    private boolean shouldRetryError(CompiledRetryPolicy retryPolicy, int attempt) {
+        return retryPolicy != null && attempt < retryPolicy.getMaxAttempts();
+    }
+
+    /**
+     * 计算重试前等待时间。
+     *
+     * @param retryPolicy 重试策略
+     * @param attempt 当前尝试次数
+     * @return 等待信号
+     */
+    private Mono<Void> delayBeforeRetry(CompiledRetryPolicy retryPolicy, int attempt) {
+        Duration delay = retryDelay(retryPolicy, attempt);
+        return delay.isZero() ? Mono.empty() : Mono.delay(delay).then();
+    }
+
+    /**
+     * 计算重试退避时间。
+     *
+     * @param retryPolicy 重试策略
+     * @param attempt 当前尝试次数
+     * @return 退避时间
+     */
+    private Duration retryDelay(CompiledRetryPolicy retryPolicy, int attempt) {
+        Duration firstBackoff = retryPolicy.getFirstBackoff() == null
+                ? ProxyRetryConstants.DEFAULT_FIRST_BACKOFF
+                : retryPolicy.getFirstBackoff();
+        Duration maxBackoff = retryPolicy.getMaxBackoff() == null
+                ? ProxyRetryConstants.DEFAULT_MAX_BACKOFF
+                : retryPolicy.getMaxBackoff();
+        if (firstBackoff.isZero() || firstBackoff.isNegative()) {
+            return Duration.ZERO;
+        }
+        long multiplier = 1L << Math.min(Math.max(attempt - 1, 0), ProxyRetryConstants.MAX_ALLOWED_ATTEMPTS);
+        long delayMillis = saturatingMultiply(firstBackoff.toMillis(), multiplier);
+        return Duration.ofMillis(Math.min(delayMillis, Math.max(maxBackoff.toMillis(), 0)));
+    }
+
+    /**
+     * 执行饱和乘法。
+     *
+     * @param value 原始值
+     * @param multiplier 倍数
+     * @return 乘法结果
+     */
+    private long saturatingMultiply(long value, long multiplier) {
+        if (value <= 0 || multiplier <= 0) {
+            return 0;
+        }
+        if (value > Long.MAX_VALUE / multiplier) {
+            return Long.MAX_VALUE;
+        }
+        return value * multiplier;
     }
 
     /**
@@ -510,8 +733,8 @@ public class GatePilotProxyHandler {
      * @return 上游目标地址
      */
     private URI targetUri(ServerRequest request, CompiledRoute route, CompiledUpstream upstream) {
-        // 当前先取第一个端点，负载均衡后续独立补
-        CompiledUpstream.CompiledEndpoint endpoint = upstream.getEndpoints().get(0);
+        // 每次转发都经过端点选择器，重试时可以切到其他副本
+        CompiledUpstream.CompiledEndpoint endpoint = endpointSelector.select(upstream, loadBalanceHashKey(request, route));
         String path = targetPath(request.uri().getRawPath(), route);
         UriComponentsBuilder builder = UriComponentsBuilder.newInstance()
                 .scheme(scheme(upstream))
@@ -524,6 +747,29 @@ public class GatePilotProxyHandler {
             builder.query(request.uri().getRawQuery());
         }
         return builder.build(true).toUri();
+    }
+
+    /**
+     * 构造负载均衡哈希键。
+     *
+     * @param request WebFlux 请求
+     * @param route 已命中路由
+     * @return 哈希键
+     */
+    private String loadBalanceHashKey(ServerRequest request, CompiledRoute route) {
+        String traceId = request.headers().firstHeader(ProxyAuditConstants.DEFAULT_TRACE_HEADER_NAME);
+        if (StringUtils.hasText(traceId)) {
+            return route.getRouteId() + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR + traceId.trim();
+        }
+        return route.getRouteId()
+                + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR
+                + Objects.toString(host(request), "")
+                + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR
+                + Objects.toString(remoteAddress(request), "")
+                + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR
+                + request.uri().getRawPath()
+                + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR
+                + Objects.toString(request.uri().getRawQuery(), "");
     }
 
     /**
@@ -634,6 +880,71 @@ public class GatePilotProxyHandler {
     }
 
     /**
+     * 判断是否为内部入口请求。
+     *
+     * @param request WebFlux 请求
+     * @return 是否为内部入口
+     */
+    private boolean internalRequest(ServerRequest request) {
+        String path = request.uri().getRawPath();
+        return ProxyHttpConstants.INTERNAL_PROXY_PREFIX.equals(path)
+                || path.startsWith(ProxyHttpConstants.INTERNAL_PROXY_PREFIX + ProxyHttpConstants.PATH_SEPARATOR);
+    }
+
+    /**
+     * 判断请求是否来自本机回环地址。
+     *
+     * @param request WebFlux 请求
+     * @return 是否来自本机
+     */
+    private boolean loopbackRequest(ServerRequest request) {
+        Optional<InetSocketAddress> remoteAddress = request.remoteAddress();
+        if (remoteAddress.isEmpty()) {
+            return false;
+        }
+        InetAddress address = remoteAddress.get().getAddress();
+        if (address != null) {
+            return address.isLoopbackAddress();
+        }
+        return ProxyHttpConstants.LOCALHOST.equalsIgnoreCase(remoteAddress.get().getHostString());
+    }
+
+    /**
+     * 创建认证失败响应。
+     *
+     * @param request WebFlux 请求
+     * @param route 已命中路由
+     * @param trafficColor 流量颜色
+     * @param authResult 认证结果
+     * @param startNanos 请求开始时间
+     * @return WebFlux 响应
+     */
+    private Mono<ServerResponse> authFailureResponse(ServerRequest request,
+                                                     CompiledRoute route,
+                                                     String trafficColor,
+                                                     RuntimeAuthResult authResult,
+                                                     long startNanos) {
+        return ServerResponse.status(HttpStatusCode.valueOf(authResult.status()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(ApiResponse.fail(authResult.code(), authResult.message()))
+                .doOnSuccess(response -> auditRecorder.record(
+                        request,
+                        route,
+                        route.getUpstreamName(),
+                        null,
+                        authResult.status(),
+                        trafficColor,
+                        true,
+                        true,
+                        false,
+                        ProxyAuditConstants.OUTCOME_BLOCKED,
+                        authResult.reason(),
+                        authResult.error(),
+                        startNanos
+                ));
+    }
+
+    /**
      * 创建仅包含状态码的响应并记录审计。
      *
      * @param request WebFlux 请求
@@ -722,6 +1033,7 @@ public class GatePilotProxyHandler {
      *
      * @param request WebFlux 请求
      * @param route 已命中路由
+     * @param upstreamName 上游名称
      * @param upstreamUri 上游地址
      * @param trafficColor 流量颜色
      * @param circuitBreaker 熔断策略
@@ -731,6 +1043,7 @@ public class GatePilotProxyHandler {
      */
     private Mono<ServerResponse> recordForwardError(ServerRequest request,
                                                     CompiledRoute route,
+                                                    String upstreamName,
                                                     URI upstreamUri,
                                                     String trafficColor,
                                                     CompiledCircuitBreakerPolicy circuitBreaker,
@@ -740,7 +1053,7 @@ public class GatePilotProxyHandler {
             auditRecorder.record(
                     request,
                     route,
-                    route.getUpstreamName(),
+                    upstreamName,
                     upstreamUri,
                     ProxyAuditConstants.DEFAULT_ERROR_STATUS,
                     trafficColor,
@@ -761,7 +1074,7 @@ public class GatePilotProxyHandler {
                 routeCircuitBreaker.slowCall(circuitBreaker, startNanos, nowNanos),
                 nowNanos
         );
-        return circuitBreakerFallback(request, route, upstreamUri, trafficColor, circuitBreaker, startNanos,
+        return circuitBreakerFallback(request, route, upstreamName, upstreamUri, trafficColor, circuitBreaker, startNanos,
                 ProxyAuditConstants.REASON_UPSTREAM_ERROR, error);
     }
 
@@ -770,6 +1083,7 @@ public class GatePilotProxyHandler {
      *
      * @param request WebFlux 请求
      * @param route 已命中路由
+     * @param upstreamName 上游名称
      * @param upstreamUri 上游地址
      * @param trafficColor 流量颜色
      * @param circuitBreaker 熔断策略
@@ -779,13 +1093,14 @@ public class GatePilotProxyHandler {
      */
     private Mono<ServerResponse> circuitBreakerFallback(ServerRequest request,
                                                         CompiledRoute route,
+                                                        String upstreamName,
                                                         URI upstreamUri,
                                                         String trafficColor,
                                                         CompiledCircuitBreakerPolicy circuitBreaker,
                                                         long startNanos,
                                                         String reason) {
-        return circuitBreakerFallback(request, route, upstreamUri, trafficColor, circuitBreaker, startNanos, reason,
-                null);
+        return circuitBreakerFallback(request, route, upstreamName, upstreamUri, trafficColor, circuitBreaker,
+                startNanos, reason, null);
     }
 
     /**
@@ -793,6 +1108,7 @@ public class GatePilotProxyHandler {
      *
      * @param request WebFlux 请求
      * @param route 已命中路由
+     * @param upstreamName 上游名称
      * @param upstreamUri 上游地址
      * @param trafficColor 流量颜色
      * @param circuitBreaker 熔断策略
@@ -803,6 +1119,7 @@ public class GatePilotProxyHandler {
      */
     private Mono<ServerResponse> circuitBreakerFallback(ServerRequest request,
                                                         CompiledRoute route,
+                                                        String upstreamName,
                                                         URI upstreamUri,
                                                         String trafficColor,
                                                         CompiledCircuitBreakerPolicy circuitBreaker,
@@ -815,7 +1132,7 @@ public class GatePilotProxyHandler {
                 .doOnSuccess(response -> auditRecorder.record(
                         request,
                         route,
-                        route.getUpstreamName(),
+                        upstreamName,
                         upstreamUri,
                         circuitBreaker.getFallbackStatus(),
                         trafficColor,

@@ -48,6 +48,16 @@ public final class ProxyHttpConstants {
     public static final String INTERNAL_PROXY_PATH = "/internal/**";
 
     /**
+     * 本机内部代理前缀。
+     */
+    public static final String INTERNAL_PROXY_PREFIX = "/internal";
+
+    /**
+     * 本机地址文本。
+     */
+    public static final String LOCALHOST = "localhost";
+
+    /**
      * 逐跳请求头。
      */
     public static final Set<String> HOP_BY_HOP_HEADERS = Set.of(

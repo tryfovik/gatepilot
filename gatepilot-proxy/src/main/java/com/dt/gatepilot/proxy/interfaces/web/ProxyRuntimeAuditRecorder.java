@@ -155,7 +155,12 @@ public class ProxyRuntimeAuditRecorder {
         if (StringUtils.hasText(headerTraceId)) {
             return headerTraceId;
         }
-        return request.exchange().getRequest().getId();
+        try {
+            return request.exchange().getRequest().getId();
+        } catch (IllegalStateException exception) {
+            // 部分单元测试请求没有绑定 exchange，审计允许缺少 traceId
+            return null;
+        }
     }
 
     /**
