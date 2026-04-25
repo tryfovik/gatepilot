@@ -55,7 +55,7 @@ infrastructure  出站实现：数据库、HTTP 客户端、Spring 配置、调�
 - [GatePilot 架构边界规范](architecture-boundaries.md)
 - [GatePilot Console 设计规范](console-design-guidelines.md)
 
-旧 `platform-gateway-*` 不是废弃代码池，里面的路由编译、过滤器、染色、熔断、审计、诊断、校验和 Sentinel 注册都可以迁移。迁移前必须先看 [旧实现迁移清单](architecture-boundaries.md#12-旧实现迁移清单)，只迁能力和测试，不迁旧职责混杂关系。
+旧 `platform-gateway-*` 不是废弃代码池，但也不是可以直接搬运的实现来源。里面的路由编译、过滤器、染色、熔断、审计、诊断、校验和 Sentinel 注册只能作为能力样本、算法参考、测试素材和工程经验。改造前必须先看 [旧能力改造清单](architecture-boundaries.md#12-旧能力改造清单)，以 GatePilot 资源模型、`PublishedConfig` 和 DDD 边界为准，禁止按旧模型、旧接口、旧包结构直接搬代码。
 
 后端开发还必须参考上层 getboot 规范：
 
@@ -119,7 +119,7 @@ console
 - [x] 写入公共能力必须先查 getboot、缺失也必须先补 getboot 的硬性规则。
 - [x] 对齐 getboot `ApiResponse`、`X-Trace-Id`、MDC `traceId` 和 HTTP 出站透传约定。
 - [x] 写入并执行 GatePilot Java 展开式 Javadoc 注释格式。
-- [x] 清理当前半迁移状态，保证工作区重新回到可编译、可测试状态。
+- [x] 清理旧模块收敛过程中的半成品状态，保证工作区重新回到可编译、可测试状态。
 - [x] 将 GatePilot 模块包结构调整为 DDD 分层，移除内部 `api / spi / support` 包口径。
 
 ### Phase 1：目标模块骨架
@@ -131,7 +131,7 @@ console
 - [x] 建立 `gatepilot-proxy` 模块骨架。
 - [x] 建立 `gatepilot-console` 模块骨架。
 - [x] 建立 `gatepilot-app` 装配模块骨架。
-- [x] 删除或迁移临时 `platform-gateway-core` 命名，避免形成新的垃圾包。
+- [x] 删除或收敛临时 `platform-gateway-core` 命名，避免形成新的垃圾包。
 
 ### Phase 2：资源模型
 
@@ -152,14 +152,14 @@ console
 - [x] 建立 `interfaces / application / domain / infrastructure` 分层骨架。
 - [x] 建立声明式资源 CRUD API 骨架。
 - [x] 建立资源列表游标分页约束，避免大规模资源一次性返回。
-- [x] 迁移配置存储端口到 `gatepilot-apiserver`。
+- [x] 按 GatePilot 模型重建配置存储端口到 `gatepilot-apiserver`。
 - [x] 实现基于数据库的 `GatePilotResourceStore` 生产存储。
 - [x] 基于数据库实现资源 generation 递增、索引分页和审计时间字段。
 - [ ] 基于数据库实现跨副本乐观锁写入保护。
-- [x] 迁移配置查看能力到 `gatepilot-apiserver`。
-- [x] 迁移配置 dry-run 校验到 `gatepilot-apiserver`。
-- [x] 迁移配置 diff 到 `gatepilot-apiserver`。
-- [x] 迁移版本快照到 `gatepilot-apiserver`。
+- [x] 按 GatePilot 模型重建配置查看能力到 `gatepilot-apiserver`。
+- [x] 按 GatePilot 模型重建配置 dry-run 校验到 `gatepilot-apiserver`。
+- [x] 按 GatePilot 模型重建配置 diff 到 `gatepilot-apiserver`。
+- [x] 按 GatePilot 模型重建版本快照到 `gatepilot-apiserver`。
 - [x] 增加发布请求 API。
 - [x] 增加回滚请求 API。
 - [x] 增加 agent 注册、心跳、配置拉取和状态上报 API。
@@ -191,22 +191,22 @@ console
 
 ### Phase 6：proxy
 
-- [ ] 收敛现有 `platform-gateway-runtime` / `platform-gateway-server` 到 `gatepilot-proxy`。
+- [ ] 将旧数据面模块能力按 GatePilot 运行模型收敛到 `gatepilot-proxy`。
 - [ ] 移除 proxy 中的配置查看、版本快照、Web 管理、审计查询职责。
 - [ ] proxy 只从 agent 获取 `PublishedConfig`。
 - [x] proxy 支持原子切换运行状态。
 - [x] proxy 支持失败保留 last-good。
 - [x] proxy 支持 `PublishedConfig` 预编译为运行态快照。
 - [x] proxy 热路径运行态使用本地内存索引，不访问控制面。
-- [x] 从旧 `GatewayRouteDefinitionLocator` 迁移路由编译和命中算法。
-- [x] 从旧 `GatewayTrafficColorResolver` / `GatewayTrafficColorFilter` 迁移流量染色执行能力。
-- [x] 从旧 `GatewayAuthenticationFilter` 迁移路由级认证策略判断能力。
+- [x] 基于旧 `GatewayRouteDefinitionLocator` 的能力样本重建路由编译和命中算法。
+- [x] 基于旧 `GatewayTrafficColorResolver` / `GatewayTrafficColorFilter` 的能力样本重建流量染色执行能力。
+- [x] 参考旧 `GatewayAuthenticationFilter` 改造路由级认证策略判断能力。
 - [ ] 接入 getboot-auth 执行路由级认证。
-- [x] 从旧 `GatewayMethodAccessFilter` 迁移 HTTP 方法白名单判断能力。
+- [x] 参考旧 `GatewayMethodAccessFilter` 改造 HTTP 方法白名单判断能力。
 - [ ] 接入 proxy WebFlux 过滤链执行 HTTP 方法白名单。
-- [ ] 从旧 `GatewayCircuitBreakerFilter` 迁移熔断和 fallback 能力。
-- [ ] 从旧 `GatewaySentinelRuleRegistrar` 迁移 Sentinel 规则注册能力。
-- [ ] 从旧审计过滤器迁移访问审计采集能力。
+- [ ] 参考旧 `GatewayCircuitBreakerFilter` 改造熔断和 fallback 能力。
+- [ ] 参考旧 `GatewaySentinelRuleRegistrar` 改造 Sentinel 规则注册能力。
+- [ ] 参考旧审计过滤器改造访问审计采集能力。
 - [ ] 保留并验证路由、转发、限流、熔断、重试、染色、灰度、蓝绿执行能力。
 - [x] 运行审计事件只采集并上报，不在 proxy 内做管理查询。
 
@@ -230,13 +230,13 @@ console
 - [x] 实现 Audits 基础列表页。
 - [x] 实现 Settings 基础列表页。
 
-### Phase 7.5：旧管理能力收敛
+### Phase 7.5：旧管理能力改造
 
-- [ ] 从旧 `GatewayDiagnosticsService` 迁移路由诊断能力到 apiserver 查询用例和 console 页面。
-- [ ] 从旧 `GatewayManagementService` 迁移 dry-run、diff、配置摘要能力到 apiserver / controller-manager。
-- [ ] 从旧 `GatewayConfigSnapshotRepository` 迁移快照概念到数据库持久化版本表。
-- [ ] 从旧 `GatewayAccessAuditController` 迁移审计查询能力到 apiserver 持久化查询 API。
-- [ ] 从旧 `GatewayRouteCatalogEndpoint` 迁移路由目录展示到 console，不再依赖 Actuator 私有端点。
+- [ ] 参考旧 `GatewayDiagnosticsService` 改造路由诊断能力到 apiserver 查询用例和 console 页面。
+- [ ] 参考旧 `GatewayManagementService` 改造 dry-run、diff、配置摘要能力到 apiserver / controller-manager。
+- [ ] 参考旧 `GatewayConfigSnapshotRepository` 改造快照概念到数据库持久化版本表。
+- [ ] 参考旧 `GatewayAccessAuditController` 改造审计查询能力到 apiserver 持久化查询 API。
+- [ ] 参考旧 `GatewayRouteCatalogEndpoint` 改造路由目录展示到 console，不再依赖 Actuator 私有端点。
 
 ### Phase 8：app 合包
 
