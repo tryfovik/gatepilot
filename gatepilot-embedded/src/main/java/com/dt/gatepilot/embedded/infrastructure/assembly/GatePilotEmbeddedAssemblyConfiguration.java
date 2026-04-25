@@ -1,4 +1,4 @@
-package com.dt.gatepilot.infrastructure.assembly;
+package com.dt.gatepilot.embedded.infrastructure.assembly;
 
 import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditReporter;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
@@ -10,10 +10,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * GatePilot 单体合包装配配置。
+ * GatePilot 单 JVM 嵌入式装配配置。
  */
 @Configuration
-public class GatePilotAppAssemblyConfiguration {
+public class GatePilotEmbeddedAssemblyConfiguration {
 
     /**
      * 创建进程内 proxy apply 客户端。
@@ -25,7 +25,7 @@ public class GatePilotAppAssemblyConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnBean(ProxyConfigApplier.class)
     public ProxyApplyClient proxyApplyClient(ProxyConfigApplier proxyConfigApplier) {
-        // app 只做端口装配，不承载发布或转发业务逻辑
+        // embedded 只做端口桥接，不承载发布或转发业务逻辑
         return new InProcessProxyApplyClient(proxyConfigApplier);
     }
 

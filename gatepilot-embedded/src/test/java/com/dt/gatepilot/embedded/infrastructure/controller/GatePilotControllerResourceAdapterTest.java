@@ -1,4 +1,4 @@
-package com.dt.gatepilot.apiserver.infrastructure.controller;
+package com.dt.gatepilot.embedded.infrastructure.controller;
 
 import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
 import com.dt.gatepilot.domain.enums.NodeRole;

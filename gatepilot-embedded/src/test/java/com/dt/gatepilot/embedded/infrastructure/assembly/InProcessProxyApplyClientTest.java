@@ -1,4 +1,4 @@
-package com.dt.gatepilot.infrastructure.assembly;
+package com.dt.gatepilot.embedded.infrastructure.assembly;
 
 import com.dt.gatepilot.agent.application.dto.AgentApplyResult;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;

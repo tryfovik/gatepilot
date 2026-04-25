@@ -33,6 +33,7 @@ gatepilot-controller-manager
 gatepilot-agent
 gatepilot-proxy
 gatepilot-console
+gatepilot-embedded
 gatepilot-app
 ```
 
@@ -137,6 +138,7 @@ console
 - [x] 建立 `gatepilot-agent` 模块骨架。
 - [x] 建立 `gatepilot-proxy` 模块骨架。
 - [x] 建立 `gatepilot-console` 模块骨架。
+- [x] 建立 `gatepilot-embedded` 单 JVM 适配模块骨架。
 - [x] 建立 `gatepilot-app` 装配模块骨架。
 - [x] 删除或收敛历史临时 core 命名，避免形成新的垃圾包。
 
@@ -181,7 +183,7 @@ console
 - [x] 汇总节点发布状态。
 - [x] 记录发布事件。
 - [x] 建立 controller-manager 的资源读取、发布产物写入和事件写回 `domain.port`。
-- [x] 建立 apiserver 到 controller-manager `domain.port` 的资源存储适配器。
+- [x] 建立 embedded 到 controller-manager `domain.port` 的进程内资源存储适配器。
 - [x] 实现发布意图 / GatewayEvent 到 PublishedConfig 的异步推进服务。
 - [ ] 支持失败回滚编排。
 
@@ -258,6 +260,7 @@ console
 
 ### Phase 8：app 合包
 
+- [x] 将单 JVM 进程内适配器从 app / apiserver 拆到 `gatepilot-embedded`。
 - [x] 建立 `gatepilot-app` 启动入口。
 - [x] 装配 apiserver。
 - [x] 装配 controller-manager。
@@ -281,6 +284,7 @@ console
 - [x] 发布意图到 `PublishedConfig`、配置快照、agent pull 的最小链路测试通过。
 - [x] MyBatis-Plus 资源存储保存、更新、分页测试通过。
 - [x] agent / apiserver / app 运行审计上报、持久化、查询和进程内桥接测试通过。
+- [x] apiserver 不再依赖 controller-manager，app 不再承载进程内适配实现。
 - [ ] 分服务模式最小链路验证通过。
 - [ ] 配置发布链路端到端验证通过。
 - [ ] proxy 控制面不可用时 last-good 启动验证通过。

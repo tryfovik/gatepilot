@@ -26,11 +26,6 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.dt.gateway</groupId>
-            <artifactId>gatepilot-controller-manager</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>com.dt</groupId>
             <artifactId>getboot-web</artifactId>
             <exclusions>

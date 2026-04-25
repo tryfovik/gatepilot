@@ -22,22 +22,7 @@
     <dependencies>
         <dependency>
             <groupId>com.dt.gateway</groupId>
-            <artifactId>gatepilot-apiserver</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.dt.gateway</groupId>
-            <artifactId>gatepilot-controller-manager</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.dt.gateway</groupId>
-            <artifactId>gatepilot-agent</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.dt.gateway</groupId>
-            <artifactId>gatepilot-proxy</artifactId>
+            <artifactId>gatepilot-embedded</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

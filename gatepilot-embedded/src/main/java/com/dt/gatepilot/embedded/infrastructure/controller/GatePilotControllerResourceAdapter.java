@@ -1,4 +1,4 @@
-package com.dt.gatepilot.apiserver.infrastructure.controller;
+package com.dt.gatepilot.embedded.infrastructure.controller;
 
 import com.dt.gatepilot.domain.enums.EventSeverity;
 import com.dt.gatepilot.domain.enums.ResourceKind;
@@ -41,8 +41,6 @@ import org.springframework.util.StringUtils;
 public class GatePilotControllerResourceAdapter
         implements ReleaseIntentSource, GatewayDesiredStateReader, ReconcileResultSink {
 
-    private static final int LIST_LIMIT = 500;
-
     private final GatePilotResourceService resourceService;
 
     private final GatePilotConfigSnapshotService snapshotService;
@@ -61,7 +59,7 @@ public class GatePilotControllerResourceAdapter
 
     @Override
     public List<ReleaseIntent> listPending(int limit) {
-        int effectiveLimit = Math.min(limit, LIST_LIMIT);
+        int effectiveLimit = Math.min(limit, EmbeddedAdapterConstants.RESOURCE_LIST_LIMIT);
         // controller 每轮只领取有限数量，避免单副本长时间占用
         return list(GatePilotResourcePaths.EVENTS, null, GatewayEvent.class)
                 .stream()
@@ -199,13 +197,13 @@ public class GatePilotControllerResourceAdapter
                 .toList();
     }
 
-    @SuppressWarnings("unchecked")
     private <T> List<T> list(String resourcePath, String namespace, Class<T> resourceType) {
-        CursorPage<Object> page = resourceService.list(resourcePath, namespace, null, LIST_LIMIT);
+        CursorPage<Object> page = resourceService.list(resourcePath, namespace, null,
+                EmbeddedAdapterConstants.RESOURCE_LIST_LIMIT);
         // adapter 只做类型转换，不在这里改写资源内容
         return page.getItems()
                 .stream()
-                .map(resource -> (T) resourceType.cast(resource))
+                .map(resourceType::cast)
                 .toList();
     }
 

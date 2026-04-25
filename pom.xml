@@ -32,6 +32,7 @@
         <module>gatepilot-agent</module>
         <module>gatepilot-proxy</module>
         <module>gatepilot-console</module>
+        <module>gatepilot-embedded</module>
         <module>gatepilot-app</module>
     </modules>
 </project>

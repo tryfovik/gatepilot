@@ -1,6 +1,6 @@
 # GatePilot 架构边界规范
 
-更新时间：2026-04-25
+更新时间：2026-04-26
 
 GatePilot 是网关控制与运行系统。本文档用于约束后续开发的模块边界。GatePilot 可以支持单体大包部署，也可以支持控制面、节点代理、数据面分服务部署；部署形态可以变化，但代码职责边界不能变化。
 
@@ -109,7 +109,7 @@ private String version;
 - `gatepilot.apiserver.store.type=database` 使用 getboot-database 提供的数据源、MyBatis-Plus 和数据库增强能力，资源表结构参考 `gatepilot-apiserver/src/main/resources/db/gatepilot/schema-mysql.sql`。
 - 后续数据库访问、事务、分页、乐观锁和审计字段优先复用 getboot 数据访问规范和能力；如果 getboot 缺能力，先回 getboot 补，再让 GatePilot 接入。
 - GatePilot 关系型数据库访问必须基于 getboot-database 接入 MyBatis-Plus；单表 CRUD 优先用 Mapper / BaseMapper，复杂 SQL 必须放在 mapper.xml，禁止在业务代码里用 JdbcTemplate 或字符串拼接 SQL。
-- controller-manager、agent、proxy 都不能直接访问 GatePilot 配置数据库，只能通过 apiserver API 或 apiserver 提供的进程内端口访问资源。
+- controller-manager、agent、proxy 都不能直接访问 GatePilot 配置数据库，只能通过 apiserver API 或嵌入式适配器访问资源。
 
 发布边界：
 
@@ -290,6 +290,28 @@ Console 页面设计必须遵守 [GatePilot Console 设计规范](console-design
 - 直接读取数据库。
 - 直接读取后端配置文件。
 
+### gatepilot-embedded
+
+单 JVM 嵌入式适配模块。
+
+职责：
+
+- 单体合包下把 controller-manager 的端口适配到 apiserver 应用服务。
+- 单体合包下把 agent 的 proxy apply 端口适配到本进程 proxy。
+- 单体合包下把 proxy 运行审计事件适配到 agent 上报器。
+- 只处理进程内端口桥接和模型转换，不承载控制面、数据面或发布策略。
+
+禁止放：
+
+- REST Controller。
+- 资源 CRUD 或数据库实现。
+- 发布策略决策。
+- proxy filter 实现。
+- 管理页面。
+- 通用工具类。
+
+`gatepilot-embedded` 是为了保证 `gatepilot-app` 只做启动和静态资源装配，同时避免 apiserver 反向依赖 controller-manager。分服务部署不依赖这个模块。
+
 ### gatepilot-app
 
 合包启动器。
@@ -300,6 +322,7 @@ Console 页面设计必须遵守 [GatePilot Console 设计规范](console-design
 - 装配 controller-manager。
 - 装配 agent。
 - 装配 proxy。
+- 依赖 `gatepilot-embedded` 获得单 JVM 进程内适配能力。
 - 承载 console 静态资源。
 - 提供单 jar 启动入口。
 
@@ -425,9 +448,10 @@ controller-manager -> gatepilot-domain
 controller-manager -> own domain ports
 agent -> gatepilot-domain
 agent -> apiserver client
-agent -> proxy local client
+agent -> own proxy apply port
 proxy -> gatepilot-domain
-app -> apiserver / controller-manager / agent / proxy / console
+embedded -> apiserver / controller-manager / agent / proxy
+app -> embedded / console static
 ```
 
 禁止的依赖方向：
@@ -441,6 +465,7 @@ proxy -> apiserver implementation
 proxy -> console
 proxy -> controller-manager
 agent -> console
+apiserver -> controller-manager
 console -> proxy
 app -> 业务实现代码
 ```
@@ -455,6 +480,7 @@ app -> 业务实现代码
 - 节点注册、配置同步、last-good：放 `gatepilot-agent`。
 - 接流量、转发、过滤链执行：放 `gatepilot-proxy`。
 - 页面、表单、图表：放 `gatepilot-console`。
+- 单 JVM 端口桥接：放 `gatepilot-embedded`。
 - 单 jar 装配：放 `gatepilot-app`。
 
 禁止因为“很多模块都要用”就新建 `common`、`core`、`shared`。
@@ -473,6 +499,7 @@ app -> 业务实现代码
 
 ```text
 gatepilot-app
+  gatepilot-embedded
   apiserver
   controller-manager
   agent
@@ -485,6 +512,7 @@ gatepilot-app
 要求：
 
 - app 只负责装配。
+- embedded 只负责进程内端口桥接。
 - 内部仍按模块接口协作。
 - proxy 仍只消费 PublishedConfig。
 - console 仍只调 apiserver。
@@ -666,6 +694,7 @@ Client
 - `gatepilot-agent`
 - `gatepilot-proxy`
 - `gatepilot-console`
+- `gatepilot-embedded`
 - `gatepilot-app`
 
 历史模块不再参与主构建，也不能被 GatePilot 新模块依赖、导入或复制：

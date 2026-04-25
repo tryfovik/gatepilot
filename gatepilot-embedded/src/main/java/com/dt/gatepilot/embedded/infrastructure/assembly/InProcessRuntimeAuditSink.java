@@ -1,4 +1,4 @@
-package com.dt.gatepilot.infrastructure.assembly;
+package com.dt.gatepilot.embedded.infrastructure.assembly;
 
 import com.dt.gatepilot.agent.application.dto.AgentRuntimeAuditEvent;
 import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditReporter;
@@ -26,7 +26,7 @@ public class InProcessRuntimeAuditSink implements RuntimeAuditSink {
         if (event == null) {
             return;
         }
-        // app 只做进程内端口桥接，不保存审计数据
+        // embedded 只做进程内端口桥接，不保存审计数据
         runtimeAuditReporter.record(toAgentEvent(event));
     }
 
