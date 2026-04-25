@@ -20,6 +20,7 @@ public class PublishedConfigCompiler {
      * @return 编译后的运行态
      */
     public CompiledProxyRuntime compile(PublishedConfig config) {
+        // 每次发布编译成全新运行态，后面直接原子替换
         CompiledProxyRuntime runtime = new CompiledProxyRuntime();
         runtime.initMetadata(config);
         runtime.setRoutes(config.getSpec().getRoutes().stream().map(this::compileRoute).toList());
@@ -30,18 +31,26 @@ public class PublishedConfigCompiler {
     }
 
     private CompiledRoute compileRoute(PublishedConfig.PublishedRoute source) {
+        // 发布产物允许字段缺省，编译期统一兜底
         CompiledRoute route = new CompiledRoute();
         route.setRouteId(source.getRouteId());
-        route.setProtocols(source.getProtocols());
+        route.setProtocols(emptyIfNull(source.getProtocols()));
         route.setHosts(normalizeHosts(source.getHosts()));
         route.setPathPrefix(normalizePath(source.getPath()));
-        route.setMethods(source.getMethods());
+        route.setMethods(emptyIfNull(source.getMethods()));
+        route.setStripPrefix(source.getStripPrefix());
+        route.setRewritePathPrefix(normalizeOptionalPathPrefix(source.getRewritePathPrefix()));
+        route.setAddHeaders(source.getAddHeaders() == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(source.getAddHeaders()));
+        route.setRemoveHeaders(emptyIfNull(source.getRemoveHeaders()));
         route.setUpstreamName(source.getUpstreamName());
-        route.setPolicyNames(source.getPolicyNames());
+        route.setPolicyNames(emptyIfNull(source.getPolicyNames()));
         return route;
     }
 
     private Map<String, CompiledUpstream> compileUpstreams(PublishedConfig config) {
+        // 上游按名称建索引，转发时不扫列表
         Map<String, CompiledUpstream> upstreams = new LinkedHashMap<>();
         for (PublishedConfig.PublishedUpstream source : config.getSpec().getUpstreams()) {
             CompiledUpstream upstream = new CompiledUpstream();
@@ -55,6 +64,7 @@ public class PublishedConfigCompiler {
     }
 
     private CompiledUpstream.CompiledEndpoint compileEndpoint(PublishedConfig.PublishedEndpoint source) {
+        // endpoint 先保持轻量映射，负载均衡后续再扩展
         CompiledUpstream.CompiledEndpoint endpoint = new CompiledUpstream.CompiledEndpoint();
         endpoint.setHost(source.getHost());
         endpoint.setPort(source.getPort());
@@ -63,6 +73,7 @@ public class PublishedConfigCompiler {
     }
 
     private Map<String, CompiledPolicy> compilePolicies(PublishedConfig config) {
+        // 策略按名称索引，路由只保存策略名
         Map<String, CompiledPolicy> policies = new LinkedHashMap<>();
         for (PublishedConfig.PublishedPolicy source : config.getSpec().getPolicies()) {
             CompiledPolicy policy = new CompiledPolicy();
@@ -75,6 +86,7 @@ public class PublishedConfigCompiler {
     }
 
     private Map<RouteMatchKey, CompiledRoute> compileRouteIndex(Iterable<CompiledRoute> routes) {
+        // host 为空的路由归到通配 host
         Map<RouteMatchKey, CompiledRoute> index = new LinkedHashMap<>();
         for (CompiledRoute route : routes) {
             if (route.getHosts().isEmpty()) {
@@ -89,6 +101,7 @@ public class PublishedConfigCompiler {
     }
 
     private void putRoute(Map<RouteMatchKey, CompiledRoute> index, RouteMatchKey key, CompiledRoute route) {
+        // 同一个 host + path 只能有一个路由
         CompiledRoute previous = index.putIfAbsent(key, route);
         if (previous != null) {
             throw new IllegalArgumentException("duplicate route match key: " + key.host() + key.pathPrefix());
@@ -96,6 +109,7 @@ public class PublishedConfigCompiler {
     }
 
     private List<String> normalizeHosts(List<String> hosts) {
+        // 域名统一小写去重，避免运行态重复索引
         if (hosts == null || hosts.isEmpty()) {
             return List.of();
         }
@@ -110,6 +124,7 @@ public class PublishedConfigCompiler {
     }
 
     private String normalizeHost(String host) {
+        // 路由匹配只关心 host，不关心端口
         if (host == null || host.isBlank()) {
             return null;
         }
@@ -122,6 +137,7 @@ public class PublishedConfigCompiler {
     }
 
     private String normalizePath(String path) {
+        // 入口 path 是必填项，缺失时直接让发布失败
         if (path == null || path.isBlank()) {
             throw new IllegalArgumentException("route path must not be blank");
         }
@@ -135,5 +151,23 @@ public class PublishedConfigCompiler {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
+    }
+
+    private String normalizeOptionalPathPrefix(String path) {
+        // rewrite 前缀允许不配，配置了就统一成标准路径
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        String normalized = path.trim();
+        normalized = normalized.startsWith("/") ? normalized : "/" + normalized;
+        while (normalized.length() > 1 && normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private <T> List<T> emptyIfNull(List<T> values) {
+        // 运行态尽量不用 null 列表，少做热路径判断
+        return values == null ? List.of() : values;
     }
 }

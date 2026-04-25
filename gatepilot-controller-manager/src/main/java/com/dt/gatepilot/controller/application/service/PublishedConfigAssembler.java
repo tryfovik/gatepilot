@@ -18,6 +18,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -86,6 +87,7 @@ public class PublishedConfigAssembler {
     }
 
     private PublishedConfig.PublishedRoute routeSnapshot(GatewayRoute route) {
+        // 路由发布快照只保留 proxy 热路径需要的字段
         PublishedConfig.PublishedRoute snapshot = new PublishedConfig.PublishedRoute();
         snapshot.setRouteId(route.getMetadata().getUid());
         snapshot.setSourceRef(ref(ResourceKind.GATEWAY_ROUTE, route.getMetadata().getNamespace(),
@@ -95,6 +97,16 @@ public class PublishedConfigAssembler {
         snapshot.setPath(Optional.ofNullable(route.getSpec().getPath()).map(GatewayRoute.RoutePathMatch::getValue)
                 .orElse(null));
         snapshot.setMethods(route.getSpec().getMethods());
+        snapshot.setStripPrefix(Optional.ofNullable(route.getSpec().getPath())
+                .map(GatewayRoute.RoutePathMatch::getStripPrefix)
+                .orElse(null));
+        // rewrite 可能为空，发布产物里统一转成空集合或 null
+        GatewayRoute.RewriteRule rewrite = route.getSpec().getRewrite();
+        snapshot.setRewritePathPrefix(Optional.ofNullable(rewrite)
+                .map(GatewayRoute.RewriteRule::getPathPrefix)
+                .orElse(null));
+        snapshot.setAddHeaders(rewrite == null ? Map.of() : rewrite.getAddHeaders());
+        snapshot.setRemoveHeaders(rewrite == null ? List.of() : rewrite.getRemoveHeaders());
         snapshot.setUpstreamName(Optional.ofNullable(route.getSpec().getUpstreamRef()).map(ResourceReference::getName)
                 .orElse(null));
         snapshot.setPolicyNames(route.getSpec().getPolicyRefs().stream().map(ResourceReference::getName).toList());

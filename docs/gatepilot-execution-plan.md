@@ -119,6 +119,7 @@ console
 - [x] 写入公共能力必须先查 getboot、缺失也必须先补 getboot 的硬性规则。
 - [x] 对齐 getboot `ApiResponse`、`X-Trace-Id`、MDC `traceId` 和 HTTP 出站透传约定。
 - [x] 写入并执行 GatePilot Java 展开式 Javadoc 注释格式。
+- [x] 写入方法内中文注释规则：注释要短、核心、像人写，末尾不加句号。
 - [x] 清理旧模块收敛过程中的半成品状态，保证工作区重新回到可编译、可测试状态。
 - [x] 将 GatePilot 模块包结构调整为 DDD 分层，移除内部 `api / spi / support` 包口径。
 - [x] 从父级 Maven reactor 摘掉历史模块，主构建只保留 GatePilot 新模块。
@@ -206,9 +207,9 @@ console
 - [x] 参考旧 `GatewayAuthenticationFilter` 改造路由级认证策略判断能力。
 - [ ] 接入 getboot-auth 执行路由级认证。
 - [x] 参考旧 `GatewayMethodAccessFilter` 改造 HTTP 方法白名单判断能力。
-- [ ] 接入 proxy WebFlux 过滤链执行 HTTP 方法白名单。
-- [ ] 接入 proxy WebFlux 过滤链执行路由转发。
-- [ ] 接入 proxy WebFlux 过滤链执行染色解析、请求头透传和响应头回写。
+- [x] 接入 proxy WebFlux 过滤链执行 HTTP 方法白名单。
+- [x] 接入 proxy WebFlux 过滤链执行路由转发。
+- [x] 接入 proxy WebFlux 过滤链执行染色解析、请求头透传和响应头回写。
 - [x] 改造 Query / IP 染色规则。
 - [ ] 参考旧 `GatewayCircuitBreakerFilter` 改造熔断和 fallback 能力。
 - [ ] 参考旧 `GatewaySentinelRuleRegistrar` 改造 Sentinel 规则注册能力。

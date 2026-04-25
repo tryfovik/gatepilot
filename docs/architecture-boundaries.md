@@ -29,6 +29,7 @@ Java 代码注释格式：
 
 - 类、字段、枚举项和公开方法使用展开式 Javadoc。
 - 禁止新增单行 Javadoc，例如 `/** 发布版本。 */`。
+- 方法内中文注释只写关键原因和关键转换，短一点，像人写，末尾不加句号。
 - 正确格式如下：
 
 ```java
@@ -690,13 +691,13 @@ Client
 | 旧实现位置 | 已有能力 | 改造目标 | 当前覆盖状态 | 改造要求 |
 | --- | --- | --- | --- | --- |
 | `platform-gateway-legacy-config/GatewayProperties` | 旧 YAML 配置模型，包含项目、路由、认证、CORS、健康检查、上下文头、染色、审计、治理策略 | `gatepilot-domain` 资源模型和 `gatepilot-apiserver` admission 校验 | 部分覆盖 | 只能作为字段设计参考，不能继续让生产依赖本地 YAML 作为事实来源 |
-| `platform-gateway-legacy-config/GatewayRouteDefinitionLocator` | 路由编译和路由命中 | `gatepilot-proxy/domain/runtime` | 已覆盖编译索引和最长前缀命中，转发执行未完成 | 改成从 `PublishedConfig` 预编译，不再从 `GatewayProperties` 读取 |
+| `platform-gateway-legacy-config/GatewayRouteDefinitionLocator` | 路由编译和路由命中 | `gatepilot-proxy/domain/runtime` | 已覆盖编译索引、最长前缀命中和基础 WebFlux 转发，完整治理过滤链仍缺 | 改成从 `PublishedConfig` 预编译，不再从 `GatewayProperties` 读取 |
 | `platform-gateway-legacy-config/GatewayTrafficColorResolver` | Header、Cookie、Query、IP 等染色解析 | `gatepilot-proxy/domain/runtime` | 已覆盖 Header / Cookie / Query / IP / 权重 / 默认色解析，过滤链执行和响应头回写仍缺 | 保留解析规则，输入改成 proxy 运行态请求上下文和已发布策略 |
 | `platform-gateway-legacy-config/GatewayPropertiesValidator` | 配置合法性校验 | `gatepilot-apiserver/application` 和 `gatepilot-controller-manager/application` | 部分覆盖 | 拆成资源 admission 校验、发布 dry-run 校验、PublishedConfig 编译校验 |
 | `platform-gateway-runtime/GatewayAuthenticationFilter` | 路由级认证 | `gatepilot-proxy` | 只覆盖策略判断，getboot-auth 执行未接入 | 参考旧判断逻辑，继续复用 getboot-auth，策略来自 `PublishedConfig`，失败响应使用 getboot 统一规则 |
-| `platform-gateway-runtime/GatewayMethodAccessFilter` | HTTP 方法白名单 | `gatepilot-proxy` | 只覆盖策略判断，WebFlux 过滤链执行未接入 | 改为读取编译后的 route policy，热路径不能访问控制面 |
+| `platform-gateway-runtime/GatewayMethodAccessFilter` | HTTP 方法白名单 | `gatepilot-proxy` | 已覆盖策略判断和 WebFlux 405 执行 | 改为读取编译后的 route policy，热路径不能访问控制面 |
 | `platform-gateway-runtime/InternalRouteAccessFilter` | 内部运维入口保护 | `gatepilot-proxy` 或 `gatepilot-apiserver` 各自入口保护 | 未覆盖 | 按入口分开，proxy 保护本机 apply / health / state，apiserver 保护管理 API |
-| `platform-gateway-runtime/GatewayTrafficColorFilter` | 流量染色执行和响应头回写 | `gatepilot-proxy` | 只覆盖解析，过滤链执行和响应头回写未接入 | 与灰度、蓝绿选择统一走运行态策略快照 |
+| `platform-gateway-runtime/GatewayTrafficColorFilter` | 流量染色执行和响应头回写 | `gatepilot-proxy` | 已覆盖解析、请求头透传和响应头回写，规则级自定义 propagateHeaders 仍缺 | 与灰度、蓝绿选择统一走运行态策略快照 |
 | `platform-gateway-runtime/GatewayCircuitBreakerFilter` | 轻量熔断和 fallback | `gatepilot-proxy` | 未覆盖 | 参考旧状态机和测试样本，优先评估 getboot-governance / Sentinel 能力，缺失能力先补 getboot |
 | `platform-gateway-runtime/GatewayAccessAuditFilter` | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | 只有端口占位，采集 / 上报 / 查询未完成 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
 | `platform-gateway-runtime/UpstreamHealthIndicator` | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | agent 上报模型已预留，主动探测未完成 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |

@@ -36,11 +36,17 @@ public class RouteAccessEvaluator {
         if (route.getMethods().isEmpty() || method == null || method.isBlank()) {
             return true;
         }
+        if (route.getMethods().stream().anyMatch(methodValue -> "ANY".equals(methodValue.name()))) {
+            return true;
+        }
         String normalizedMethod = method.trim().toUpperCase(Locale.ROOT);
         return route.getMethods().stream().map(Enum::name).anyMatch(normalizedMethod::equals);
     }
 
     private List<String> allowedMethods(CompiledRoute route) {
+        if (route.getMethods().stream().anyMatch(method -> "ANY".equals(method.name()))) {
+            return List.of();
+        }
         return route.getMethods().stream().map(Enum::name).toList();
     }
 

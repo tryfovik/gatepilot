@@ -160,6 +160,26 @@ public class PublishedConfig {
         private List<HttpMethod> methods = new ArrayList<>();
 
         /**
+         * 是否剥离入口匹配前缀。
+         */
+        private Boolean stripPrefix;
+
+        /**
+         * 转发到上游前改写的路径前缀。
+         */
+        private String rewritePathPrefix;
+
+        /**
+         * 转发时追加的请求头。
+         */
+        private Map<String, String> addHeaders = new LinkedHashMap<>();
+
+        /**
+         * 转发时移除的请求头。
+         */
+        private List<String> removeHeaders = new ArrayList<>();
+
+        /**
          * 目标上游名称。
          */
         private String upstreamName;
