@@ -1,6 +1,9 @@
 package com.dt.platform.gateway.infrastructure.security;
 
 import com.dt.platform.gateway.infrastructure.config.GatewayProperties;
+import com.dt.platform.gateway.infrastructure.audit.GatewayAccessAuditFilter;
+import com.dt.platform.gateway.infrastructure.audit.GatewayAccessAuditRepository;
+import com.dt.platform.gateway.infrastructure.governance.GatewayCircuitBreakerFilter;
 import com.dt.platform.gateway.infrastructure.route.GatewayRouteDefinitionLocator;
 import com.dt.platform.gateway.infrastructure.traffic.GatewayTrafficColorFilter;
 import com.getboot.auth.spi.SaTokenWebFluxAuthChecker;
@@ -9,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.web.reactive.DispatcherHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -26,13 +30,31 @@ public class GatewaySecurityConfiguration {
      * 注册流量染色过滤器。
      *
      * @param properties 网关配置
+     * @param routeDefinitionLocator 路由定义定位器
      * @return 流量染色过滤器
      */
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 1)
     @ConditionalOnProperty(prefix = "platform.gateway.traffic-color", name = "enabled", havingValue = "true")
-    public WebFilter gatewayTrafficColorFilter(GatewayProperties properties) {
-        return new GatewayTrafficColorFilter(properties.getTrafficColor());
+    public WebFilter gatewayTrafficColorFilter(GatewayProperties properties,
+                                               GatewayRouteDefinitionLocator routeDefinitionLocator) {
+        return new GatewayTrafficColorFilter(properties.getTrafficColor(), routeDefinitionLocator);
+    }
+
+    /**
+     * 注册访问审计过滤器。
+     *
+     * @param properties 网关配置
+     * @param routeDefinitionLocator 路由定义定位器
+     * @param auditRepository 审计仓库
+     * @return 访问审计过滤器
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 2)
+    public WebFilter gatewayAccessAuditFilter(GatewayProperties properties,
+                                              GatewayRouteDefinitionLocator routeDefinitionLocator,
+                                              GatewayAccessAuditRepository auditRepository) {
+        return new GatewayAccessAuditFilter(properties, routeDefinitionLocator, auditRepository);
     }
 
     /**
@@ -74,6 +96,20 @@ public class GatewaySecurityConfiguration {
                                                  GatewayRouteDefinitionLocator routeDefinitionLocator,
                                                  SaTokenWebFluxAuthChecker authChecker) {
         return new GatewayAuthenticationFilter(properties.getAuth(), routeDefinitionLocator, authChecker);
+    }
+
+    /**
+     * 注册路由级熔断过滤器。
+     *
+     * @param routeDefinitionLocator 路由定义定位器
+     * @param dispatcherHandler WebFlux 分发器
+     * @return 熔断过滤器
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 30)
+    public WebFilter gatewayCircuitBreakerFilter(GatewayRouteDefinitionLocator routeDefinitionLocator,
+                                                 DispatcherHandler dispatcherHandler) {
+        return new GatewayCircuitBreakerFilter(routeDefinitionLocator, dispatcherHandler);
     }
 
     /**

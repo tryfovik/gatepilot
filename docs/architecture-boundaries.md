@@ -1,0 +1,608 @@
+# GatePilot 架构边界规范
+
+更新时间：2026-04-25
+
+GatePilot 是网关控制与运行系统。本文档用于约束后续开发的模块边界。GatePilot 可以支持单体大包部署，也可以支持控制面、节点代理、数据面分服务部署；部署形态可以变化，但代码职责边界不能变化。
+
+## 1. 架构原则
+
+GatePilot 采用接近 Kubernetes 的控制面 / 数据面思想：
+
+1. 声明式资源：管理端保存期望状态，数据面只消费已发布状态。
+2. 控制面负责管理：配置存储、查看、校验、版本、发布、回滚、权限和操作审计属于控制面。
+3. 数据面负责流量：业务请求只进入数据面，数据面不编辑配置、不存配置版本、不提供管理页面。
+4. 节点代理负责同步：agent 跟随 proxy 节点部署，负责配置同步、last-good 缓存、节点注册、心跳和状态上报。
+5. 合包只做装配：最终大 jar 可以同时启动 apiserver、controller-manager、agent、proxy 和 console 静态资源，但 app 模块不能写业务实现代码。
+
+Java 代码注释格式：
+
+- 类、字段、枚举项和公开方法使用展开式 Javadoc。
+- 禁止新增单行 Javadoc，例如 `/** 发布版本。 */`。
+- 正确格式如下：
+
+```java
+/**
+ * 发布版本。
+ */
+private String version;
+```
+
+## 2. 目标模块
+
+目标模块按职责命名，避免出现 `core`、`common`、`runtime` 这类容易变成垃圾包的名字。
+
+### gatepilot-api
+
+声明式资源模型模块。
+
+只能放：
+
+- 资源定义。
+- 枚举。
+- DTO。
+- 资源 metadata / spec / status。
+
+典型资源：
+
+- `GatewayProject`
+- `GatewayRoute`
+- `TrafficPolicy`
+- `ReleasePolicy`
+- `AuthPolicy`
+- `Upstream`
+- `PublishedConfig`
+- `GatewayNode`
+- `GatewayNodeStatus`
+- `GatewayEvent`
+
+禁止放：
+
+- Spring Controller。
+- Service。
+- Repository。
+- 数据库访问。
+- 网关转发逻辑。
+- 配置发布流程。
+- 页面接口。
+
+注意：这里的 `api` 不是 HTTP API，而是资源模型 API，类似 Kubernetes API Types。
+
+### gatepilot-apiserver
+
+控制面 API 服务。
+
+职责：
+
+- 配置资源 CRUD。
+- 配置查看。
+- 配置合法性校验。
+- 权限校验。
+- 操作审计。
+- 配置版本存储。
+- 发布入口。
+- 回滚入口。
+- 给 console 提供 REST/JSON API。
+- 给 agent 提供注册、心跳、配置 watch / pull、状态上报 API。
+
+存储边界：
+
+- 生产环境配置、发布产物、快照、事件、审计和节点状态必须持久化到数据库。
+- `GatePilotResourceStore` 是 apiserver 的资源存储端口。
+- 内存版资源存储只能用于本地开发、单元测试和演示，不能作为生产实现。
+- `gatepilot.apiserver.store.type=memory` 只允许开发测试使用。
+- `gatepilot.apiserver.store.type=jdbc` 使用 getboot-database 提供的数据源和数据库增强能力，资源表结构参考 `gatepilot-apiserver/src/main/resources/db/gatepilot/schema-mysql.sql`。
+- 后续数据库访问、事务、分页、乐观锁和审计字段优先复用 getboot 数据访问规范和能力；如果 getboot 缺能力，先回 getboot 补，再让 GatePilot 接入。
+- controller-manager、agent、proxy 都不能直接访问 GatePilot 配置数据库，只能通过 apiserver API 或 apiserver 提供的进程内端口访问资源。
+
+发布边界：
+
+- apiserver 只接收、校验、保存发布意图资源。
+- apiserver 可以做 admission 校验，例如必填字段、资源是否存在、基础引用关系是否成立。
+- apiserver 不负责发布推进、灰度步骤推进、蓝绿切换决策和自动回滚决策。
+- apiserver 不直接调用 agent 或 proxy。
+- apiserver 对 console 提供查询 API，但查询结果来自资源存储中的 `PublishedConfig`、快照、事件和状态。
+
+公共能力约束：
+
+- HTTP 统一响应使用 `getboot-web` 的 `ApiResponse`。
+- Trace 入口、MDC、响应头回写和 Reactor 上下文传播使用 `getboot-observability`。
+- agent / apiserver 之间的 HTTP 出站透传使用 `getboot-http-client`，不手写 Trace Header 注入。
+- 通用异常、响应、Trace、Web 规范优先复用 getboot 已有能力。
+- 不在 apiserver 内自造通用响应封装、通用异常体系或通用 Web 基础设施。
+- GatePilot 只定义自身领域 DTO，例如资源游标分页 `CursorPageResponse`。
+
+公共能力新增流程：
+
+1. 先判断能力是不是网关领域能力。路由、发布、配置同步、proxy apply、流量执行属于 GatePilot；统一响应、异常、Trace、Header 透传、缓存、锁、限流、幂等、HTTP 客户端、指标、数据库访问这类属于公共能力。
+2. 如果是公共能力，必须先去 getboot 现有模块查找，优先看 `../../docs/MODULE_MAP.md` 和对应模块 README。
+3. getboot 已经有的，GatePilot 只能接入和配置，不能复制一份实现。
+4. getboot 没有的，不能在 GatePilot 临时补一份；必须先回 getboot 新增或扩展公共能力，再由 GatePilot 依赖它。
+5. 如果 getboot 里找不到对应模块，也仍然先去 getboot 建模块或扩展模块，不允许绕回 GatePilot 自造公共基础设施。
+6. 只有确认能力是 GatePilot 专属领域能力，才允许写在 `gatepilot-*` 模块内。
+7. 任何新增 `common`、`core`、`shared` 或自造公共基础设施的改动，都必须先改本文档说明原因，否则不允许落代码。
+
+公共能力缺失处理红线：
+
+```text
+判断为公共能力
+  -> 查 getboot
+  -> getboot 有：GatePilot 接入和配置
+  -> getboot 没有：先补 getboot，再回 GatePilot 接入
+  -> 禁止：因为 getboot 暂时没有，就在 GatePilot 内自造一份
+```
+
+这条规则没有“临时例外”。如果为了赶进度必须先落地，也应该先在 getboot 形成最小公共能力，再让 GatePilot 依赖；否则后续会把 GatePilot 拖成基础设施垃圾包。
+
+GatePilot 默认 Trace 约定：
+
+```yaml
+getboot:
+  observability:
+    trace:
+      enabled: true
+      header-name: X-Trace-Id
+      request-header-propagation-enabled: true
+      response-header-enabled: true
+      mdc-key: traceId
+```
+
+`tid` 的传递链路固定为：入口请求头 `X-Trace-Id` -> `getboot-observability` 解析或生成 TraceId -> 写入 `TraceContextHolder` 和 MDC `traceId` -> 通过 `getboot-http-client` 写入 agent / apiserver 出站请求头 -> 下游服务继续沿用同一个 `X-Trace-Id`。
+
+agent 访问 apiserver 时必须使用 Spring 管理的 `WebClient.Builder` 或 getboot 已增强过的 HTTP 客户端。禁止在 agent 客户端里手工拼接 `X-Trace-Id`，避免和 getboot Trace 规则分叉。
+
+禁止放：
+
+- 业务流量转发。
+- Spring Cloud Gateway 路由注册。
+- Sentinel 运行规则注册。
+- proxy filter。
+- 前端页面业务逻辑。
+
+### gatepilot-controller-manager
+
+控制器集合，负责把期望状态推进为已发布状态。
+
+职责：
+
+- watch / list apiserver 中的资源变化。
+- claim 发布意图，避免多副本 controller-manager 重复推进同一次发布。
+- reconcile `GatewayProject`、`GatewayRoute`、`TrafficPolicy`、`ReleasePolicy` 等资源。
+- 生成 `PublishedConfig`。
+- 将 `PublishedConfig`、快照、事件和状态写回 apiserver。
+- 管理发布计划、灰度计划、蓝绿切换和回滚计划。
+- 汇总 agent / proxy 节点应用结果。
+- 汇总节点健康和发布状态。
+- 生成发布事件。
+
+禁止放：
+
+- 配置 CRUD 页面接口。
+- 面向 console 的查询接口。
+- 资源存储实现。
+- 业务流量转发。
+- 具体 proxy filter 实现。
+- 前端逻辑。
+
+controller-manager 与 apiserver 的关系：
+
+- 分服务部署时，controller-manager 通过 apiserver API 读写资源。
+- 单体合包部署时，controller-manager 可以使用进程内适配器读写同一份资源存储。
+- 无论哪种部署方式，controller-manager 代码只能依赖自身 SPI，不反向依赖 apiserver 的 Controller 或 Web 层。
+- apiserver 不能通过一个同步 Service 调用把整条发布链路跑完，否则发布推进职责会回流到 apiserver。
+
+### gatepilot-agent
+
+节点侧代理，跟 proxy 部署在一起。
+
+职责：
+
+- 节点注册。
+- 心跳上报。
+- 拉取或 watch `PublishedConfig`。
+- 校验配置版本、hash、签名和兼容性。
+- 写入本地 last-good 配置。
+- 写入 staged config。
+- 通知本机 proxy apply 配置。
+- 上报 apply 成功或失败原因。
+- 上报节点状态、当前配置版本、路由健康、上游健康和简要运行指标。
+- 控制面不可用时使用 last-good 启动。
+
+禁止放：
+
+- 配置编辑 API。
+- 配置版本库。
+- 发布审批。
+- 发布策略决策。
+- 业务流量转发。
+- 管理页面。
+
+### gatepilot-proxy
+
+数据面网关。
+
+职责：
+
+- 接收业务流量。
+- 执行已发布配置。
+- 路由匹配。
+- 路径改写。
+- 上游转发。
+- 限流、熔断、重试、超时、请求体限制。
+- 流量染色执行。
+- 灰度和蓝绿发布执行。
+- 运行审计事件采集。
+- 运行指标采集。
+- 向 agent 暴露本机 apply / health / state 能力。
+
+禁止放：
+
+- 配置编辑。
+- 配置存储。
+- 配置版本管理。
+- 发布审批。
+- 回滚决策。
+- 管理台页面。
+- 面向用户的管理 API。
+
+### gatepilot-console
+
+前端管理台。
+
+Console 页面设计必须遵守 [GatePilot Console 设计规范](console-design-guidelines.md)。
+
+职责：
+
+- 页面展示。
+- 表单编辑。
+- 诊断入口。
+- 发布操作入口。
+- 审计查询入口。
+- 只调用 apiserver API。
+
+禁止放：
+
+- 后端配置存储。
+- 发布决策。
+- 直接调用 proxy。
+- 直接读取数据库。
+- 直接读取后端配置文件。
+
+### gatepilot-app
+
+合包启动器。
+
+职责：
+
+- 装配 apiserver。
+- 装配 controller-manager。
+- 装配 agent。
+- 装配 proxy。
+- 承载 console 静态资源。
+- 提供单 jar 启动入口。
+
+禁止放：
+
+- 业务逻辑。
+- 配置治理实现。
+- proxy filter 实现。
+- 发布控制器实现。
+- Repository。
+- Controller 业务代码。
+
+app 模块只是部署装配层。单体大包坏了，问题应该能定位到 apiserver、controller-manager、agent、proxy 或 console，而不是 app 自己。
+
+## 3. 发布链路
+
+配置发布必须走固定链路：
+
+```text
+console
+  -> apiserver 保存草稿资源
+  -> apiserver 校验资源
+  -> apiserver 创建发布请求
+  -> controller-manager reconcile
+  -> controller-manager 生成 PublishedConfig
+  -> agent watch / pull PublishedConfig
+  -> agent 校验并写入 staged config
+  -> agent 通知 proxy apply
+  -> proxy 原子切换运行状态
+  -> agent 上报 apply result
+  -> controller-manager 汇总发布状态
+  -> apiserver 提供查询
+  -> console 展示结果
+```
+
+关键规则：
+
+- proxy 不消费草稿配置，只消费 `PublishedConfig`。
+- agent 不决定灰度比例，只同步和应用控制面发布的结果。
+- controller-manager 负责发布编排和状态推进。
+- apiserver 负责存储、权限、审计和查询。
+- console 只是操作入口，不拥有发布逻辑。
+
+## 4. Agent 协议
+
+agent 和 apiserver 之间先按这些能力设计接口，具体 HTTP 路径可以后续实现时细化：
+
+- 节点注册：`register node`
+- 节点心跳：`heartbeat`
+- 配置拉取：`pull published config`
+- 配置订阅：`watch published config`
+- 应用结果上报：`report apply result`
+- 节点健康上报：`report node health`
+- 上游健康上报：`report upstream health`
+- 指标摘要上报：`report metrics summary`
+- 运行事件上报：`report runtime event`
+
+agent 本地至少要维护：
+
+- node identity。
+- current config version。
+- staged config。
+- last-good config。
+- last apply result。
+- control-plane connection state。
+
+## 5. 资源模型规范
+
+声明式资源统一采用三段式结构：
+
+```text
+metadata
+spec
+status
+```
+
+`metadata` 放资源标识和管理信息：
+
+- id / name。
+- namespace 或 tenant。
+- labels。
+- annotations。
+- generation。
+- createdAt。
+- updatedAt。
+
+`spec` 放期望状态：
+
+- 项目。
+- 路由。
+- 上游。
+- 认证策略。
+- 流控策略。
+- 熔断策略。
+- 灰度策略。
+- 蓝绿策略。
+
+`status` 放实际状态：
+
+- observedGeneration。
+- phase。
+- conditions。
+- lastTransitionTime。
+- currentPublishedVersion。
+- nodeApplySummary。
+- error message。
+
+规则：
+
+- 用户和 console 主要改 `spec`。
+- controller-manager 写 `status`。
+- proxy 不写资源，只通过 agent 上报状态。
+- `PublishedConfig` 是给 agent / proxy 消费的发布产物，不是草稿配置。
+
+## 6. 依赖方向
+
+允许的依赖方向：
+
+```text
+console -> apiserver HTTP API
+apiserver -> api
+controller-manager -> api
+controller-manager -> apiserver client 或 store abstraction
+agent -> api
+agent -> apiserver client
+agent -> proxy local client
+proxy -> api
+app -> apiserver / controller-manager / agent / proxy / console
+```
+
+禁止的依赖方向：
+
+```text
+api -> apiserver
+api -> controller-manager
+api -> agent
+api -> proxy
+proxy -> apiserver implementation
+proxy -> console
+proxy -> controller-manager
+agent -> console
+console -> proxy
+app -> 业务实现代码
+```
+
+## 7. 新能力放置规则
+
+开发新能力前先回答一个问题：它改变的是资源、控制、同步、流量，还是页面？
+
+- 新资源字段：放 `gatepilot-api`。
+- 配置 CRUD：放 `gatepilot-apiserver`。
+- 发布、回滚、灰度推进：放 `gatepilot-controller-manager`。
+- 节点注册、配置同步、last-good：放 `gatepilot-agent`。
+- 接流量、转发、过滤链执行：放 `gatepilot-proxy`。
+- 页面、表单、图表：放 `gatepilot-console`。
+- 单 jar 装配：放 `gatepilot-app`。
+
+禁止因为“很多模块都要用”就新建 `common`、`core`、`shared`。
+
+确实跨模块复用时，先判断它是什么：
+
+- 是资源模型：放 `api`。
+- 是控制面逻辑：放 `apiserver` 或 `controller-manager`。
+- 是节点同步逻辑：放 `agent`。
+- 是数据面执行逻辑：放 `proxy`。
+- 是纯前端展示：放 `console`。
+
+## 8. 部署形态
+
+### 单体大包
+
+```text
+gatepilot-app
+  apiserver
+  controller-manager
+  agent
+  proxy
+  console static
+```
+
+适合本地开发、小规模部署、快速试用。
+
+要求：
+
+- app 只负责装配。
+- 内部仍按模块接口协作。
+- proxy 仍只消费 PublishedConfig。
+- console 仍只调 apiserver。
+
+### 分服务部署
+
+```text
+gatepilot-apiserver
+gatepilot-controller-manager
+gatepilot-proxy + gatepilot-agent
+gatepilot-console
+```
+
+适合多网关节点、高可用、高流量场景。
+
+要求：
+
+- agent 跟 proxy 同节点或同 Pod 部署。
+- proxy 不直接连数据库。
+- proxy 不直接读草稿配置。
+- 控制面故障时，proxy 继续使用 last-good 配置。
+
+## 9. 集群副本与高可用约束
+
+GatePilot 必须天然支持横向扩容，不能只适配单节点网关。扩副本时遵守下面规则：
+
+- proxy 副本保持无状态，不在本地保存草稿、版本库、发布决策或管理查询数据。
+- 每个 proxy 副本旁边至少有一个 agent，agent 使用稳定 `nodeId` 注册到 apiserver。
+- `PublishedConfig` 是所有 proxy 副本共同消费的发布产物，节点是否应用成功通过 agent 上报。
+- controller-manager reconcile 必须幂等，同一个发布版本重复推进不能产生不同结果。
+- controller-manager 多副本部署时只能有一个 active leader 推进发布，其他副本 standby 或只读观察。
+- apiserver 多副本部署时必须共享同一个配置存储和版本存储，不能使用各进程本地内存作为事实来源。
+- agent pull / watch 需要带上当前配置版本、nodeId、zone 和能力信息，避免控制面误判节点状态。
+- proxy 启动时控制面不可用，必须通过 agent 使用 last-good 配置启动；如果没有 last-good，要保持不接流量并上报原因。
+- 发布状态必须按节点聚合，至少能看到 desired、applied、failed 和每个失败节点的原因。
+- 同 zone 或同机房发布应支持分批推进，避免一次性把所有副本切到坏配置。
+
+这些约束意味着：扩一个网关副本，本质上只是新增一个 `GatewayNode`，由 agent 拉取同一份 `PublishedConfig`，proxy 原子应用配置，controller-manager 汇总节点应用结果。不能让 proxy 副本之间互相依赖，也不能让某个 proxy 副本成为配置主节点。
+
+## 10. 大规模流量硬约束
+
+GatePilot 的长期目标是接入大量项目和高并发大流量。架构上必须做到：项目数量、路由数量、流量规模增长时，主要通过扩副本、扩分片、扩存储和扩控制面实例解决，不能要求修改 proxy 转发代码。
+
+硬约束：
+
+- 任何项目接入都必须表达为资源和策略，不允许为单个项目写专属转发代码。
+- proxy 必须保持无状态，业务流量处理路径不访问数据库、不调用 apiserver、不等待 controller-manager。
+- proxy 运行态必须使用预编译、不可变的路由索引和策略快照，配置切换只能做原子引用替换。
+- 路由匹配不能随项目数线性扫描，后续实现必须按 host、path prefix、method、priority 建立索引。
+- `PublishedConfig` 必须支持按 project、namespace、zone、isolationGroup、configShard 下发，避免所有节点消费全部配置。
+- agent pull / watch 必须携带 `nodeId`、`zone`、`isolationGroup`、`configShards`、当前版本和当前序号。
+- apiserver 的列表、审计、事件、发布历史接口必须分页或游标化，禁止一次性返回全量。
+- controller-manager 生成配置必须按分片幂等推进，单个项目发布不能阻塞所有项目。
+- 高流量项目必须能通过资源字段调度到独立隔离组，不需要改代码。
+- 发布策略、染色规则、蓝绿/灰度权重都必须是数据驱动，不能写死在 filter 里。
+- 可观测数据按节点、项目、路由、上游维度聚合，明细查询走时间窗口和分页。
+
+规模化路径：
+
+```text
+增加项目
+  -> 新增 GatewayProject / GatewayRoute / Upstream / Policy 资源
+  -> controller-manager 生成对应分片 PublishedConfig
+  -> 目标 agent 按 configShard 拉取
+  -> proxy 原子替换本地路由索引
+
+增加流量
+  -> 增加 proxy + agent 副本
+  -> 新节点注册为 GatewayNode
+  -> controller-manager 将节点纳入目标集合
+  -> agent 拉取对应 PublishedConfig
+  -> proxy 接入负载均衡并开始承载流量
+```
+
+验收口径：
+
+- 接 1000 个项目时，不需要新增 Java 代码。
+- 单项目高流量时，通过调大 proxy 副本、独立 isolationGroup、独立上游和独立发布策略解决。
+- 多项目高流量时，通过 configShard、zone、isolationGroup 分摊配置和运行压力。
+- 控制面短时不可用时，proxy 继续用 last-good 配置承载已有流量。
+
+实际容量必须用压测证明，不能只靠架构假设。后续 Phase 9 必须增加项目规模、路由规模、配置发布和数据面吞吐压测。
+
+### 模块类比
+
+为了降低理解成本，可以按下面类比理解各模块：
+
+- `gatepilot-api` 像 Kubernetes API Types，只定义资源长什么样。
+- `gatepilot-apiserver` 像 Kubernetes apiserver，是资源登记处、查询入口、权限和审计入口。
+- `gatepilot-controller-manager` 像控制器集合，持续把期望状态推进成已发布状态。
+- `gatepilot-agent` 像 kubelet，守在每个 proxy 节点旁边，负责注册、拉配置、last-good 和上报状态。
+- `gatepilot-proxy` 像真正承载业务流量的 Pod / 数据面，只执行本地已发布配置。
+- `gatepilot-console` 像 Dashboard，只调 apiserver。
+- `gatepilot-app` 像本地一体化启动包，只装配，不写业务。
+
+### 大流量项目隔离例子
+
+假设 `project-a` 是百亿级流量项目：
+
+```text
+GatewayProject(project-a)
+  spec.trafficTier = critical
+  spec.isolationGroup = project-a-high
+  spec.configShard = shard-project-a
+
+GatewayNode(proxy-001..proxy-200)
+  spec.isolationGroup = project-a-high
+  spec.configShards = [shard-project-a]
+```
+
+发布时 controller-manager 只为 `shard-project-a` 生成对应 `PublishedConfig`。这些 agent 拉到配置后通知本机 proxy 原子切换。业务流量只进入 `project-a-high` 这组 proxy 副本，扩容时新增 proxy + agent 节点即可，不需要改 Java 转发代码。
+
+这不是唯一形态，但属于大型网关、服务网格和云控制面常用的可扩展路径：控制面管资源，数据面无状态扩容，高流量租户用隔离池和配置分片承载。
+
+### xDS / Envoy 升级方向
+
+Envoy 是业界常用的高性能代理数据面，xDS 是控制面向 Envoy 动态下发配置的一组协议族。它们解决的问题和 GatePilot 的长期方向类似：控制面生成配置，数据面热加载配置并承载流量。
+
+当前 GatePilot 先使用自研 Java proxy，贴合现有 Spring Cloud Gateway 体系。后续如果需要更高性能或接入服务网格生态，可以增加 Envoy 数据面适配：
+
+- controller-manager 在生成 `PublishedConfig` 的同时，也可以生成 xDS 需要的 listener、route、cluster、endpoint 配置。
+- agent 可以扩展为 xDS 管理客户端或 Envoy sidecar 管理器。
+- proxy 模块可以保留 Java 数据面，也可以新增 Envoy adapter，不影响 apiserver、console 和资源模型。
+
+这只是升级方向，不是当前阶段的必选复杂度。当前阶段更重要的是先把控制面 / agent / proxy 边界设计成类似 xDS 的单向配置下发模型，保证以后换数据面时不会推倒重来。
+
+## 11. 当前迁移约束
+
+当前仓库已有历史模块名，后续迁移时按下面目标收敛：
+
+- `platform-gateway-management` / `platform-gateway-admin-server` 收敛到 `gatepilot-apiserver`。
+- 发布编排能力新建或迁移到 `gatepilot-controller-manager`。
+- 节点注册、配置同步、last-good 和状态上报新建到 `gatepilot-agent`。
+- `platform-gateway-runtime` / `platform-gateway-server` 收敛到 `gatepilot-proxy`。
+- `platform-gateway-admin-web` 收敛到 `gatepilot-console`。
+- 新建 `gatepilot-app` 作为最终合包启动器。
+- `platform-gateway-legacy-config` 只作为迁移期旧版配置兼容模块，不能新增新能力；旧配置能力最终应被 GatePilot 资源模型和 apiserver / controller-manager / proxy 链路替代。
+
+迁移期间也必须遵守边界：
+
+- 不再向 runtime/server 增加配置管理能力。
+- 不再向 management/admin-server 增加数据面转发能力。
+- 不再新增 `core/common/shared` 这类泛化模块。
+- 新代码优先按目标模块职责落位。

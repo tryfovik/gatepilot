@@ -1,0 +1,55 @@
+server:
+  port: 18080
+
+spring:
+  application:
+    name: gatepilot-app
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+getboot:
+  observability:
+    trace:
+      enabled: true
+      header-name: X-Trace-Id
+      request-header-propagation-enabled: true
+      response-header-enabled: true
+      mdc-key: traceId
+      request-attribute-name: GETBOOT_TRACE_ID
+      async-propagation-enabled: true
+    reactor:
+      enabled: true
+      automatic-context-propagation-enabled: true
+    metrics:
+      enabled: true
+      common-tags:
+        app: gatepilot-app
+        env: local
+    prometheus:
+      enabled: true
+  http-client:
+    webclient:
+      trace:
+        enabled: true
+        header-name: X-Trace-Id
+
+gatepilot:
+  mode: standalone
+  apiserver:
+    store:
+      type: memory
+      jdbc:
+        table-name: gatepilot_resource
+        initialize-schema: false
+  agent:
+    enabled: true
+    apiserver-base-url: http://127.0.0.1:18080

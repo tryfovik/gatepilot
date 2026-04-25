@@ -103,6 +103,11 @@ platform:
       #     pattern: true
       #     match-strategy: exact
       #     color: green
+    audit:
+      enabled: true
+      log-enabled: true
+      recent-capacity: 5000
+      trace-header-name: X-Trace-Id
     projects:
       game:
         enabled: true
@@ -149,11 +154,33 @@ platform:
             #       max-backoff: 200ms
             #       factor: 2
             #       based-on-previous-value: true
+            #   circuit-breaker:
+            #     enabled: true
+            #     status-codes:
+            #       - 500
+            #       - 502
+            #       - 503
+            #       - 504
+            #     sliding-window-size: 100
+            #     minimum-number-of-calls: 20
+            #     failure-rate-threshold: 50
+            #     wait-duration-in-open-state: 30s
+            #     permitted-number-of-calls-in-half-open-state: 10
+            #     slow-call-duration-threshold: 5s
+            #     slow-call-rate-threshold: 80
+            #     fallback-status: 503
+            #     fallback-code: 503
+            #     fallback-message: Service temporarily unavailable
             # release:
+            #   weight-hash-headers:
+            #     - X-User-Id
+            #     - X-Tenant-Id
+            #     - X-Trace-Id
             #   variants:
             #     green:
             #       service-uri: http://127.0.0.1:28080
             #       actuator-uri: http://127.0.0.1:28080
+            #       weight: 10
             #       match-colors:
             #         - green
             #   flow-control:

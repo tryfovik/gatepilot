@@ -42,9 +42,16 @@ class GatewayRouteDefinitionLocatorTest {
         assertThat(definition.getRetryPolicy().backoff()).isNotNull();
         assertThat(definition.getRetryPolicy().backoff().firstBackoff()).isEqualTo(Duration.ofMillis(20));
         assertThat(definition.getRetryPolicy().backoff().maxBackoff()).isEqualTo(Duration.ofMillis(200));
+        assertThat(definition.getCircuitBreakerPolicy()).isNotNull();
+        assertThat(definition.getCircuitBreakerPolicy().name()).isEqualTo("platform-gateway-cb-game-admin");
+        assertThat(definition.getCircuitBreakerPolicy().statusCodes()).containsExactly(500, 502, 503, 504);
+        assertThat(definition.getCircuitBreakerPolicy().fallbackUri()).isNull();
+        assertThat(definition.getCircuitBreakerPolicy().fallbackStatus()).isEqualTo(503);
+        assertThat(definition.getReleaseWeightHashHeaders()).containsExactly("X-User-Id", "X-Tenant-Id", "X-Trace-Id");
         assertThat(definition.getReleaseVariants()).hasSize(1);
         assertThat(definition.getReleaseVariants().get(0).variantKey()).isEqualTo("green");
         assertThat(definition.getReleaseVariants().get(0).matchColors()).containsExactly("green");
+        assertThat(definition.getReleaseVariants().get(0).weight()).isEqualTo(10);
         assertThat(definition.getReleaseVariants().get(0).serviceUri()).isEqualTo(URI.create("http://127.0.0.1:28080"));
         assertThat(definition.getReleaseVariants().get(0).actuatorUri()).isEqualTo(URI.create("http://127.0.0.1:28080"));
         assertThat(definition.isApiMethodAllowed("get")).isTrue();
@@ -102,7 +109,9 @@ class GatewayRouteDefinitionLocatorTest {
         adminRoute.getGovernance().getRetry().getBackoff().setMaxBackoff(Duration.ofMillis(200));
         adminRoute.getGovernance().getRetry().getBackoff().setFactor(2);
         adminRoute.getGovernance().getRetry().getBackoff().setBasedOnPreviousValue(true);
+        adminRoute.getGovernance().getCircuitBreaker().setEnabled(true);
         GatewayProperties.ReleaseVariantProperties greenVariant = new GatewayProperties.ReleaseVariantProperties();
+        greenVariant.setWeight(10);
         greenVariant.setServiceUri(URI.create("http://127.0.0.1:28080"));
         greenVariant.setActuatorUri(URI.create("http://127.0.0.1:28080"));
         adminRoute.getRelease().getVariants().put("green", greenVariant);

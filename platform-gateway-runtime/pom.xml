@@ -21,6 +21,10 @@
 
     <dependencies>
         <dependency>
+            <groupId>com.dt.gateway</groupId>
+            <artifactId>platform-gateway-legacy-config</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.dt</groupId>
             <artifactId>getboot-auth</artifactId>
         </dependency>

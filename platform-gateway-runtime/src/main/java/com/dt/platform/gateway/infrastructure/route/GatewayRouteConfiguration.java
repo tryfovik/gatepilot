@@ -35,19 +35,6 @@ public class GatewayRouteConfiguration {
     }
 
     /**
-     * 注册生效路由目录端点。
-     *
-     * @param properties 网关配置
-     * @param routeDefinitionLocator 路由定义定位器
-     * @return 路由目录端点
-     */
-    @Bean
-    public GatewayRouteCatalogEndpoint gatewayRouteCatalogEndpoint(GatewayProperties properties,
-                                                                   GatewayRouteDefinitionLocator routeDefinitionLocator) {
-        return new GatewayRouteCatalogEndpoint(properties, routeDefinitionLocator);
-    }
-
-    /**
      * 注册平台网关路由。
      *
      * @param builder 路由构建器

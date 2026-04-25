@@ -1,4 +1,4 @@
-# Platform Gateway 接入手册
+# GatePilot 接入手册
 
 这份文档面向准备把自己的项目接入 `platform-gateway` 的开发者和运维同学。
 
@@ -163,6 +163,37 @@ platform:
 
 建议把重试只用于显式可重放的读请求或幂等请求，不要默认给扣款、下单、状态变更这类写接口打开重试。
 
+如果要给路由增加上游故障兜底，可以开启路由级熔断 fallback：
+
+```yaml
+platform:
+  gateway:
+    projects:
+      village-care:
+        routes:
+          open:
+            governance:
+              circuit-breaker:
+                enabled: true
+                status-codes:
+                  - 500
+                  - 502
+                  - 503
+                  - 504
+                sliding-window-size: 100
+                minimum-number-of-calls: 20
+                failure-rate-threshold: 50
+                wait-duration-in-open-state: 30s
+                permitted-number-of-calls-in-half-open-state: 10
+                slow-call-duration-threshold: 5s
+                slow-call-rate-threshold: 80
+                fallback-status: 503
+                fallback-code: 503
+                fallback-message: Service temporarily unavailable
+```
+
+未配置 `fallback-uri` 时，网关会返回内置 UTF-8 JSON fallback；需要自定义 fallback 时，目前只支持 `forward:` URI。
+
 如果要做灰度或蓝绿发布，还需要把“流量染色”和“发布变体”一起配好：
 
 ```yaml
@@ -186,15 +217,20 @@ platform:
         routes:
           open:
             release:
+              weight-hash-headers:
+                - X-User-Id
+                - X-Tenant-Id
+                - X-Trace-Id
               variants:
                 green:
                   service-uri: http://127.0.0.1:29080
                   actuator-uri: http://127.0.0.1:29080
+                  weight: 10
                   match-colors:
                     - green
 ```
 
-网关会先算出当前请求的 `X-Traffic-Color`，再用这个颜色优先命中发布变体；如果没有变体命中，流量会自动回落到默认上游。
+网关会先算出当前请求的 `X-Traffic-Color`，再用这个颜色优先命中发布变体；如果没有显式颜色且配置了 `weight`，网关会按稳定哈希做权重灰度；如果没有变体命中，流量会自动回落到默认上游。
 
 ## 4. 标准接入步骤
 
@@ -333,6 +369,9 @@ java -jar platform-gateway-server/target/platform-gateway-1.0.0-SNAPSHOT.jar \
 9. 如果当前 route 开了重试，瞬时失败会按预期重试，而且只作用在显式允许的方法上。
 10. 内部运维入口只能走 `/internal/**`。
 11. Actuator 路由目录和实际配置一致。
+12. 路由诊断 API 能解释当前请求的路由命中、认证、染色、变体和治理策略。
+13. 访问审计 API 能按 traceId、项目、路由、状态码、颜色和变体查询最近请求。
+14. 管理配置 API 能导出当前配置，并对候选配置做 dry-run 校验、diff、版本快照和发布事件查询。
 
 示例命令：
 
@@ -345,6 +384,23 @@ curl -i -H 'X-Trace-Id: trace-demo-001' http://127.0.0.1:18082/api/game/open/sys
 curl -i -H 'X-Canary: true' http://127.0.0.1:18082/api/game/open/system/ping
 curl -i http://127.0.0.1:18082/internal/game/admin/actuator/health
 curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
+curl -s -X POST http://127.0.0.1:18083/internal/_platform-gateway/diagnostics/route \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"GET","path":"/api/game/admin/system/ping","headers":{"X-Canary":["true"]},"query":{},"cookies":{},"remoteAddress":"127.0.0.1"}'
+curl -s 'http://127.0.0.1:18083/internal/_platform-gateway/audits?projectKey=game&routeKey=admin&limit=20'
+curl -s 'http://127.0.0.1:18083/internal/_platform-gateway/audits?traceId=trace-demo-001'
+curl -s 'http://127.0.0.1:18083/internal/_platform-gateway/config/effective'
+curl -s -X POST http://127.0.0.1:18083/internal/_platform-gateway/config/validate \
+  -H 'Content-Type: application/json' \
+  --data-binary @candidate-gateway-config.json
+curl -s -X POST http://127.0.0.1:18083/internal/_platform-gateway/config/diff \
+  -H 'Content-Type: application/json' \
+  --data-binary @candidate-gateway-config.json
+curl -s -X POST http://127.0.0.1:18083/internal/_platform-gateway/config/versions \
+  -H 'Content-Type: application/json' \
+  --data-binary @candidate-gateway-snapshot.json
+curl -s 'http://127.0.0.1:18083/internal/_platform-gateway/config/versions?limit=20'
+curl -s 'http://127.0.0.1:18083/internal/_platform-gateway/config/releases?limit=20'
 ```
 
 接入成功后，至少应该能从 `platformGatewayRoutes` 看见：
@@ -385,6 +441,81 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - `projects[].routes[].releaseVariants[].matchColors`
 - `projects[].routes[].releaseVariants[].serviceUri`
 - `projects[].routes[].releaseVariants[].actuatorUri`
+
+路由诊断 API 会返回：
+
+- `matched`
+- `routeType`
+- `route.projectKey`
+- `route.routeKey`
+- `access.methodAllowed`
+- `access.authenticationRequired`
+- `traffic.color`
+- `traffic.selectedReleaseVariant`
+- `upstream.uri`
+- `governance.retry`
+- `governance.flowControl`
+- `governance.circuitBreaker`
+- `warnings`
+
+访问审计 API 会返回最近审计事件：
+
+- `timestamp`
+- `traceId`
+- `clientIp`
+- `method`
+- `path`
+- `routeType`
+- `projectKey`
+- `routeKey`
+- `status`
+- `latencyMs`
+- `trafficColor`
+- `releaseVariant`
+- `upstreamUri`
+- `methodAllowed`
+- `authRequired`
+- `publicPath`
+- `fallback`
+- `outcome`
+- `error`
+
+当前审计 API 保存的是最近事件，适合联调和管理台排障底座；长期留存、跨实例检索和审计报表后续应接日志平台或持久化存储。
+
+管理配置 API 会返回：
+
+- `config/effective.summary`
+- `config/effective.properties`
+- `config/validate.valid`
+- `config/validate.errors`
+- `config/validate.warnings`
+- `config/validate.summary`
+- `config/diff.valid`
+- `config/diff.currentSummary`
+- `config/diff.candidateSummary`
+- `config/diff.changes[].category`
+- `config/diff.changes[].projectKey`
+- `config/diff.changes[].routeKey`
+- `config/diff.changes[].field`
+- `config/diff.changes[].before`
+- `config/diff.changes[].after`
+- `config/versions[].versionId`
+- `config/versions[].status`
+- `config/versions[].active`
+- `config/versions[].operator`
+- `config/versions[].reason`
+- `config/versions[].summary`
+- `config/versions[].errors`
+- `config/versions[].warnings`
+- `config/versions[].changes`
+- `config/releases[].recordId`
+- `config/releases[].versionId`
+- `config/releases[].action`
+- `config/releases[].status`
+- `config/releases[].operator`
+- `config/releases[].message`
+
+发布前建议先跑 `config/validate`，再跑 `config/diff` 给人确认变更范围；确认后可以调用 `config/versions` 保存候选版本快照。当前 API 只做只读导出、预检、差异计算和内存事件记录，不会直接替换线上配置。
 
 ## 6. 接入方最容易踩的坑
 
@@ -504,10 +635,24 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 
 平台网关默认暴露这些关键观测入口：
 
+数据面网关 `platform-gateway-server` 默认端口是 `18082`，负责业务转发和基础观测：
+
 - `/actuator/health`
 - `/actuator/health/liveness`
 - `/actuator/health/readiness`
 - `/actuator/platformGatewayRoutes`
+
+管理面后端 `platform-gateway-admin-server` 默认端口是 `18083`，负责排障和配置治理：
+
+- `/actuator/health`
+- `/actuator/platformGatewayRoutes`
+- `/internal/_platform-gateway/diagnostics/route`
+- `/internal/_platform-gateway/audits`
+- `/internal/_platform-gateway/config/effective`
+- `/internal/_platform-gateway/config/validate`
+- `/internal/_platform-gateway/config/diff`
+- `/internal/_platform-gateway/config/versions`
+- `/internal/_platform-gateway/config/releases`
 
 推荐排查顺序：
 
@@ -516,6 +661,9 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 3. 再访问目标 `/api/**` 或 `/internal/**` 路径，判断是网关拦截还是上游报错。
 4. 如果发布链路有问题，先看响应头里的 `X-Traffic-Color`，再看 `/actuator/platformGatewayRoutes` 里的发布变体。
 5. 如果链路排查需要串日志，直接看请求头和响应头里的 `X-Trace-Id` 是否贯通。
+6. 如果不确定请求会命中哪里，先调用 `/internal/_platform-gateway/diagnostics/route` 做一次模拟诊断。
+7. 如果请求已经发生，按 traceId 或 project / route 调 `/internal/_platform-gateway/audits` 查最近审计事件。
+8. 如果准备改配置，先用 `/internal/_platform-gateway/config/validate` 和 `/internal/_platform-gateway/config/diff` 做发布前校验。
 
 ## 8. 上线前检查清单
 
@@ -532,6 +680,8 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - 流量染色规则已经验证，`X-Traffic-Color` 的值和预期一致
 - 浏览器场景已确认 `X-Traffic-Color` 在 CORS `exposed-headers` 里可见
 - 灰度 / 蓝绿发布变体已经验证，染色请求会命中正确上游
+- `platform.gateway.audit.enabled` 已按环境确认，最近事件保留条数和结构化日志输出符合排障要求
+- 候选配置已经通过 `/internal/_platform-gateway/config/validate`，并用 `/internal/_platform-gateway/config/diff` 确认过变更范围，必要时已保存候选版本快照
 - 开启重试的 route 已确认是可安全重放的请求，并验证过失败触发条件
 - `connect-timeout-ms` 和 `response-timeout` 已按上游实际延迟设置
 - `/actuator/platformGatewayRoutes` 返回内容和配置一致
@@ -545,5 +695,15 @@ curl -s http://127.0.0.1:18082/actuator/platformGatewayRoutes
 - `README.md`
 - `platform-gateway-server/src/main/resources/application.yml`
 - `platform-gateway-server/src/main/resources/application-local.example.yml`
+- `gatepilot-console/README.md`
 
-这三个文件已经覆盖了网关定位、默认能力和接入配置模板。
+前三个文件保留了历史数据面配置模板；GatePilot 的新控制面由 `gatepilot-apiserver` 承载，`gatepilot-console` 是 Vue 前端管理台，通过 REST/JSON 调用 apiserver，不嵌入网关数据面发布件。
+
+本地查看管理台：
+
+```bash
+cd gatepilot-console
+npm run dev
+```
+
+打开 Vite 输出的本地地址，默认通过 `/api/gatepilot` 代理到 `http://127.0.0.1:18080`。

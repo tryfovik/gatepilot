@@ -26,15 +26,40 @@
     </properties>
 
     <modules>
+        <module>gatepilot-api</module>
+        <module>gatepilot-apiserver</module>
+        <module>gatepilot-controller-manager</module>
+        <module>gatepilot-agent</module>
+        <module>gatepilot-proxy</module>
+        <module>gatepilot-console</module>
+        <module>gatepilot-app</module>
+        <module>platform-gateway-legacy-config</module>
         <module>platform-gateway-runtime</module>
+        <module>platform-gateway-management</module>
         <module>platform-gateway-server</module>
+        <module>platform-gateway-admin-server</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>com.dt.gateway</groupId>
+                <artifactId>platform-gateway-legacy-config</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dt.gateway</groupId>
                 <artifactId>platform-gateway-runtime</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dt.gateway</groupId>
+                <artifactId>platform-gateway-management</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dt.gateway</groupId>
+                <artifactId>platform-gateway-admin-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

@@ -82,6 +82,17 @@ class GatewayValidationConfigurationTest {
     }
 
     @Test
+    void shouldFailWhenAuditRecentCapacityIsNonPositive() {
+        contextRunner.withPropertyValues("platform.gateway.audit.recent-capacity=0")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway audit recent capacity must be positive");
+                });
+    }
+
+    @Test
     void shouldFailWhenTrafficColorDefaultIsInvalid() {
         contextRunner.withPropertyValues(
                         "platform.gateway.traffic-color.enabled=true",
@@ -235,6 +246,48 @@ class GatewayValidationConfigurationTest {
     }
 
     @Test
+    void shouldFailWhenCircuitBreakerConfiguredOnDisabledApiRoute() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.api-enabled=false",
+                        "platform.gateway.projects.game.routes.admin.governance.circuit-breaker.enabled=true"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway circuit breaker requires api route to be enabled");
+                });
+    }
+
+    @Test
+    void shouldFailWhenCircuitBreakerStatusCodeUnsupported() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.governance.circuit-breaker.enabled=true",
+                        "platform.gateway.projects.game.routes.admin.governance.circuit-breaker.status-codes[0]=799"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway circuit breaker status code is unsupported");
+                });
+    }
+
+    @Test
+    void shouldFailWhenCircuitBreakerFallbackUriIsNotForward() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.projects.game.routes.admin.governance.circuit-breaker.enabled=true",
+                        "platform.gateway.projects.game.routes.admin.governance.circuit-breaker.fallback-uri=http://127.0.0.1/fallback"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway circuit breaker fallback uri only supports forward scheme");
+                });
+    }
+
+    @Test
     void shouldFailWhenReleaseVariantConfiguredWithoutTrafficColor() {
         contextRunner.withPropertyValues(
                         "platform.gateway.projects.game.routes.admin.release.variants.green.service-uri=http://127.0.0.1:28080"
@@ -244,6 +297,35 @@ class GatewayValidationConfigurationTest {
                     assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
                     assertThat(context.getStartupFailure().getMessage())
                             .contains("gateway release variants require traffic color to be enabled");
+                });
+    }
+
+    @Test
+    void shouldFailWhenReleaseVariantWeightIsOutOfRange() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.traffic-color.enabled=true",
+                        "platform.gateway.projects.game.routes.admin.release.variants.green.weight=101"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway release variant weight must be between 0 and 100");
+                });
+    }
+
+    @Test
+    void shouldFailWhenReleaseVariantTotalWeightExceedsOneHundred() {
+        contextRunner.withPropertyValues(
+                        "platform.gateway.traffic-color.enabled=true",
+                        "platform.gateway.projects.game.routes.admin.release.variants.green.weight=70",
+                        "platform.gateway.projects.game.routes.admin.release.variants.blue.weight=40"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure().getMessage())
+                            .contains("gateway release variant total weight must not exceed 100");
                 });
     }
 

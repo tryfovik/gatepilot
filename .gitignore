@@ -1,3 +1,7 @@
 /.idea/
 **/target/
 *.iml
+platform-gateway-admin-web/node_modules/
+platform-gateway-admin-web/dist/
+gatepilot-console/node_modules/
+gatepilot-console/dist/
