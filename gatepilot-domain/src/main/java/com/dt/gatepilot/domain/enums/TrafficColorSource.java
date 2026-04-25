@@ -21,6 +21,11 @@ public enum TrafficColorSource {
     QUERY,
 
     /**
+     * 客户端 IP。
+     */
+    IP,
+
+    /**
      * JWT Claim。
      */
     JWT_CLAIM,

@@ -279,6 +279,9 @@ console
 - [ ] 大路由表预编译和 proxy 原子切换压测通过。
 - [ ] configShard / isolationGroup 分片发布验证通过。
 - [ ] 高流量项目通过扩 proxy 副本承载，不修改转发代码。
+- [ ] Kubernetes 基础部署验证通过：VIP / Nginx 入口不承载 GatePilot 项目治理，proxy Deployment + Service + HPA 可扩副本。
+- [ ] agent 从 K8s 环境读取 podName、namespace、zone、nodeName、isolationGroup、configShards 并注册为 `GatewayNode`。
+- [ ] controller-manager 多副本通过 Kubernetes Lease 或等价机制完成 leader / standby 验证。
 
 ## 5. 打勾规则
 

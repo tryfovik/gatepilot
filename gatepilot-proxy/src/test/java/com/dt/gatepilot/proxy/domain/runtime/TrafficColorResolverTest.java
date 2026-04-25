@@ -42,6 +42,33 @@ class TrafficColorResolverTest {
     }
 
     @Test
+    void shouldResolveColorFromQueryRule() {
+        CompiledProxyRuntime runtime = runtimeWithTrafficRules(queryRule());
+
+        String color = new TrafficColorResolver().resolve(runtime, request(
+                Map.of(),
+                Map.of(),
+                Map.of("preview", "enabled")
+        ));
+
+        assertThat(color).isEqualTo("yellow");
+    }
+
+    @Test
+    void shouldResolveColorFromIpRule() {
+        CompiledProxyRuntime runtime = runtimeWithTrafficRules(ipRule());
+
+        String color = new TrafficColorResolver().resolve(runtime, request(
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                "10.20.30.40"
+        ));
+
+        assertThat(color).isEqualTo("gray");
+    }
+
+    @Test
     void shouldResolveWeightedReleaseColorWhenNoRuleMatches() {
         CompiledProxyRuntime runtime = runtime();
 
@@ -76,6 +103,13 @@ class TrafficColorResolverTest {
         return new PublishedConfigCompiler().compile(config);
     }
 
+    private CompiledProxyRuntime runtimeWithTrafficRules(TrafficPolicy.TrafficColorRule... rules) {
+        PublishedConfig config = baseConfig();
+        PublishedConfig.PublishedPolicy policy = trafficPolicy(List.of(rules));
+        config.getSpec().getPolicies().add(policy);
+        return new PublishedConfigCompiler().compile(config);
+    }
+
     private PublishedConfig baseConfig() {
         PublishedConfig config = new PublishedConfig();
         config.getSpec().setVersion("v1");
@@ -91,12 +125,16 @@ class TrafficColorResolverTest {
     }
 
     private PublishedConfig.PublishedPolicy trafficPolicy() {
+        return trafficPolicy(List.of(cookieRule()));
+    }
+
+    private PublishedConfig.PublishedPolicy trafficPolicy(List<TrafficPolicy.TrafficColorRule> rules) {
         PublishedConfig.PublishedPolicy policy = new PublishedConfig.PublishedPolicy();
         policy.setName("traffic-main");
         policy.setType("TrafficPolicy");
         policy.getConfig().put("trustRequestHeader", true);
         policy.getConfig().put("defaultColor", "stable");
-        policy.getConfig().put("colorRules", List.of(cookieRule()));
+        policy.getConfig().put("colorRules", rules);
         return policy;
     }
 
@@ -106,6 +144,23 @@ class TrafficColorResolverTest {
         rule.setKey("beta");
         rule.setMatch("true");
         rule.setColor("green");
+        return rule;
+    }
+
+    private TrafficPolicy.TrafficColorRule queryRule() {
+        TrafficPolicy.TrafficColorRule rule = new TrafficPolicy.TrafficColorRule();
+        rule.setSource(TrafficColorSource.QUERY);
+        rule.setKey("preview");
+        rule.setMatch("enabled");
+        rule.setColor("yellow");
+        return rule;
+    }
+
+    private TrafficPolicy.TrafficColorRule ipRule() {
+        TrafficPolicy.TrafficColorRule rule = new TrafficPolicy.TrafficColorRule();
+        rule.setSource(TrafficColorSource.IP);
+        rule.setMatch("10.20.30.40");
+        rule.setColor("gray");
         return rule;
     }
 
@@ -124,6 +179,13 @@ class TrafficColorResolverTest {
     private TrafficColorRequest request(Map<String, String> headers,
                                         Map<String, String> cookies,
                                         Map<String, String> query) {
+        return request(headers, cookies, query, "127.0.0.1");
+    }
+
+    private TrafficColorRequest request(Map<String, String> headers,
+                                        Map<String, String> cookies,
+                                        Map<String, String> query,
+                                        String remoteAddress) {
         return new TrafficColorRequest(
                 "api.example.com",
                 "/api/game/admin/users",
@@ -131,7 +193,7 @@ class TrafficColorResolverTest {
                 headers::get,
                 cookies::get,
                 query::get,
-                "127.0.0.1"
+                remoteAddress
         );
     }
 }

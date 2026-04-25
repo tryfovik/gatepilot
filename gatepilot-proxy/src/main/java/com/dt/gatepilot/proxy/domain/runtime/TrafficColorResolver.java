@@ -158,6 +158,9 @@ public class TrafficColorResolver {
         String normalizedPattern = normalizeText(pattern);
         String normalizedMatchStrategy = normalizeLiteral(matchStrategy, "exact");
         String normalizedColor = normalizeColor(color, null);
+        if (ipSource(normalizedSource) && normalizedFieldName == null) {
+            normalizedFieldName = "remoteAddress";
+        }
         if (normalizedFieldName == null || normalizedPattern == null || normalizedColor == null) {
             return null;
         }
@@ -214,11 +217,23 @@ public class TrafficColorResolver {
     }
 
     private String extractCandidate(TrafficColorRequest request, String source, String fieldName) {
+        if (ipSource(source)) {
+            return request.remoteAddress();
+        }
         return switch (source) {
             case "cookie" -> request.cookie(fieldName);
             case "query" -> request.query(fieldName);
             default -> request.header(fieldName);
         };
+    }
+
+    private boolean ipSource(String source) {
+        return "ip".equals(source)
+                || "client-ip".equals(source)
+                || "client_ip".equals(source)
+                || "remote-address".equals(source)
+                || "remote_address".equals(source)
+                || "remoteaddress".equals(source);
     }
 
     private String buildWeightedHashKey(CompiledPolicy policy, CompiledRoute route, TrafficColorRequest request) {

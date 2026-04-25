@@ -600,6 +600,51 @@ Envoy 是业界常用的高性能代理数据面，xDS 是控制面向 Envoy 动
 
 这只是升级方向，不是当前阶段的必选复杂度。当前阶段更重要的是先把控制面 / agent / proxy 边界设计成类似 xDS 的单向配置下发模型，保证以后换数据面时不会推倒重来。
 
+### Kubernetes 部署与联动
+
+GatePilot 默认面向 Kubernetes 部署。生产环境推荐分服务部署，单体 `gatepilot-app` 用于开发、演示、小规模环境或应急合包，不作为大流量集群的唯一形态。
+
+入口推荐拓扑：
+
+```text
+Client
+  -> VIP(HAProxy + Keepalived)
+  -> Nginx 集群
+  -> Kubernetes Service(gatepilot-proxy-<isolationGroup>)
+  -> gatepilot-proxy Pod + gatepilot-agent sidecar
+  -> Upstream Service / EndpointSlice / 外部上游
+```
+
+职责边界：
+
+- HAProxy + Keepalived 只负责 VIP 高可用、Nginx 节点健康检查和四层 / 七层入口转发，不承载 GatePilot 项目路由、灰度、染色和发布配置。
+- Nginx 集群负责 TLS 卸载、基础 WAF、静态入口、粗粒度 host 转发和到 GatePilot proxy Service 的负载均衡，不维护项目级治理规则。
+- GatePilot proxy 负责项目级路由、转发、限流、熔断、重试、染色、蓝绿 / 灰度执行和审计采集。
+- GatePilot apiserver 仍然是配置事实来源，生产配置写数据库；Kubernetes 资源不能绕过 apiserver 直接改数据面。
+- controller-manager 多副本运行时使用 Kubernetes Lease 或等价机制做 leader election，避免多个 controller 同时推进同一发布。
+- 每个 proxy Pod 建议携带 agent sidecar；agent 通过 Downward API / 环境变量读取 podName、namespace、zone、nodeName、isolationGroup、configShards 后注册为 `GatewayNode`。
+- 高流量项目使用独立 Deployment、Service、HPA、PDB、configShard 和 isolationGroup，Nginx 按 host 或入口路径转发到对应 proxy Service。
+
+近期只考虑 Kubernetes 基础部署联动，不做 CRD / Gateway API / Envoy / xDS 等深集成，避免把当前阶段复杂度拉高。下面能力只作为长期路线保留，不能插队影响当前开发主线：
+
+| 层级 | 能力 | GatePilot 落点 | 说明 |
+| --- | --- | --- | --- |
+| L1 | Deployment / Service / HPA / PDB / readiness | 运维部署规范和 Helm / manifest | 先保证 proxy 能无状态扩副本，控制面可多副本。 |
+| L2 | Service / EndpointSlice 服务发现 | `Upstream` 后续增加 Kubernetes discovery 引用 | 上游可从固定 endpoint 升级为发现 K8s Service endpoints。 |
+| L3 | Lease leader election | `gatepilot-controller-manager/infrastructure/leader` | 多 controller 只允许一个 active reconciler。 |
+| L4 | Gateway API / Ingress 入口集成 | 可选 K8s adapter | 只做入口资源对接或导入，不替代 GatePilot 数据库事实来源。 |
+| L5 | CRD / Operator | 长期可选能力 | 允许 `kubectl apply` 管理 GatePilot 资源，但必须通过 apiserver admission 和持久化。 |
+| L6 | Envoy / xDS 数据面 | 长期升级方向 | 高性能数据面可替换 Java proxy，但资源模型和控制面不推倒重来。 |
+
+上层已经有 Nginx 集群和 HAProxy + Keepalived VIP 时，当前阶段不需要 GatePilot 去实现 L4 负载均衡。GatePilot 要做的是把自己变成一个可横向扩容、可分片、可观测、可被 Nginx 稳定代理的数据面服务。
+
+参考官方能力：
+
+- Kubernetes Gateway API: https://kubernetes.io/docs/concepts/services-networking/gateway/
+- Kubernetes Service: https://kubernetes.io/docs/concepts/services-networking/service/
+- Kubernetes EndpointSlice: https://kubernetes.io/docs/reference/kubernetes-api/service-resources/endpoint-slice-v1/
+- Kubernetes client-go leader election: https://pkg.go.dev/k8s.io/client-go/tools/leaderelection
+
 ## 11. 历史模块退役约束
 
 父级 Maven reactor 只保留 GatePilot 新模块：
