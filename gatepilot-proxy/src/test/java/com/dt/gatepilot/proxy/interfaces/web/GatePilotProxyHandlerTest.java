@@ -5,11 +5,16 @@ import com.dt.gatepilot.domain.enums.Protocol;
 import com.dt.gatepilot.domain.enums.TrafficColorSource;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
+import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
+import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
+import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -29,6 +34,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class GatePilotProxyHandlerTest {
 
+    /**
+     * 应转发请求并写入染色请求头。
+     */
     @Test
     void shouldForwardRequestWithRewrittenPathAndTrafficColorHeader() {
         AtomicReference<ClientRequest> forwardedRequest = new AtomicReference<>();
@@ -51,6 +59,9 @@ class GatePilotProxyHandlerTest {
         assertThat(forwardedRequest.get().headers()).doesNotContainKey("X-Remove-Me");
     }
 
+    /**
+     * 应在转发前拒绝不支持的方法。
+     */
     @Test
     void shouldRejectUnsupportedMethodBeforeForwarding() {
         AtomicReference<ClientRequest> forwardedRequest = new AtomicReference<>();
@@ -67,6 +78,9 @@ class GatePilotProxyHandlerTest {
         assertThat(forwardedRequest.get()).isNull();
     }
 
+    /**
+     * 应在运行态为空时返回不可用。
+     */
     @Test
     void shouldReturnServiceUnavailableWhenRuntimeIsEmpty() {
         AtomicReference<ClientRequest> forwardedRequest = new AtomicReference<>();
@@ -80,11 +94,76 @@ class GatePilotProxyHandlerTest {
                 .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
 
+    /**
+     * 应在连续上游失败后打开熔断并返回 fallback。
+     */
+    @Test
+    void shouldOpenCircuitBreakerAfterUpstreamFailures() {
+        AtomicInteger forwardedCount = new AtomicInteger();
+        GatePilotProxyHandler handler = handler(runtimeWithCircuitBreaker(), forwardedCount, HttpStatus.INTERNAL_SERVER_ERROR);
+        WebTestClient client = client(handler);
+
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                .expectBody(String.class)
+                .value(body -> assertThat(body)
+                        .contains("\"code\":90001")
+                        .contains("服务临时不可用"));
+
+        assertThat(forwardedCount.get()).isEqualTo(2);
+    }
+
+    /**
+     * 应在上游异常时记录失败并返回 fallback。
+     */
+    @Test
+    void shouldFallbackWhenForwardFailedWithCircuitBreaker() {
+        AtomicInteger forwardedCount = new AtomicInteger();
+        GatePilotProxyHandler handler = handlerWithError(runtimeWithCircuitBreaker(), forwardedCount);
+        WebTestClient client = client(handler);
+
+        client.get()
+                .uri("/api/game/admin/users")
+                .header(HttpHeaders.HOST, "api.example.com")
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("服务临时不可用"));
+
+        assertThat(forwardedCount.get()).isEqualTo(1);
+    }
+
+    /**
+     * 创建 WebTestClient。
+     *
+     * @param handler proxy 入口处理器
+     * @return WebTestClient
+     */
     private WebTestClient client(GatePilotProxyHandler handler) {
         return WebTestClient.bindToRouterFunction(RouterFunctions.route(RequestPredicates.all(), handler::handle))
                 .build();
     }
 
+    /**
+     * 创建默认成功转发处理器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param forwardedRequest 转发请求记录器
+     * @return proxy 入口处理器
+     */
     private GatePilotProxyHandler handler(ProxyRuntimeState runtimeState,
                                           AtomicReference<ClientRequest> forwardedRequest) {
         WebClient webClient = WebClient.builder()
@@ -97,16 +176,90 @@ class GatePilotProxyHandlerTest {
                 runtimeState,
                 new RouteAccessEvaluator(),
                 new TrafficColorResolver(),
+                new CircuitBreakerPolicyResolver(),
+                new RouteCircuitBreaker(),
                 webClient
         );
     }
 
+    /**
+     * 创建固定状态转发处理器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param forwardedCount 转发计数器
+     * @param status 上游状态
+     * @return proxy 入口处理器
+     */
+    private GatePilotProxyHandler handler(ProxyRuntimeState runtimeState,
+                                          AtomicInteger forwardedCount,
+                                          HttpStatus status) {
+        WebClient webClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    forwardedCount.incrementAndGet();
+                    return Mono.just(ClientResponse.create(status).body("upstream").build());
+                })
+                .build();
+        return new GatePilotProxyHandler(
+                runtimeState,
+                new RouteAccessEvaluator(),
+                new TrafficColorResolver(),
+                new CircuitBreakerPolicyResolver(),
+                new RouteCircuitBreaker(),
+                webClient
+        );
+    }
+
+    /**
+     * 创建异常转发处理器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param forwardedCount 转发计数器
+     * @return proxy 入口处理器
+     */
+    private GatePilotProxyHandler handlerWithError(ProxyRuntimeState runtimeState, AtomicInteger forwardedCount) {
+        WebClient webClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    forwardedCount.incrementAndGet();
+                    return Mono.error(new IllegalStateException("upstream error"));
+                })
+                .build();
+        return new GatePilotProxyHandler(
+                runtimeState,
+                new RouteAccessEvaluator(),
+                new TrafficColorResolver(),
+                new CircuitBreakerPolicyResolver(),
+                new RouteCircuitBreaker(),
+                webClient
+        );
+    }
+
+    /**
+     * 创建默认运行态。
+     *
+     * @return proxy 运行态
+     */
     private ProxyRuntimeState runtime() {
         ProxyRuntimeState state = new ProxyRuntimeState();
         state.switchTo(new PublishedConfigCompiler().compile(config()));
         return state;
     }
 
+    /**
+     * 创建带熔断的运行态。
+     *
+     * @return proxy 运行态
+     */
+    private ProxyRuntimeState runtimeWithCircuitBreaker() {
+        ProxyRuntimeState state = new ProxyRuntimeState();
+        state.switchTo(new PublishedConfigCompiler().compile(configWithCircuitBreaker()));
+        return state;
+    }
+
+    /**
+     * 创建默认发布配置。
+     *
+     * @return 发布配置
+     */
     private PublishedConfig config() {
         PublishedConfig config = new PublishedConfig();
         config.getSpec().setVersion("v1");
@@ -117,6 +270,23 @@ class GatePilotProxyHandlerTest {
         return config;
     }
 
+    /**
+     * 创建带熔断的发布配置。
+     *
+     * @return 发布配置
+     */
+    private PublishedConfig configWithCircuitBreaker() {
+        PublishedConfig config = config();
+        config.getSpec().getPolicies().clear();
+        config.getSpec().getPolicies().add(trafficPolicyWithCircuitBreaker());
+        return config;
+    }
+
+    /**
+     * 创建默认路由。
+     *
+     * @return 发布路由
+     */
     private PublishedConfig.PublishedRoute route() {
         PublishedConfig.PublishedRoute route = new PublishedConfig.PublishedRoute();
         route.setRouteId("admin");
@@ -132,6 +302,11 @@ class GatePilotProxyHandlerTest {
         return route;
     }
 
+    /**
+     * 创建默认上游。
+     *
+     * @return 发布上游
+     */
     private PublishedConfig.PublishedUpstream upstream() {
         PublishedConfig.PublishedUpstream upstream = new PublishedConfig.PublishedUpstream();
         upstream.setName("admin-upstream");
@@ -144,16 +319,43 @@ class GatePilotProxyHandlerTest {
         return upstream;
     }
 
+    /**
+     * 创建默认流量策略。
+     *
+     * @return 发布策略
+     */
     private PublishedConfig.PublishedPolicy trafficPolicy() {
         PublishedConfig.PublishedPolicy policy = new PublishedConfig.PublishedPolicy();
         policy.setName("traffic-main");
-        policy.setType("TrafficPolicy");
+        policy.setType(PublishedConfigConstants.POLICY_TYPE_TRAFFIC);
         TrafficPolicy.TrafficColorRule rule = new TrafficPolicy.TrafficColorRule();
         rule.setSource(TrafficColorSource.QUERY);
         rule.setKey("preview");
         rule.setMatch("enabled");
         rule.setColor("yellow");
-        policy.getConfig().put("colorRules", List.of(rule));
+        policy.getConfig().put(PublishedConfigConstants.KEY_COLOR_RULES, List.of(rule));
+        return policy;
+    }
+
+    /**
+     * 创建带熔断的流量策略。
+     *
+     * @return 发布策略
+     */
+    private PublishedConfig.PublishedPolicy trafficPolicyWithCircuitBreaker() {
+        PublishedConfig.PublishedPolicy policy = trafficPolicy();
+        TrafficPolicy.CircuitBreakerPolicy circuitBreaker = new TrafficPolicy.CircuitBreakerPolicy();
+        circuitBreaker.setEnabled(true);
+        circuitBreaker.setSlidingWindowSize(2);
+        circuitBreaker.setMinimumNumberOfCalls(2);
+        circuitBreaker.setFailureRateThreshold(50);
+        circuitBreaker.setWaitDurationInOpenState(Duration.ofSeconds(30));
+        circuitBreaker.setPermittedNumberOfCallsInHalfOpenState(1);
+        circuitBreaker.setStatusCodes(List.of(500));
+        circuitBreaker.setFallbackStatus(503);
+        circuitBreaker.setFallbackCode(90001);
+        circuitBreaker.setFallbackMessage("服务临时不可用");
+        policy.getConfig().put(PublishedConfigConstants.KEY_CIRCUIT_BREAKER, circuitBreaker);
         return policy;
     }
 }

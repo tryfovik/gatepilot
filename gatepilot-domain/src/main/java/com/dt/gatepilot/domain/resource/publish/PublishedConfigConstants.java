@@ -190,6 +190,75 @@ public final class PublishedConfigConstants {
      */
     public static final String KEY_DEFAULT_COLOR = "defaultColor";
 
+    /**
+     * enabled 配置键。
+     */
+    public static final String KEY_ENABLED = "enabled";
+
+    /**
+     * slidingWindowSize 配置键。
+     */
+    public static final String KEY_SLIDING_WINDOW_SIZE = "slidingWindowSize";
+
+    /**
+     * minimumNumberOfCalls 配置键。
+     */
+    public static final String KEY_MINIMUM_NUMBER_OF_CALLS = "minimumNumberOfCalls";
+
+    /**
+     * failureRateThreshold 配置键。
+     */
+    public static final String KEY_FAILURE_RATE_THRESHOLD = "failureRateThreshold";
+
+    /**
+     * slowCallRateThreshold 配置键。
+     */
+    public static final String KEY_SLOW_CALL_RATE_THRESHOLD = "slowCallRateThreshold";
+
+    /**
+     * slowCallDurationThreshold 配置键。
+     */
+    public static final String KEY_SLOW_CALL_DURATION_THRESHOLD = "slowCallDurationThreshold";
+
+    /**
+     * waitDurationInOpenState 配置键。
+     */
+    public static final String KEY_WAIT_DURATION_IN_OPEN_STATE = "waitDurationInOpenState";
+
+    /**
+     * permittedNumberOfCallsInHalfOpenState 配置键。
+     */
+    public static final String KEY_PERMITTED_NUMBER_OF_CALLS_IN_HALF_OPEN_STATE =
+            "permittedNumberOfCallsInHalfOpenState";
+
+    /**
+     * statusCodes 配置键。
+     */
+    public static final String KEY_STATUS_CODES = "statusCodes";
+
+    /**
+     * fallbackStatus 配置键。
+     */
+    public static final String KEY_FALLBACK_STATUS = "fallbackStatus";
+
+    /**
+     * fallbackCode 配置键。
+     */
+    public static final String KEY_FALLBACK_CODE = "fallbackCode";
+
+    /**
+     * fallbackMessage 配置键。
+     */
+    public static final String KEY_FALLBACK_MESSAGE = "fallbackMessage";
+
+    /**
+     * contentType 配置键。
+     */
+    public static final String KEY_CONTENT_TYPE = "contentType";
+
+    /**
+     * 隐藏工具类构造器。
+     */
     private PublishedConfigConstants() {
         // 发布配置常量不允许实例化
     }

@@ -702,7 +702,7 @@ Client
 | `platform-gateway-runtime/GatewayMethodAccessFilter` | HTTP 方法白名单 | `gatepilot-proxy` | 已覆盖策略判断和 WebFlux 405 执行 | 改为读取编译后的 route policy，热路径不能访问控制面 |
 | `platform-gateway-runtime/InternalRouteAccessFilter` | 内部运维入口保护 | `gatepilot-proxy` 或 `gatepilot-apiserver` 各自入口保护 | 未覆盖 | 按入口分开，proxy 保护本机 apply / health / state，apiserver 保护管理 API |
 | `platform-gateway-runtime/GatewayTrafficColorFilter` | 流量染色执行和响应头回写 | `gatepilot-proxy` | 已覆盖解析、请求头透传和响应头回写，规则级自定义 propagateHeaders 仍缺 | 与灰度、蓝绿选择统一走运行态策略快照 |
-| `platform-gateway-runtime/GatewayCircuitBreakerFilter` | 轻量熔断和 fallback | `gatepilot-proxy` | 未覆盖 | 参考旧状态机和测试样本，优先评估 getboot-governance / Sentinel 能力，缺失能力先补 getboot |
+| `platform-gateway-runtime/GatewayCircuitBreakerFilter` | 轻量熔断和 fallback | `gatepilot-proxy` | 已覆盖本机滑动窗口状态机、OPEN / HALF_OPEN / CLOSED 转换和 getboot `ApiResponse` fallback，Sentinel / getboot-governance 仍未接入 | 策略来自 `PublishedConfig`，状态只存在 proxy 本机内存，后续限流和治理公共能力仍优先接 getboot |
 | `platform-gateway-runtime/GatewayAccessAuditFilter` | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | 只有端口占位，采集 / 上报 / 查询未完成 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
 | `platform-gateway-runtime/UpstreamHealthIndicator` | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | agent 上报模型已预留，主动探测未完成 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |
 | `platform-gateway-server/GatewaySentinelRuleRegistrar` | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 未覆盖 | 规则由 `PublishedConfig` 编译生成，不再从旧 YAML 全量注册 |

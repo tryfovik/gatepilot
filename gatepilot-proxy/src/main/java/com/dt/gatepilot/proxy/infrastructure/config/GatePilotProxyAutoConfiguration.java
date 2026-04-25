@@ -1,9 +1,11 @@
 package com.dt.gatepilot.proxy.infrastructure.config;
 
+import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
+import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
 import com.dt.gatepilot.proxy.interfaces.web.GatePilotProxyHandler;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyHttpConstants;
@@ -88,11 +90,37 @@ public class GatePilotProxyAutoConfiguration {
     }
 
     /**
+     * 创建熔断策略解析器。
+     *
+     * @return 熔断策略解析器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public CircuitBreakerPolicyResolver circuitBreakerPolicyResolver() {
+        // 熔断策略解析只消费已编译策略快照
+        return new CircuitBreakerPolicyResolver();
+    }
+
+    /**
+     * 创建路由熔断器。
+     *
+     * @return 路由熔断器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public RouteCircuitBreaker routeCircuitBreaker() {
+        // 熔断状态按 proxy 进程本地维护，扩副本时天然隔离
+        return new RouteCircuitBreaker();
+    }
+
+    /**
      * 创建 proxy WebFlux 入口处理器。
      *
      * @param runtimeState proxy 运行态
      * @param accessEvaluator 路由访问判断器
      * @param trafficColorResolver 流量染色解析器
+     * @param circuitBreakerPolicyResolver 熔断策略解析器
+     * @param routeCircuitBreaker 路由熔断器
      * @param webClientBuilder WebClient 构造器
      * @return proxy WebFlux 入口处理器
      */
@@ -101,9 +129,18 @@ public class GatePilotProxyAutoConfiguration {
     public GatePilotProxyHandler gatePilotProxyHandler(ProxyRuntimeState runtimeState,
                                                        RouteAccessEvaluator accessEvaluator,
                                                        TrafficColorResolver trafficColorResolver,
+                                                       CircuitBreakerPolicyResolver circuitBreakerPolicyResolver,
+                                                       RouteCircuitBreaker routeCircuitBreaker,
                                                        WebClient.Builder webClientBuilder) {
         // WebClient.Builder 由 getboot-http-client 增强时可自动继承 Trace 透传
-        return new GatePilotProxyHandler(runtimeState, accessEvaluator, trafficColorResolver, webClientBuilder.build());
+        return new GatePilotProxyHandler(
+                runtimeState,
+                accessEvaluator,
+                trafficColorResolver,
+                circuitBreakerPolicyResolver,
+                routeCircuitBreaker,
+                webClientBuilder.build()
+        );
     }
 
     /**
@@ -118,6 +155,11 @@ public class GatePilotProxyAutoConfiguration {
         return RouterFunctions.route(proxyPath(), handler::handle);
     }
 
+    /**
+     * 创建 proxy 路由匹配器。
+     *
+     * @return proxy 路由匹配器
+     */
     private RequestPredicate proxyPath() {
         // GatePilot 管理 API 不走数据面代理
         return RequestPredicates.path(ProxyHttpConstants.API_PROXY_PATH)

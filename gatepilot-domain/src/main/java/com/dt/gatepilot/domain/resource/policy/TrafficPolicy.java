@@ -142,6 +142,11 @@ public class TrafficPolicy {
         private Boolean enabled;
 
         /**
+         * 滑动窗口大小。
+         */
+        private Integer slidingWindowSize;
+
+        /**
          * 熔断窗口内最小请求数。
          */
         private Integer minimumNumberOfCalls;
@@ -152,6 +157,11 @@ public class TrafficPolicy {
         private Integer failureRateThreshold;
 
         /**
+         * 慢调用率阈值。
+         */
+        private Integer slowCallRateThreshold;
+
+        /**
          * 慢调用阈值。
          */
         private Duration slowCallDurationThreshold;
@@ -160,6 +170,36 @@ public class TrafficPolicy {
          * 熔断打开后的等待时间。
          */
         private Duration waitDurationInOpenState;
+
+        /**
+         * 半开状态允许的探测请求数。
+         */
+        private Integer permittedNumberOfCallsInHalfOpenState;
+
+        /**
+         * 视为失败的 HTTP 状态码。
+         */
+        private List<Integer> statusCodes = new ArrayList<>();
+
+        /**
+         * fallback HTTP 状态。
+         */
+        private Integer fallbackStatus;
+
+        /**
+         * fallback 业务码。
+         */
+        private Integer fallbackCode;
+
+        /**
+         * fallback 提示。
+         */
+        private String fallbackMessage;
+
+        /**
+         * fallback 响应类型。
+         */
+        private String contentType;
     }
 
     /**

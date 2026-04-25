@@ -26,6 +26,16 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.dt</groupId>
+            <artifactId>getboot-web</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-web</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
