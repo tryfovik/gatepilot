@@ -42,7 +42,7 @@ public class GatePilotAgentAutoConfiguration {
     @ConditionalOnMissingBean
     public AgentNodeProfile agentNodeProfile(GatePilotAgentProperties properties) {
         AgentNodeProfile profile = new AgentNodeProfile();
-        // 节点身份只从配置装配，不在运行链路里猜测
+        // 节点身份只从网关配置装配，避免同一职责出现多套来源
         profile.setNamespace(properties.getNamespace());
         profile.setNodeId(properties.getNodeId());
         profile.setRole(properties.getRole());

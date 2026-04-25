@@ -673,7 +673,7 @@ Client
 - GatePilot proxy 负责项目级路由、转发、限流、熔断、重试、染色、蓝绿 / 灰度执行和审计采集。
 - GatePilot apiserver 仍然是配置事实来源，生产配置写数据库；Kubernetes 资源不能绕过 apiserver 直接改数据面。
 - controller-manager 多副本运行时使用 Kubernetes Lease 或等价机制做 leader election，避免多个 controller 同时推进同一发布。
-- 每个 proxy Pod 建议携带 agent sidecar；agent 通过 Downward API / 环境变量读取 podName、namespace、zone、nodeName、isolationGroup、configShards 后注册为 `GatewayNode`。
+- 每个 proxy Pod 建议携带 agent sidecar；agent 只从网关配置读取 namespace、nodeId、zone、isolationGroup、configShards 后注册为 `GatewayNode`，这些配置由 Nacos 等配置中心统一下发。
 - 高流量项目使用独立 Deployment、Service、HPA、PDB、configShard 和 isolationGroup，Nginx 按 host 或入口路径转发到对应 proxy Service。
 
 近期只考虑 Kubernetes 基础部署联动，不做 CRD / Gateway API / Envoy / xDS 等深集成，避免把当前阶段复杂度拉高。下面能力只作为长期路线保留，不能插队影响当前开发主线：
