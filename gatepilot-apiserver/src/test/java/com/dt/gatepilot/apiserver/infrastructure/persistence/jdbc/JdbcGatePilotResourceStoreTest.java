@@ -6,10 +6,13 @@ import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverProper
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.getboot.exception.api.exception.BusinessException;
+import java.util.UUID;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * JDBC 资源存储测试。
@@ -31,6 +34,7 @@ class JdbcGatePilotResourceStoreTest {
 
         store.save(ResourceKind.GATEWAY_PROJECT, "default", "game", first, GatewayProject.class);
         store.save(ResourceKind.GATEWAY_PROJECT, "default", "order", second, GatewayProject.class);
+        String firstUid = first.getMetadata().getUid();
         first.getSpec().setDisplayName("Game Platform Updated");
         store.save(ResourceKind.GATEWAY_PROJECT, "default", "game", first, GatewayProject.class);
         CursorPage<GatewayProject> page =
@@ -39,10 +43,35 @@ class JdbcGatePilotResourceStoreTest {
                 .orElseThrow();
 
         assertThat(found.getSpec().getDisplayName()).isEqualTo("Game Platform Updated");
+        assertThat(found.getMetadata().getUid()).isEqualTo(firstUid);
         assertThat(found.getMetadata().getGeneration()).isEqualTo(2L);
         assertThat(page.getItems()).hasSize(1);
         assertThat(page.getTotal()).isEqualTo(2);
         assertThat(page.getNextCursor()).isEqualTo("default/order");
+    }
+
+    @Test
+    void shouldRejectStaleGenerationUpdate() {
+        store.initializeSchema();
+        GatewayProject first = project("Game Platform");
+        store.save(ResourceKind.GATEWAY_PROJECT, "default", "game", first, GatewayProject.class);
+        GatewayProject stale = store.find(ResourceKind.GATEWAY_PROJECT, "default", "game", GatewayProject.class)
+                .orElseThrow();
+        GatewayProject latest = store.find(ResourceKind.GATEWAY_PROJECT, "default", "game", GatewayProject.class)
+                .orElseThrow();
+
+        latest.getSpec().setDisplayName("Fresh Update");
+        store.save(ResourceKind.GATEWAY_PROJECT, "default", "game", latest, GatewayProject.class);
+        stale.getSpec().setDisplayName("Stale Update");
+
+        assertThatThrownBy(() -> store.save(ResourceKind.GATEWAY_PROJECT, "default", "game",
+                stale, GatewayProject.class))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining(JdbcResourceStoreConstants.MESSAGE_RESOURCE_WRITE_CONFLICT);
+        GatewayProject found = store.find(ResourceKind.GATEWAY_PROJECT, "default", "game", GatewayProject.class)
+                .orElseThrow();
+        assertThat(found.getSpec().getDisplayName()).isEqualTo("Fresh Update");
+        assertThat(found.getMetadata().getGeneration()).isEqualTo(2L);
     }
 
     private GatewayProject project(String displayName) {
@@ -53,7 +82,9 @@ class JdbcGatePilotResourceStoreTest {
 
     private JdbcDataSource dataSource() {
         JdbcDataSource dataSource = new JdbcDataSource();
-        dataSource.setUrl("jdbc:h2:mem:gatepilot_resource_store;MODE=MySQL;DB_CLOSE_DELAY=-1");
+        // 每个测试使用独立内存库，避免 generation 相互污染
+        dataSource.setUrl("jdbc:h2:mem:gatepilot_resource_store_" + UUID.randomUUID().toString().replace("-", "_")
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1");
         dataSource.setUser("sa");
         dataSource.setPassword("");
         return dataSource;

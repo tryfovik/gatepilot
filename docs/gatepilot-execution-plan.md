@@ -161,7 +161,7 @@ console
 - [x] 按 GatePilot 模型重建配置存储端口到 `gatepilot-apiserver`。
 - [x] 实现基于数据库的 `GatePilotResourceStore` 生产存储。
 - [x] 基于数据库实现资源 generation 递增、索引分页和审计时间字段。
-- [ ] 基于数据库实现跨副本乐观锁写入保护。
+- [x] 基于数据库实现跨副本乐观锁写入保护。
 - [x] 按 GatePilot 模型重建配置查看能力到 `gatepilot-apiserver`。
 - [x] 按 GatePilot 模型重建配置 dry-run 校验到 `gatepilot-apiserver`。
 - [x] 按 GatePilot 模型重建配置 diff 到 `gatepilot-apiserver`。

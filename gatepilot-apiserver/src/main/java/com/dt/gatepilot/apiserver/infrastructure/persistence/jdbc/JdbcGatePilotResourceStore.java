@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
@@ -34,8 +35,6 @@ import org.springframework.util.StringUtils;
         name = GatePilotApiserverConstants.STORE_TYPE_PROPERTY,
         havingValue = GatePilotApiserverConstants.STORE_TYPE_JDBC)
 public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
-
-    private static final int MAX_LIMIT = 500;
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -87,21 +86,19 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
     }
 
     @Override
-    public synchronized <T> T save(ResourceKind kind, String namespace, String name, T resource, Class<T> resourceType) {
+    public <T> T save(ResourceKind kind, String namespace, String name, T resource, Class<T> resourceType) {
         ResourceMetadata metadata = metadataSupport.metadataOf(resource);
         Instant now = Instant.now();
         metadata.setNamespace(namespace);
         metadata.setName(name);
-        if (!StringUtils.hasText(metadata.getUid())) {
-            metadata.setUid(UUID.randomUUID().toString());
+        // 入参 generation 就是本次写入的期望版本
+        Long expectedGeneration = metadata.getGeneration();
+        Optional<ResourceVersion> currentVersion = currentVersion(kind, namespace, name);
+        if (currentVersion.isEmpty()) {
+            insertNew(kind, namespace, name, metadata, resource, expectedGeneration, now);
+            return resource;
         }
-        if (metadata.getCreatedAt() == null) {
-            metadata.setCreatedAt(now);
-        }
-        metadata.setUpdatedAt(now);
-        long generation = nextGeneration(kind, namespace, name, metadata);
-        metadata.setGeneration(generation);
-        upsert(kind, namespace, name, metadata, resource);
+        updateExisting(kind, namespace, name, metadata, resource, expectedGeneration, currentVersion.get(), now);
         return resource;
     }
 
@@ -124,7 +121,7 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
                                           String cursor,
                                           int limit,
                                           Class<T> resourceType) {
-        int effectiveLimit = Math.max(1, Math.min(limit, MAX_LIMIT));
+        int effectiveLimit = Math.max(1, Math.min(limit, JdbcResourceStoreConstants.MAX_LIMIT));
         String effectiveNamespace = normalizeNamespace(namespace);
         String effectiveCursor = cursorValue(cursor);
         List<T> items = jdbcTemplate.query("""
@@ -166,29 +163,81 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
                 name);
     }
 
-    private long nextGeneration(ResourceKind kind, String namespace, String name, ResourceMetadata metadata) {
-        Long oldGeneration = jdbcTemplate.query("""
-                        select generation from %s
+    private Optional<ResourceVersion> currentVersion(ResourceKind kind, String namespace, String name) {
+        // 只读取 CAS 写入需要的最小版本字段
+        List<ResourceVersion> versions = jdbcTemplate.query("""
+                        select uid, generation, created_at from %s
                         where kind = ? and namespace = ? and name = ?
                         """.formatted(tableName()),
-                resultSet -> resultSet.next() ? resultSet.getLong("generation") : null,
+                (resultSet, rowNum) -> new ResourceVersion(
+                        resultSet.getString("uid"),
+                        resultSet.getLong("generation"),
+                        resultSet.getTimestamp("created_at").toInstant()
+                ),
                 kind.name(),
                 namespace,
                 name);
-        if (oldGeneration == null) {
-            return Optional.ofNullable(metadata.getGeneration()).orElse(1L);
-        }
-        return oldGeneration + 1L;
+        return versions.stream().findFirst();
     }
 
-    private void upsert(ResourceKind kind, String namespace, String name, ResourceMetadata metadata, Object resource) {
+    private void insertNew(ResourceKind kind,
+                           String namespace,
+                           String name,
+                           ResourceMetadata metadata,
+                           Object resource,
+                           Long expectedGeneration,
+                           Instant now) {
+        if (expectedGeneration != null) {
+            throw writeConflict();
+        }
+        // 新资源由控制面生成 uid 和第一代 generation
+        if (!StringUtils.hasText(metadata.getUid())) {
+            metadata.setUid(UUID.randomUUID().toString());
+        }
+        if (metadata.getCreatedAt() == null) {
+            metadata.setCreatedAt(now);
+        }
+        metadata.setUpdatedAt(now);
+        metadata.setGeneration(JdbcResourceStoreConstants.FIRST_GENERATION);
+        try {
+            jdbcTemplate.update("""
+                            insert into %s(kind, namespace, name, uid, generation, resource_json, created_at, updated_at)
+                            values (?, ?, ?, ?, ?, ?, ?, ?)
+                            """.formatted(tableName()),
+                    kind.name(),
+                    namespace,
+                    name,
+                    metadata.getUid(),
+                    metadata.getGeneration(),
+                    writeResource(resource),
+                    Timestamp.from(metadata.getCreatedAt()),
+                    Timestamp.from(metadata.getUpdatedAt()));
+        } catch (DuplicateKeyException exception) {
+            throw writeConflict();
+        }
+    }
+
+    private void updateExisting(ResourceKind kind,
+                                String namespace,
+                                String name,
+                                ResourceMetadata metadata,
+                                Object resource,
+                                Long expectedGeneration,
+                                ResourceVersion currentVersion,
+                                Instant now) {
+        long expected = Optional.ofNullable(expectedGeneration).orElse(currentVersion.generation());
+        metadata.setUid(currentVersion.uid());
+        metadata.setCreatedAt(Optional.ofNullable(metadata.getCreatedAt()).orElse(currentVersion.createdAt()));
+        metadata.setUpdatedAt(now);
+        metadata.setGeneration(currentVersion.generation() + JdbcResourceStoreConstants.GENERATION_STEP);
+        // update 带 generation 条件，跨副本并发写入只能成功一个
         int updated = jdbcTemplate.update("""
                         update %s
                         set uid = ?,
                             generation = ?,
                             resource_json = ?,
                             updated_at = ?
-                        where kind = ? and namespace = ? and name = ?
+                        where kind = ? and namespace = ? and name = ? and generation = ?
                         """.formatted(tableName()),
                 metadata.getUid(),
                 metadata.getGeneration(),
@@ -196,29 +245,19 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
                 Timestamp.from(metadata.getUpdatedAt()),
                 kind.name(),
                 namespace,
-                name);
-        if (updated > 0) {
-            return;
-        }
-        jdbcTemplate.update("""
-                        insert into %s(kind, namespace, name, uid, generation, resource_json, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?)
-                        """.formatted(tableName()),
-                kind.name(),
-                namespace,
                 name,
-                metadata.getUid(),
-                metadata.getGeneration(),
-                writeResource(resource),
-                Timestamp.from(metadata.getCreatedAt()),
-                Timestamp.from(metadata.getUpdatedAt()));
+                expected);
+        if (updated == 0) {
+            throw writeConflict();
+        }
     }
 
     private <T> T readResource(ResultSet resultSet, Class<T> resourceType) throws SQLException {
         try {
             return objectMapper.readValue(resultSet.getString("resource_json"), resourceType);
         } catch (JsonProcessingException exception) {
-            throw new BusinessException(CommonErrorCode.ERROR.code(), "resource json deserialization failed", exception);
+            throw new BusinessException(CommonErrorCode.ERROR.code(),
+                    JdbcResourceStoreConstants.MESSAGE_JSON_DESERIALIZATION_FAILED, exception);
         }
     }
 
@@ -226,7 +265,8 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
         try {
             return objectMapper.writeValueAsString(resource);
         } catch (JsonProcessingException exception) {
-            throw new BusinessException(CommonErrorCode.ERROR.code(), "resource json serialization failed", exception);
+            throw new BusinessException(CommonErrorCode.ERROR.code(),
+                    JdbcResourceStoreConstants.MESSAGE_JSON_SERIALIZATION_FAILED, exception);
         }
     }
 
@@ -253,9 +293,22 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
 
     private String tableName() {
         String tableName = properties.getStore().getJdbc().getTableName();
-        if (!StringUtils.hasText(tableName) || !tableName.matches("[a-zA-Z0-9_]+")) {
-            throw new BusinessException(CommonErrorCode.ERROR.code(), "invalid gatepilot resource table name");
+        if (!StringUtils.hasText(tableName) || !tableName.matches(JdbcResourceStoreConstants.TABLE_NAME_PATTERN)) {
+            throw new BusinessException(CommonErrorCode.ERROR.code(),
+                    JdbcResourceStoreConstants.MESSAGE_INVALID_TABLE_NAME);
         }
         return tableName;
+    }
+
+    private BusinessException writeConflict() {
+        // 统一返回 409 语义，提示调用方刷新资源后重试
+        return new BusinessException(CommonErrorCode.REQUEST_PROCESSING.code(),
+                JdbcResourceStoreConstants.MESSAGE_RESOURCE_WRITE_CONFLICT);
+    }
+
+    /**
+     * 数据库中的资源版本。
+     */
+    private record ResourceVersion(String uid, long generation, Instant createdAt) {
     }
 }
