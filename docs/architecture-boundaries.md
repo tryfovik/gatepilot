@@ -108,6 +108,7 @@ private String version;
 - `gatepilot.apiserver.store.type=memory` 只允许开发测试使用。
 - `gatepilot.apiserver.store.type=jdbc` 使用 getboot-database 提供的数据源和数据库增强能力，资源表结构参考 `gatepilot-apiserver/src/main/resources/db/gatepilot/schema-mysql.sql`。
 - 后续数据库访问、事务、分页、乐观锁和审计字段优先复用 getboot 数据访问规范和能力；如果 getboot 缺能力，先回 getboot 补，再让 GatePilot 接入。
+- GatePilot 关系型数据库访问必须基于 getboot-database 接入 MyBatis-Plus；单表 CRUD 优先用 Mapper / BaseMapper，复杂 SQL 必须放在 mapper.xml，禁止在业务代码里用 JdbcTemplate 或字符串拼接 SQL。
 - controller-manager、agent、proxy 都不能直接访问 GatePilot 配置数据库，只能通过 apiserver API 或 apiserver 提供的进程内端口访问资源。
 
 发布边界：

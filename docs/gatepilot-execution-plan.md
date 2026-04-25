@@ -119,6 +119,7 @@ console
 - [x] 补充后端开发必须参考 getboot 开发规范。
 - [x] 写入公共能力必须先查 getboot、缺失也必须先补 getboot 的硬性规则。
 - [x] 对齐 getboot `ApiResponse`、`X-Trace-Id`、MDC `traceId` 和 HTTP 出站透传约定。
+- [x] 写入关系型数据库访问必须基于 getboot-database、MyBatis-Plus 和 mapper.xml 的规则。
 - [x] 写入并执行 GatePilot Java 展开式 Javadoc 注释格式。
 - [x] 写入方法内中文注释规则：注释要短、核心、像人写，末尾不加句号。
 - [x] 写入硬编码禁止规则：路径、Header、label、reason、配置 key、默认值必须进入上下文常量类。
@@ -162,6 +163,7 @@ console
 - [x] 实现基于数据库的 `GatePilotResourceStore` 生产存储。
 - [x] 基于数据库实现资源 generation 递增、索引分页和审计时间字段。
 - [x] 基于数据库实现跨副本乐观锁写入保护。
+- [x] 将数据库资源存储改为 getboot-database + MyBatis-Plus Mapper 实现，复杂查询收敛到 mapper.xml。
 - [x] 按 GatePilot 模型重建配置查看能力到 `gatepilot-apiserver`。
 - [x] 按 GatePilot 模型重建配置 dry-run 校验到 `gatepilot-apiserver`。
 - [x] 按 GatePilot 模型重建配置 diff 到 `gatepilot-apiserver`。

@@ -39,11 +39,6 @@ public class GatePilotApiserverProperties {
     public static class Jdbc {
 
         /**
-         * 资源表名。
-         */
-        private String tableName = GatePilotApiserverConstants.DEFAULT_RESOURCE_TABLE;
-
-        /**
          * 是否启动时初始化资源表结构。
          */
         private boolean initializeSchema = false;

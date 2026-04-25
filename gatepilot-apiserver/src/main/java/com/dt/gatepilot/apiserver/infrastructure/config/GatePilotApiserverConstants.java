@@ -30,11 +30,6 @@ public final class GatePilotApiserverConstants {
      */
     public static final String STORE_TYPE_JDBC = "jdbc";
 
-    /**
-     * 默认资源表名。
-     */
-    public static final String DEFAULT_RESOURCE_TABLE = "gatepilot_resource";
-
     private GatePilotApiserverConstants() {
         // apiserver 配置常量不允许实例化
     }

@@ -11,6 +11,16 @@ public final class JdbcResourceStoreConstants {
     public static final int MAX_LIMIT = 500;
 
     /**
+     * 资源表名。
+     */
+    public static final String TABLE_NAME = "gatepilot_resource";
+
+    /**
+     * 初始化脚本路径。
+     */
+    public static final String SCHEMA_LOCATION = "db/gatepilot/schema-mysql.sql";
+
+    /**
      * 首次写入 generation。
      */
     public static final long FIRST_GENERATION = 1L;
@@ -19,11 +29,6 @@ public final class JdbcResourceStoreConstants {
      * 每次成功写入的 generation 增量。
      */
     public static final long GENERATION_STEP = 1L;
-
-    /**
-     * 表名白名单正则。
-     */
-    public static final String TABLE_NAME_PATTERN = "[a-zA-Z0-9_]+";
 
     /**
      * 资源写入冲突提示。
@@ -39,11 +44,6 @@ public final class JdbcResourceStoreConstants {
      * 资源 JSON 序列化失败提示。
      */
     public static final String MESSAGE_JSON_SERIALIZATION_FAILED = "resource json serialization failed";
-
-    /**
-     * 无效资源表名提示。
-     */
-    public static final String MESSAGE_INVALID_TABLE_NAME = "invalid gatepilot resource table name";
 
     private JdbcResourceStoreConstants() {
         // JDBC 资源存储常量不允许实例化

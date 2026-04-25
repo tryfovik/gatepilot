@@ -48,7 +48,6 @@ gatepilot:
     store:
       type: memory
       jdbc:
-        table-name: gatepilot_resource
         initialize-schema: false
   agent:
     enabled: true

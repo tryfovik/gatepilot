@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dt.gatepilot.apiserver.infrastructure.persistence.jdbc.GatePilotResourceMapper">
+
+    <resultMap id="GatePilotResourceRecordMap"
+               type="com.dt.gatepilot.apiserver.infrastructure.persistence.jdbc.GatePilotResourceRecord">
+        <id property="id" column="id"/>
+        <result property="kind" column="kind"/>
+        <result property="namespace" column="namespace"/>
+        <result property="name" column="name"/>
+        <result property="uid" column="uid"/>
+        <result property="generation" column="generation"/>
+        <result property="resourceJson" column="resource_json"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, kind, namespace, name, uid, generation, resource_json, created_at, updated_at
+    </sql>
+
+    <sql id="ResourceTable">
+        gatepilot_resource
+    </sql>
+
+    <select id="selectByResourceKey" resultMap="GatePilotResourceRecordMap">
+        select
+        <include refid="BaseColumns"/>
+        from
+        <include refid="ResourceTable"/>
+        where kind = #{kind}
+          and namespace = #{namespace}
+          and name = #{name}
+    </select>
+
+    <select id="selectPageByCursor" resultMap="GatePilotResourceRecordMap">
+        select
+        <include refid="BaseColumns"/>
+        from
+        <include refid="ResourceTable"/>
+        where kind = #{kind}
+        <if test="namespace != null and namespace != ''">
+          and namespace = #{namespace}
+        </if>
+          and concat(namespace, '/', name) &gt; #{cursor}
+        order by namespace asc, name asc
+        limit #{limit}
+    </select>
+
+    <select id="countByKindAndNamespace" resultType="int">
+        select count(1)
+        from
+        <include refid="ResourceTable"/>
+        where kind = #{kind}
+        <if test="namespace != null and namespace != ''">
+          and namespace = #{namespace}
+        </if>
+    </select>
+
+    <delete id="deleteByResourceKey">
+        delete from
+        <include refid="ResourceTable"/>
+        where kind = #{kind}
+          and namespace = #{namespace}
+          and name = #{name}
+    </delete>
+</mapper>
