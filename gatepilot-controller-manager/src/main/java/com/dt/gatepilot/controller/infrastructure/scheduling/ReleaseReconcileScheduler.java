@@ -1,7 +1,7 @@
 package com.dt.gatepilot.controller.infrastructure.scheduling;
 
-import com.dt.gatepilot.controller.api.properties.GatePilotControllerManagerProperties;
-import com.dt.gatepilot.controller.support.reconcile.ReleaseReconcileController;
+import com.dt.gatepilot.controller.infrastructure.config.GatePilotControllerManagerProperties;
+import com.dt.gatepilot.controller.application.service.ReleaseReconcileController;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**

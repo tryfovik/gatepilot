@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>com.dt.gateway</groupId>
-        <artifactId>platform-gateway-parent</artifactId>
+        <artifactId>gatepilot-parent</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
@@ -22,7 +22,7 @@
     <dependencies>
         <dependency>
             <groupId>com.dt.gateway</groupId>
-            <artifactId>gatepilot-api</artifactId>
+            <artifactId>gatepilot-domain</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

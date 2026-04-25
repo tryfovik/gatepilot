@@ -1,13 +1,13 @@
 package com.dt.gatepilot.agent.infrastructure.apiserver;
 
-import com.dt.gatepilot.agent.api.AgentApplyResult;
-import com.dt.gatepilot.agent.api.AgentConfigCursor;
-import com.dt.gatepilot.agent.api.AgentHeartbeatSnapshot;
-import com.dt.gatepilot.agent.api.AgentNodeProfile;
-import com.dt.gatepilot.agent.api.properties.GatePilotAgentProperties;
-import com.dt.gatepilot.agent.spi.AgentControlPlaneClient;
-import com.dt.gatepilot.api.resource.node.GatewayNode;
-import com.dt.gatepilot.api.resource.publish.PublishedConfig;
+import com.dt.gatepilot.agent.application.dto.AgentApplyResult;
+import com.dt.gatepilot.agent.application.dto.AgentConfigCursor;
+import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
+import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
+import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
+import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
+import com.dt.gatepilot.domain.resource.node.GatewayNode;
+import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.getboot.exception.api.exception.BusinessException;
 import com.getboot.web.api.response.ApiResponse;
 import java.util.Optional;

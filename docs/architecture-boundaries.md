@@ -14,6 +14,17 @@ GatePilot 采用接近 Kubernetes 的控制面 / 数据面思想：
 4. 节点代理负责同步：agent 跟随 proxy 节点部署，负责配置同步、last-good 缓存、节点注册、心跳和状态上报。
 5. 合包只做装配：最终大 jar 可以同时启动 apiserver、controller-manager、agent、proxy 和 console 静态资源，但 app 模块不能写业务实现代码。
 
+Java 后端包结构采用 DDD 分层，不沿用 getboot starter 的 `api / spi / support / infrastructure` 分层。getboot 是公共能力和扩展点集合，`api` 表示对外稳定契约，`spi` 表示对外实现桥接；GatePilot 是网关产品本身，内部按业务上下文组织代码。
+
+GatePilot 模块内固定使用：
+
+- `interfaces`：入站适配层，例如 REST Controller、参数校验、协议适配和只属于 REST 的传输对象。
+- `application`：应用层，用例编排、命令、查询、返回结果、发布流程入口和跨领域协调。
+- `domain`：领域层，领域模型、领域规则、领域服务、仓储端口和外部能力端口。
+- `infrastructure`：基础设施层，数据库实现、HTTP 客户端实现、Spring 配置、调度器、进程内适配器。
+
+禁止在 GatePilot 新增内部 `api`、`spi`、`support`、`common`、`core`、`shared` 包。确实需要扩展点时，优先命名为 `domain.port`；用例入参出参优先放 `application.command` / `application.dto`；确实只属于对外 HTTP 或 Console 协议的适配对象，才放在 `interfaces`。如果一个能力看起来“哪里都能放”，先回到本文档判断它属于哪个业务上下文，而不是新建泛化包。
+
 Java 代码注释格式：
 
 - 类、字段、枚举项和公开方法使用展开式 Javadoc。
@@ -31,7 +42,7 @@ private String version;
 
 目标模块按职责命名，避免出现 `core`、`common`、`runtime` 这类容易变成垃圾包的名字。
 
-### gatepilot-api
+### gatepilot-domain
 
 声明式资源模型模块。
 
@@ -39,8 +50,7 @@ private String version;
 
 - 资源定义。
 - 枚举。
-- DTO。
-- 资源 metadata / spec / status。
+- 资源 metadata / spec / status 等跨模块资源数据结构。
 
 典型资源：
 
@@ -64,8 +74,10 @@ private String version;
 - 网关转发逻辑。
 - 配置发布流程。
 - 页面接口。
+- REST 请求响应 DTO。
+- 应用层命令 DTO。
 
-注意：这里的 `api` 不是 HTTP API，而是资源模型 API，类似 Kubernetes API Types。
+`gatepilot-domain` 不是公共工具包，也不是“什么都能放”的核心包。它只表达 GatePilot 的声明式资源长什么样；具体用例、端口、实现和传输协议必须放回各自上下文。
 
 ### gatepilot-apiserver
 
@@ -187,7 +199,7 @@ controller-manager 与 apiserver 的关系：
 
 - 分服务部署时，controller-manager 通过 apiserver API 读写资源。
 - 单体合包部署时，controller-manager 可以使用进程内适配器读写同一份资源存储。
-- 无论哪种部署方式，controller-manager 代码只能依赖自身 SPI，不反向依赖 apiserver 的 Controller 或 Web 层。
+- 无论哪种部署方式，controller-manager 应用层只能依赖自身 `domain.port`，不反向依赖 apiserver 的 Controller 或 Web 层。
 - apiserver 不能通过一个同步 Service 调用把整条发布链路跑完，否则发布推进职责会回流到 apiserver。
 
 ### gatepilot-agent
@@ -397,23 +409,23 @@ status
 
 ```text
 console -> apiserver HTTP API
-apiserver -> api
-controller-manager -> api
-controller-manager -> apiserver client 或 store abstraction
-agent -> api
+apiserver -> gatepilot-domain
+controller-manager -> gatepilot-domain
+controller-manager -> own domain ports
+agent -> gatepilot-domain
 agent -> apiserver client
 agent -> proxy local client
-proxy -> api
+proxy -> gatepilot-domain
 app -> apiserver / controller-manager / agent / proxy / console
 ```
 
 禁止的依赖方向：
 
 ```text
-api -> apiserver
-api -> controller-manager
-api -> agent
-api -> proxy
+gatepilot-domain -> apiserver
+gatepilot-domain -> controller-manager
+gatepilot-domain -> agent
+gatepilot-domain -> proxy
 proxy -> apiserver implementation
 proxy -> console
 proxy -> controller-manager
@@ -426,7 +438,7 @@ app -> 业务实现代码
 
 开发新能力前先回答一个问题：它改变的是资源、控制、同步、流量，还是页面？
 
-- 新资源字段：放 `gatepilot-api`。
+- 新资源字段：放 `gatepilot-domain`。
 - 配置 CRUD：放 `gatepilot-apiserver`。
 - 发布、回滚、灰度推进：放 `gatepilot-controller-manager`。
 - 节点注册、配置同步、last-good：放 `gatepilot-agent`。
@@ -438,7 +450,7 @@ app -> 业务实现代码
 
 确实跨模块复用时，先判断它是什么：
 
-- 是资源模型：放 `api`。
+- 是资源模型：放 `gatepilot-domain`。
 - 是控制面逻辑：放 `apiserver` 或 `controller-manager`。
 - 是节点同步逻辑：放 `agent`。
 - 是数据面执行逻辑：放 `proxy`。
@@ -549,7 +561,7 @@ GatePilot 的长期目标是接入大量项目和高并发大流量。架构上�
 
 为了降低理解成本，可以按下面类比理解各模块：
 
-- `gatepilot-api` 像 Kubernetes API Types，只定义资源长什么样。
+- `gatepilot-domain` 像 Kubernetes 资源类型定义，只定义资源长什么样。
 - `gatepilot-apiserver` 像 Kubernetes apiserver，是资源登记处、查询入口、权限和审计入口。
 - `gatepilot-controller-manager` 像控制器集合，持续把期望状态推进成已发布状态。
 - `gatepilot-agent` 像 kubelet，守在每个 proxy 节点旁边，负责注册、拉配置、last-good 和上报状态。

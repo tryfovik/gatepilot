@@ -12,12 +12,12 @@
     </parent>
 
     <groupId>com.dt.gateway</groupId>
-    <artifactId>platform-gateway-parent</artifactId>
+    <artifactId>gatepilot-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>platform-gateway-parent</name>
-    <description>独立发布的平台网关工程</description>
+    <name>gatepilot-parent</name>
+    <description>GatePilot 网关控制与运行系统</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -26,7 +26,7 @@
     </properties>
 
     <modules>
-        <module>gatepilot-api</module>
+        <module>gatepilot-domain</module>
         <module>gatepilot-apiserver</module>
         <module>gatepilot-controller-manager</module>
         <module>gatepilot-agent</module>

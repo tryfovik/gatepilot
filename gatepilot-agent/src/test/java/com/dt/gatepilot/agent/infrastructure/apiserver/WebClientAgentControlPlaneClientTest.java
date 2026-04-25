@@ -1,7 +1,7 @@
 package com.dt.gatepilot.agent.infrastructure.apiserver;
 
-import com.dt.gatepilot.agent.api.AgentHeartbeatSnapshot;
-import com.dt.gatepilot.agent.api.properties.GatePilotAgentProperties;
+import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
+import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
 import com.getboot.exception.api.exception.BusinessException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;

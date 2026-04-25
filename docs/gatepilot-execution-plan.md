@@ -14,6 +14,8 @@
 
 - 部署形态可以变化，代码职责边界不能变化。
 - 不能再使用 `core`、`common`、`shared`、泛化 `runtime` 这类容易变成垃圾包的命名。
+- GatePilot 是网关产品本身，内部按 DDD 的 `interfaces / application / domain / infrastructure` 分层。
+- getboot 这类公共 starter 才使用 `api / spi / support / infrastructure` 组织对外契约和扩展点，GatePilot 模块内禁止照搬这套包结构。
 - 最终大包只能是装配包，不能承载业务实现。
 - proxy 只消费已发布配置，不消费草稿配置。
 - console 只调用 apiserver，不直接调用 proxy。
@@ -24,7 +26,7 @@
 目标模块：
 
 ```text
-gatepilot-api
+gatepilot-domain
 gatepilot-apiserver
 gatepilot-controller-manager
 gatepilot-agent
@@ -32,6 +34,17 @@ gatepilot-proxy
 gatepilot-console
 gatepilot-app
 ```
+
+后端包结构固定规则：
+
+```text
+interfaces      入站适配：REST Controller、参数校验、协议适配
+application     应用用例：command、dto、查询、发布入口、跨领域编排
+domain          领域规则：模型、领域服务、repository/port 等端口
+infrastructure  出站实现：数据库、HTTP 客户端、Spring 配置、调度和适配器
+```
+
+禁止在 GatePilot 新增内部 `api`、`spi`、`support`、`common`、`core`、`shared` 包。用例入参出参放 `application.command` / `application.dto`；确实只属于对外 HTTP 或 Console 协议的适配对象，放 `interfaces`；确实是外部能力桥接，放 `domain.port`；确实是实现，放 `infrastructure`。
 
 当前不规划 `gatepilot-client` 或业务应用 JVM agent。主路径是网关后台统一配置和发布，避免业务项目侧依赖 SDK 后形成第二个控制面。
 
@@ -105,10 +118,11 @@ console
 - [x] 对齐 getboot `ApiResponse`、`X-Trace-Id`、MDC `traceId` 和 HTTP 出站透传约定。
 - [x] 写入并执行 GatePilot Java 展开式 Javadoc 注释格式。
 - [x] 清理当前半迁移状态，保证工作区重新回到可编译、可测试状态。
+- [x] 将 GatePilot 模块包结构调整为 DDD 分层，移除内部 `api / spi / support` 包口径。
 
 ### Phase 1：目标模块骨架
 
-- [x] 建立 `gatepilot-api` 模块骨架。
+- [x] 建立 `gatepilot-domain` 模块骨架。
 - [x] 建立 `gatepilot-apiserver` 模块骨架。
 - [x] 建立 `gatepilot-controller-manager` 模块骨架。
 - [x] 建立 `gatepilot-agent` 模块骨架。
@@ -133,7 +147,7 @@ console
 
 ### Phase 3：apiserver
 
-- [x] 建立 `api / spi / support / infrastructure` 分层骨架。
+- [x] 建立 `interfaces / application / domain / infrastructure` 分层骨架。
 - [x] 建立声明式资源 CRUD API 骨架。
 - [x] 建立资源列表游标分页约束，避免大规模资源一次性返回。
 - [x] 迁移配置存储端口到 `gatepilot-apiserver`。
@@ -155,9 +169,9 @@ console
 - [x] 汇总 agent apply result。
 - [x] 汇总节点发布状态。
 - [x] 记录发布事件。
-- [x] 建立 controller-manager 的资源读取、发布产物写入和事件写回 SPI。
-- [x] 建立 apiserver 到 controller-manager SPI 的资源存储适配器。
-- [x] 实现 ReleaseRequest / GatewayEvent 到 PublishedConfig 的异步推进服务。
+- [x] 建立 controller-manager 的资源读取、发布产物写入和事件写回 `domain.port`。
+- [x] 建立 apiserver 到 controller-manager `domain.port` 的资源存储适配器。
+- [x] 实现发布意图 / GatewayEvent 到 PublishedConfig 的异步推进服务。
 - [ ] 支持失败回滚编排。
 
 ### Phase 5：agent

@@ -25,10 +25,10 @@ GatePilot 是网关控制与运行系统。
 
 ## 目录结构
 
-- `gatepilot-api`
-  声明式资源、枚举和 DTO。
+- `gatepilot-domain`
+  声明式资源模型和枚举。
 - `gatepilot-apiserver`
-  控制面 API，负责配置存储、查询、发布入口、回滚入口、快照、事件和 agent 协议。
+  控制面服务，负责配置存储、查询、发布入口、回滚入口、快照、事件和 agent 协议。
 - `gatepilot-controller-manager`
   控制器集合，负责把发布意图 reconcile 成 `PublishedConfig`。
 - `gatepilot-agent`
@@ -50,6 +50,17 @@ GatePilot 是网关控制与运行系统。
 - 分服务：console、apiserver、controller-manager、agent、proxy 都可以拆开部署。
 - 生产配置必须持久化到数据库，内存存储只允许开发测试使用。
 - 业务项目不需要依赖 GatePilot client jar，主路径是在网关后台统一配置和发布。
+
+## 后端分层
+
+GatePilot 自身按 DDD 分层，不沿用 getboot 公共 starter 的 `api / spi / support` 包结构。
+
+- `interfaces`：REST Controller、参数校验和协议适配。
+- `application`：用例编排、command、dto、查询和发布入口。
+- `domain`：领域模型、领域规则、仓储端口和外部能力端口。
+- `infrastructure`：数据库、HTTP 客户端、Spring 配置、调度和适配器实现。
+
+`api / spi` 这类命名只适合 getboot 这种公共能力模块对外暴露契约和扩展点。GatePilot 内部新增能力必须先判断业务上下文，不能新增 `common/core/shared/support` 这类泛化包。
 
 ## 路由模型
 

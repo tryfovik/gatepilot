@@ -1,28 +1,28 @@
 package com.dt.gatepilot.apiserver.infrastructure.controller;
 
-import com.dt.gatepilot.api.enums.EventSeverity;
-import com.dt.gatepilot.api.enums.ResourceKind;
-import com.dt.gatepilot.api.resource.common.LabelSelector;
-import com.dt.gatepilot.api.resource.config.GatewayConfigSnapshot;
-import com.dt.gatepilot.api.resource.event.GatewayEvent;
-import com.dt.gatepilot.api.resource.node.GatewayNode;
-import com.dt.gatepilot.api.resource.policy.AuthPolicy;
-import com.dt.gatepilot.api.resource.policy.ReleasePolicy;
-import com.dt.gatepilot.api.resource.policy.TrafficPolicy;
-import com.dt.gatepilot.api.resource.project.GatewayProject;
-import com.dt.gatepilot.api.resource.publish.PublishedConfig;
-import com.dt.gatepilot.api.resource.route.GatewayRoute;
-import com.dt.gatepilot.api.resource.upstream.Upstream;
-import com.dt.gatepilot.apiserver.api.response.CursorPageResponse;
-import com.dt.gatepilot.apiserver.support.resource.GatePilotResourceType;
-import com.dt.gatepilot.apiserver.support.service.GatePilotConfigSnapshotService;
-import com.dt.gatepilot.apiserver.support.service.GatePilotResourceService;
-import com.dt.gatepilot.controller.api.ReconcileResult;
-import com.dt.gatepilot.controller.spi.GatewayDesiredStateReader;
-import com.dt.gatepilot.controller.spi.ReconcileResultSink;
-import com.dt.gatepilot.controller.spi.ReleaseIntentSource;
-import com.dt.gatepilot.controller.support.model.GatewayDesiredState;
-import com.dt.gatepilot.controller.support.model.ReleaseIntent;
+import com.dt.gatepilot.domain.enums.EventSeverity;
+import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.resource.common.LabelSelector;
+import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
+import com.dt.gatepilot.domain.resource.event.GatewayEvent;
+import com.dt.gatepilot.domain.resource.node.GatewayNode;
+import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
+import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
+import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
+import com.dt.gatepilot.domain.resource.project.GatewayProject;
+import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
+import com.dt.gatepilot.domain.resource.route.GatewayRoute;
+import com.dt.gatepilot.domain.resource.upstream.Upstream;
+import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
+import com.dt.gatepilot.apiserver.application.service.GatePilotConfigSnapshotService;
+import com.dt.gatepilot.apiserver.application.service.GatePilotResourceService;
+import com.dt.gatepilot.controller.application.command.ReconcileResult;
+import com.dt.gatepilot.controller.domain.port.GatewayDesiredStateReader;
+import com.dt.gatepilot.controller.domain.port.ReconcileResultSink;
+import com.dt.gatepilot.controller.domain.port.ReleaseIntentSource;
+import com.dt.gatepilot.controller.domain.model.GatewayDesiredState;
+import com.dt.gatepilot.controller.domain.model.ReleaseIntent;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -76,7 +76,7 @@ public class GatePilotControllerResourceAdapter
         int effectiveLimit = Math.min(limit, LIST_LIMIT);
         return list("events", null, GatewayEvent.class)
                 .stream()
-                .filter(this::isPendingReleaseRequest)
+                .filter(this::isPendingCreateReleaseCommand)
                 .limit(effectiveLimit)
                 .map(this::toReleaseIntent)
                 .toList();
@@ -85,7 +85,7 @@ public class GatePilotControllerResourceAdapter
     @Override
     public boolean claim(ReleaseIntent intent, String controllerId) {
         GatewayEvent event = loadSourceEvent(intent);
-        if (!isPendingReleaseRequest(event)) {
+        if (!isPendingCreateReleaseCommand(event)) {
             return false;
         }
         event.getMetadata().getLabels().put(RECONCILE_STATE_LABEL, STATE_PROCESSING);
@@ -203,14 +203,14 @@ public class GatePilotControllerResourceAdapter
 
     @SuppressWarnings("unchecked")
     private <T> List<T> list(String resourcePath, String namespace, Class<T> resourceType) {
-        CursorPageResponse<Object> page = resourceService.list(resourcePath, namespace, null, LIST_LIMIT);
+        CursorPage<Object> page = resourceService.list(resourcePath, namespace, null, LIST_LIMIT);
         return page.getItems()
                 .stream()
                 .map(resource -> (T) resourceType.cast(resource))
                 .toList();
     }
 
-    private boolean isPendingReleaseRequest(GatewayEvent event) {
+    private boolean isPendingCreateReleaseCommand(GatewayEvent event) {
         Map<String, String> labels = event.getMetadata().getLabels();
         return RELEASE_REQUEST.equals(labels.get(EVENT_TYPE_LABEL))
                 && STATE_PENDING.equals(labels.get(RECONCILE_STATE_LABEL));
@@ -246,7 +246,7 @@ public class GatePilotControllerResourceAdapter
                 .orElse(0L) + 1L;
     }
 
-    private boolean projectMatches(com.dt.gatepilot.api.resource.common.ResourceReference reference,
+    private boolean projectMatches(com.dt.gatepilot.domain.resource.common.ResourceReference reference,
                                    String projectName) {
         return reference != null && Objects.equals(reference.getName(), projectName);
     }
