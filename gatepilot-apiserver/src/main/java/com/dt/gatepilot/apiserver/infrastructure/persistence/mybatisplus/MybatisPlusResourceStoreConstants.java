@@ -1,9 +1,9 @@
-package com.dt.gatepilot.apiserver.infrastructure.persistence.jdbc;
+package com.dt.gatepilot.apiserver.infrastructure.persistence.mybatisplus;
 
 /**
- * JDBC 资源存储常量。
+ * MyBatis-Plus 资源存储常量。
  */
-public final class JdbcResourceStoreConstants {
+public final class MybatisPlusResourceStoreConstants {
 
     /**
      * 分页最大条数。
@@ -45,7 +45,7 @@ public final class JdbcResourceStoreConstants {
      */
     public static final String MESSAGE_JSON_SERIALIZATION_FAILED = "resource json serialization failed";
 
-    private JdbcResourceStoreConstants() {
-        // JDBC 资源存储常量不允许实例化
+    private MybatisPlusResourceStoreConstants() {
+        // MyBatis-Plus 资源存储常量不允许实例化
     }
 }

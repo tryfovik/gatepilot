@@ -16,15 +16,39 @@ public interface RuntimeAuditSink {
      * 运行审计事件。
      *
      * @param traceId TraceId
+     * @param clientIp 客户端 IP
+     * @param method HTTP 方法
+     * @param path 请求路径
+     * @param host 请求域名
      * @param routeId 路由标识
      * @param upstreamName 上游名称
+     * @param upstreamUri 上游地址
      * @param status 响应状态码
      * @param latencyMillis 延迟
+     * @param trafficColor 流量颜色
+     * @param methodAllowed 方法是否允许
+     * @param authenticationRequired 是否需要认证
+     * @param fallback 是否 fallback
+     * @param outcome 执行结果
+     * @param reason 结果原因
+     * @param error 异常类型
      */
     record RuntimeAuditEvent(String traceId,
+                             String clientIp,
+                             String method,
+                             String path,
+                             String host,
                              String routeId,
                              String upstreamName,
+                             String upstreamUri,
                              int status,
-                             long latencyMillis) {
+                             long latencyMillis,
+                             String trafficColor,
+                             boolean methodAllowed,
+                             boolean authenticationRequired,
+                             boolean fallback,
+                             String outcome,
+                             String reason,
+                             String error) {
     }
 }

@@ -1,4 +1,4 @@
-package com.dt.gatepilot.apiserver.infrastructure.persistence.jdbc;
+package com.dt.gatepilot.apiserver.infrastructure.persistence.mybatisplus;
 
 import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverConstants;
 import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverProperties;
@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(prefix = GatePilotApiserverConstants.STORE_CONFIG_PREFIX,
         name = GatePilotApiserverConstants.STORE_TYPE_PROPERTY,
-        havingValue = GatePilotApiserverConstants.STORE_TYPE_JDBC)
+        havingValue = GatePilotApiserverConstants.STORE_TYPE_DATABASE)
 public class GatePilotResourceSchemaInitializer {
 
     private final DataSource dataSource;
@@ -38,12 +38,12 @@ public class GatePilotResourceSchemaInitializer {
      */
     @PostConstruct
     public void initializeSchema() {
-        if (!properties.getStore().getJdbc().isInitializeSchema()) {
+        if (!properties.getStore().getDatabase().isInitializeSchema()) {
             return;
         }
         // 建表 SQL 只从 schema 文件读取，Java 代码不拼 SQL
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
-                new ClassPathResource(JdbcResourceStoreConstants.SCHEMA_LOCATION));
+                new ClassPathResource(MybatisPlusResourceStoreConstants.SCHEMA_LOCATION));
         populator.execute(dataSource);
     }
 }

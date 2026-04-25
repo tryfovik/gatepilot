@@ -1,4 +1,4 @@
-package com.dt.gatepilot.apiserver.infrastructure.persistence.jdbc;
+package com.dt.gatepilot.apiserver.infrastructure.persistence.mybatisplus;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import java.util.List;

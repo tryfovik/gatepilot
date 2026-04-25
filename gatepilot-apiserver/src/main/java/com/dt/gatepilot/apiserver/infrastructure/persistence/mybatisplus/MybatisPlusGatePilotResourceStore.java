@@ -1,4 +1,4 @@
-package com.dt.gatepilot.apiserver.infrastructure.persistence.jdbc;
+package com.dt.gatepilot.apiserver.infrastructure.persistence.mybatisplus;
 
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.repository.GatePilotResourceStore;
@@ -28,8 +28,8 @@ import org.springframework.util.StringUtils;
 @Repository
 @ConditionalOnProperty(prefix = GatePilotApiserverConstants.STORE_CONFIG_PREFIX,
         name = GatePilotApiserverConstants.STORE_TYPE_PROPERTY,
-        havingValue = GatePilotApiserverConstants.STORE_TYPE_JDBC)
-public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
+        havingValue = GatePilotApiserverConstants.STORE_TYPE_DATABASE)
+public class MybatisPlusGatePilotResourceStore implements GatePilotResourceStore {
 
     private final GatePilotResourceMapper resourceMapper;
 
@@ -38,15 +38,15 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
     private final ObjectMapper objectMapper;
 
     /**
-     * 创建 JDBC 资源存储。
+     * 创建 MyBatis-Plus 资源存储。
      *
      * @param resourceMapper 资源 Mapper
      * @param metadataSupport metadata 工具
      * @param objectMapper JSON 转换器
      */
-    public JdbcGatePilotResourceStore(GatePilotResourceMapper resourceMapper,
-                                      ResourceMetadataSupport metadataSupport,
-                                      ObjectMapper objectMapper) {
+    public MybatisPlusGatePilotResourceStore(GatePilotResourceMapper resourceMapper,
+                                             ResourceMetadataSupport metadataSupport,
+                                             ObjectMapper objectMapper) {
         this.resourceMapper = resourceMapper;
         this.metadataSupport = metadataSupport;
         this.objectMapper = objectMapper;
@@ -111,7 +111,7 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
                                   String cursor,
                                   int limit,
                                   Class<T> resourceType) {
-        int effectiveLimit = Math.max(1, Math.min(limit, JdbcResourceStoreConstants.MAX_LIMIT));
+        int effectiveLimit = Math.max(1, Math.min(limit, MybatisPlusResourceStoreConstants.MAX_LIMIT));
         List<T> items = resourceMapper.selectPageByCursor(
                         kind.name(), normalizeNamespace(namespace), cursorValue(cursor), effectiveLimit + 1)
                 .stream()
@@ -164,7 +164,7 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
             metadata.setCreatedAt(now);
         }
         metadata.setUpdatedAt(now);
-        metadata.setGeneration(JdbcResourceStoreConstants.FIRST_GENERATION);
+        metadata.setGeneration(MybatisPlusResourceStoreConstants.FIRST_GENERATION);
         try {
             resourceMapper.insert(record(kind, namespace, name, metadata, resource, metadata.getGeneration()));
         } catch (DuplicateKeyException exception) {
@@ -193,7 +193,7 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
         if (metadata.getGeneration() != null && !metadata.getGeneration().equals(current.getGeneration())) {
             throw writeConflict();
         }
-        long nextGeneration = current.getGeneration() + JdbcResourceStoreConstants.GENERATION_STEP;
+        long nextGeneration = current.getGeneration() + MybatisPlusResourceStoreConstants.GENERATION_STEP;
         metadata.setUid(current.getUid());
         metadata.setCreatedAt(toInstant(current.getCreatedAt()));
         metadata.setUpdatedAt(now);
@@ -281,7 +281,7 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
             return objectMapper.readValue(resourceJson, resourceType);
         } catch (JsonProcessingException exception) {
             throw new BusinessException(CommonErrorCode.ERROR.code(),
-                    JdbcResourceStoreConstants.MESSAGE_JSON_DESERIALIZATION_FAILED, exception);
+                    MybatisPlusResourceStoreConstants.MESSAGE_JSON_DESERIALIZATION_FAILED, exception);
         }
     }
 
@@ -296,7 +296,7 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
             return objectMapper.writeValueAsString(resource);
         } catch (JsonProcessingException exception) {
             throw new BusinessException(CommonErrorCode.ERROR.code(),
-                    JdbcResourceStoreConstants.MESSAGE_JSON_SERIALIZATION_FAILED, exception);
+                    MybatisPlusResourceStoreConstants.MESSAGE_JSON_SERIALIZATION_FAILED, exception);
         }
     }
 
@@ -348,6 +348,6 @@ public class JdbcGatePilotResourceStore implements GatePilotResourceStore {
     private BusinessException writeConflict() {
         // 统一返回 409 语义，提示调用方刷新资源后重试
         return new BusinessException(CommonErrorCode.REQUEST_PROCESSING.code(),
-                JdbcResourceStoreConstants.MESSAGE_RESOURCE_WRITE_CONFLICT);
+                MybatisPlusResourceStoreConstants.MESSAGE_RESOURCE_WRITE_CONFLICT);
     }
 }

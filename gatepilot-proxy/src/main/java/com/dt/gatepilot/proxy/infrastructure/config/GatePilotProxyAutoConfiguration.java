@@ -1,5 +1,7 @@
 package com.dt.gatepilot.proxy.infrastructure.config;
 
+import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
+import com.dt.gatepilot.proxy.domain.port.RuntimeMetricsSink;
 import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
@@ -12,6 +14,7 @@ import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
 import com.dt.gatepilot.proxy.infrastructure.limiter.GetbootRuntimeRateLimiter;
 import com.dt.gatepilot.proxy.interfaces.web.GatePilotProxyHandler;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyHttpConstants;
+import com.dt.gatepilot.proxy.interfaces.web.ProxyRuntimeAuditRecorder;
 import com.getboot.limiter.api.registry.RateLimiterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -144,6 +147,47 @@ public class GatePilotProxyAutoConfiguration {
     }
 
     /**
+     * 创建默认运行审计采集器。
+     *
+     * @return 运行审计采集器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public RuntimeAuditSink runtimeAuditSink() {
+        // 默认不落地，agent 接入后替换为上报实现
+        return event -> {
+        };
+    }
+
+    /**
+     * 创建默认运行指标采集器。
+     *
+     * @return 运行指标采集器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public RuntimeMetricsSink runtimeMetricsSink() {
+        // 默认不落地，后续接 Micrometer 或 agent 上报实现
+        return (routeId, status, latencyMillis) -> {
+        };
+    }
+
+    /**
+     * 创建 proxy 运行审计记录器。
+     *
+     * @param runtimeAuditSink 运行审计采集器
+     * @param runtimeMetricsSink 运行指标采集器
+     * @return proxy 运行审计记录器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public ProxyRuntimeAuditRecorder proxyRuntimeAuditRecorder(RuntimeAuditSink runtimeAuditSink,
+                                                               RuntimeMetricsSink runtimeMetricsSink) {
+        // 记录器只负责组装和派发，不在 proxy 内保存审计数据
+        return new ProxyRuntimeAuditRecorder(runtimeAuditSink, runtimeMetricsSink);
+    }
+
+    /**
      * 创建 proxy WebFlux 入口处理器。
      *
      * @param runtimeState proxy 运行态
@@ -153,6 +197,7 @@ public class GatePilotProxyAutoConfiguration {
      * @param routeCircuitBreaker 路由熔断器
      * @param rateLimitPolicyResolver 限流策略解析器
      * @param runtimeRateLimiter 运行时限流器
+     * @param auditRecorder 运行审计记录器
      * @param webClientBuilder WebClient 构造器
      * @return proxy WebFlux 入口处理器
      */
@@ -165,6 +210,7 @@ public class GatePilotProxyAutoConfiguration {
                                                        RouteCircuitBreaker routeCircuitBreaker,
                                                        RateLimitPolicyResolver rateLimitPolicyResolver,
                                                        RuntimeRateLimiter runtimeRateLimiter,
+                                                       ProxyRuntimeAuditRecorder auditRecorder,
                                                        WebClient.Builder webClientBuilder) {
         // WebClient.Builder 由 getboot-http-client 增强时可自动继承 Trace 透传
         return new GatePilotProxyHandler(
@@ -175,6 +221,7 @@ public class GatePilotProxyAutoConfiguration {
                 routeCircuitBreaker,
                 rateLimitPolicyResolver,
                 runtimeRateLimiter,
+                auditRecorder,
                 webClientBuilder.build()
         );
     }

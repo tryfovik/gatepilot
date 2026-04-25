@@ -47,7 +47,7 @@ gatepilot:
   apiserver:
     store:
       type: memory
-      jdbc:
+      database:
         initialize-schema: false
   agent:
     enabled: true

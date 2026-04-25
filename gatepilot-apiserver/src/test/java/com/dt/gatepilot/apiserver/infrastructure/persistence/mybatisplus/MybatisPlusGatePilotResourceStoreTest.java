@@ -1,4 +1,4 @@
-package com.dt.gatepilot.apiserver.infrastructure.persistence.jdbc;
+package com.dt.gatepilot.apiserver.infrastructure.persistence.mybatisplus;
 
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
@@ -24,22 +24,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * JDBC 资源存储测试。
+ * MyBatis-Plus 资源存储测试。
  */
 @SpringBootTest(
-        classes = JdbcGatePilotResourceStoreTest.TestApplication.class,
+        classes = MybatisPlusGatePilotResourceStoreTest.TestApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {
                 "getboot.database.enabled=true",
-                "gatepilot.apiserver.store.type=jdbc",
-                "gatepilot.apiserver.store.jdbc.initialize-schema=true",
+                "gatepilot.apiserver.store.type=database",
+                "gatepilot.apiserver.store.database.initialize-schema=true",
                 "mybatis-plus.mapper-locations=classpath*:/mapper/**/*.xml"
         }
 )
-class JdbcGatePilotResourceStoreTest {
+class MybatisPlusGatePilotResourceStoreTest {
 
     @Autowired
-    private JdbcGatePilotResourceStore store;
+    private MybatisPlusGatePilotResourceStore store;
 
     /**
      * 验证资源可以持久化、更新和游标分页。
@@ -88,7 +88,7 @@ class JdbcGatePilotResourceStoreTest {
         assertThatThrownBy(() -> store.save(ResourceKind.GATEWAY_PROJECT, namespace, "game",
                 stale, GatewayProject.class))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining(JdbcResourceStoreConstants.MESSAGE_RESOURCE_WRITE_CONFLICT);
+                .hasMessageContaining(MybatisPlusResourceStoreConstants.MESSAGE_RESOURCE_WRITE_CONFLICT);
         GatewayProject found = store.find(ResourceKind.GATEWAY_PROJECT, namespace, "game", GatewayProject.class)
                 .orElseThrow();
         assertThat(found.getSpec().getDisplayName()).isEqualTo("Fresh Update");
@@ -125,7 +125,7 @@ class JdbcGatePilotResourceStoreTest {
     @EnableConfigurationProperties(GatePilotApiserverProperties.class)
     @MapperScan(basePackageClasses = GatePilotResourceMapper.class)
     @Import({
-            JdbcGatePilotResourceStore.class,
+            MybatisPlusGatePilotResourceStore.class,
             GatePilotResourceSchemaInitializer.class,
             ResourceMetadataSupport.class
     })

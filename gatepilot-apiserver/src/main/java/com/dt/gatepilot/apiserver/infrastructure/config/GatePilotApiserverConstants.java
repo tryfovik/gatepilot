@@ -26,9 +26,9 @@ public final class GatePilotApiserverConstants {
     public static final String STORE_TYPE_MEMORY = "memory";
 
     /**
-     * JDBC 存储类型。
+     * 数据库存储类型。
      */
-    public static final String STORE_TYPE_JDBC = "jdbc";
+    public static final String STORE_TYPE_DATABASE = "database";
 
     private GatePilotApiserverConstants() {
         // apiserver 配置常量不允许实例化

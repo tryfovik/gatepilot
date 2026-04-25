@@ -106,7 +106,7 @@ private String version;
 - `GatePilotResourceStore` 是 apiserver 的资源存储端口。
 - 内存版资源存储只能用于本地开发、单元测试和演示，不能作为生产实现。
 - `gatepilot.apiserver.store.type=memory` 只允许开发测试使用。
-- `gatepilot.apiserver.store.type=jdbc` 使用 getboot-database 提供的数据源和数据库增强能力，资源表结构参考 `gatepilot-apiserver/src/main/resources/db/gatepilot/schema-mysql.sql`。
+- `gatepilot.apiserver.store.type=database` 使用 getboot-database 提供的数据源、MyBatis-Plus 和数据库增强能力，资源表结构参考 `gatepilot-apiserver/src/main/resources/db/gatepilot/schema-mysql.sql`。
 - 后续数据库访问、事务、分页、乐观锁和审计字段优先复用 getboot 数据访问规范和能力；如果 getboot 缺能力，先回 getboot 补，再让 GatePilot 接入。
 - GatePilot 关系型数据库访问必须基于 getboot-database 接入 MyBatis-Plus；单表 CRUD 优先用 Mapper / BaseMapper，复杂 SQL 必须放在 mapper.xml，禁止在业务代码里用 JdbcTemplate 或字符串拼接 SQL。
 - controller-manager、agent、proxy 都不能直接访问 GatePilot 配置数据库，只能通过 apiserver API 或 apiserver 提供的进程内端口访问资源。
@@ -709,7 +709,7 @@ Client
 | `platform-gateway-runtime/InternalRouteAccessFilter` | 内部运维入口保护 | `gatepilot-proxy` 或 `gatepilot-apiserver` 各自入口保护 | 未覆盖 | 按入口分开，proxy 保护本机 apply / health / state，apiserver 保护管理 API |
 | `platform-gateway-runtime/GatewayTrafficColorFilter` | 流量染色执行和响应头回写 | `gatepilot-proxy` | 已覆盖解析、请求头透传和响应头回写，规则级自定义 propagateHeaders 仍缺 | 与灰度、蓝绿选择统一走运行态策略快照 |
 | `platform-gateway-runtime/GatewayCircuitBreakerFilter` | 轻量熔断和 fallback | `gatepilot-proxy` | 已覆盖本机滑动窗口状态机、OPEN / HALF_OPEN / CLOSED 转换和 getboot `ApiResponse` fallback，Sentinel / getboot-governance 仍未接入 | 策略来自 `PublishedConfig`，状态只存在 proxy 本机内存，后续限流和治理公共能力仍优先接 getboot |
-| `platform-gateway-runtime/GatewayAccessAuditFilter` | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | 只有端口占位，采集 / 上报 / 查询未完成 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
+| `platform-gateway-runtime/GatewayAccessAuditFilter` | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | proxy 采集已覆盖，agent 上报和 apiserver 查询未完成 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
 | `platform-gateway-runtime/UpstreamHealthIndicator` | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | agent 上报模型已预留，主动探测未完成 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |
 | `platform-gateway-server/GatewaySentinelRuleRegistrar` | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 基础限流已改为 `PublishedConfig` -> getboot-limiter 运行时适配，Sentinel 网关规则注册未覆盖 | 当前不直接迁移旧 YAML Sentinel 注册器；后续若接 Sentinel，仍由 `PublishedConfig` 编译生成规则 |
 | `platform-gateway-management/GatewayDiagnosticsService` | 路由诊断、策略诊断、染色和发布变体解释 | `gatepilot-apiserver/application` 和 `gatepilot-console` 页面 | Console 页面骨架已有，诊断用例未完成 | 诊断基于已发布配置、节点状态和审计数据，不直接读取 proxy 内存 |

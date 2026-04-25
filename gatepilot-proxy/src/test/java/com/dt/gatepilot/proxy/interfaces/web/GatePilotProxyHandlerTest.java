@@ -6,8 +6,11 @@ import com.dt.gatepilot.domain.enums.TrafficColorSource;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
+import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
+import com.dt.gatepilot.proxy.domain.port.RuntimeMetricsSink;
 import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
+import com.dt.gatepilot.proxy.domain.runtime.ProxyAuditConstants;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
 import com.dt.gatepilot.proxy.domain.runtime.RateLimitAcquireResult;
@@ -43,12 +46,15 @@ class GatePilotProxyHandlerTest {
     @Test
     void shouldForwardRequestWithRewrittenPathAndTrafficColorHeader() {
         AtomicReference<ClientRequest> forwardedRequest = new AtomicReference<>();
-        GatePilotProxyHandler handler = handler(runtime(), forwardedRequest);
+        CapturingRuntimeAuditSink auditSink = new CapturingRuntimeAuditSink();
+        CapturingRuntimeMetricsSink metricsSink = new CapturingRuntimeMetricsSink();
+        GatePilotProxyHandler handler = handler(runtime(), forwardedRequest, auditSink, metricsSink);
         WebTestClient client = client(handler);
 
         client.get()
                 .uri("/api/game/admin/users?preview=enabled")
                 .header(HttpHeaders.HOST, "api.example.com")
+                .header(ProxyAuditConstants.DEFAULT_TRACE_HEADER_NAME, "trace-001")
                 .header("X-Remove-Me", "bad")
                 .exchange()
                 .expectStatus().isOk()
@@ -60,6 +66,14 @@ class GatePilotProxyHandlerTest {
         assertThat(forwardedRequest.get().headers().getFirst("X-Traffic-Color")).isEqualTo("yellow");
         assertThat(forwardedRequest.get().headers().getFirst("X-Route-Id")).isEqualTo("admin");
         assertThat(forwardedRequest.get().headers()).doesNotContainKey("X-Remove-Me");
+        assertThat(auditSink.lastEvent().traceId()).isEqualTo("trace-001");
+        assertThat(auditSink.lastEvent().routeId()).isEqualTo("admin");
+        assertThat(auditSink.lastEvent().status()).isEqualTo(HttpStatus.OK.value());
+        assertThat(auditSink.lastEvent().trafficColor()).isEqualTo("yellow");
+        assertThat(auditSink.lastEvent().upstreamUri()).isEqualTo("http://upstream.local:8080/admin/users?preview=enabled");
+        assertThat(auditSink.lastEvent().outcome()).isEqualTo(ProxyAuditConstants.OUTCOME_SUCCESS);
+        assertThat(metricsSink.routeId()).isEqualTo("admin");
+        assertThat(metricsSink.status()).isEqualTo(HttpStatus.OK.value());
     }
 
     /**
@@ -135,7 +149,8 @@ class GatePilotProxyHandlerTest {
     @Test
     void shouldFallbackWhenForwardFailedWithCircuitBreaker() {
         AtomicInteger forwardedCount = new AtomicInteger();
-        GatePilotProxyHandler handler = handlerWithError(runtimeWithCircuitBreaker(), forwardedCount);
+        CapturingRuntimeAuditSink auditSink = new CapturingRuntimeAuditSink();
+        GatePilotProxyHandler handler = handlerWithError(runtimeWithCircuitBreaker(), forwardedCount, auditSink);
         WebTestClient client = client(handler);
 
         client.get()
@@ -147,6 +162,10 @@ class GatePilotProxyHandlerTest {
                 .value(body -> assertThat(body).contains("服务临时不可用"));
 
         assertThat(forwardedCount.get()).isEqualTo(1);
+        assertThat(auditSink.lastEvent().fallback()).isTrue();
+        assertThat(auditSink.lastEvent().outcome()).isEqualTo(ProxyAuditConstants.OUTCOME_FALLBACK);
+        assertThat(auditSink.lastEvent().reason()).isEqualTo(ProxyAuditConstants.REASON_UPSTREAM_ERROR);
+        assertThat(auditSink.lastEvent().error()).isEqualTo(IllegalStateException.class.getName());
     }
 
     /**
@@ -155,11 +174,13 @@ class GatePilotProxyHandlerTest {
     @Test
     void shouldRejectBeforeForwardingWhenRateLimited() {
         AtomicInteger forwardedCount = new AtomicInteger();
+        CapturingRuntimeAuditSink auditSink = new CapturingRuntimeAuditSink();
         GatePilotProxyHandler handler = handler(
                 runtimeWithRateLimit(),
                 forwardedCount,
                 HttpStatus.OK,
-                (limiterName, rule) -> RateLimitAcquireResult.REJECTED
+                (limiterName, rule) -> RateLimitAcquireResult.REJECTED,
+                auditSink
         );
         WebTestClient client = client(handler);
 
@@ -172,6 +193,10 @@ class GatePilotProxyHandlerTest {
                 .value(body -> assertThat(body).contains("请求过于频繁"));
 
         assertThat(forwardedCount.get()).isZero();
+        assertThat(auditSink.lastEvent().routeId()).isEqualTo("admin");
+        assertThat(auditSink.lastEvent().status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+        assertThat(auditSink.lastEvent().outcome()).isEqualTo(ProxyAuditConstants.OUTCOME_BLOCKED);
+        assertThat(auditSink.lastEvent().reason()).isEqualTo(ProxyAuditConstants.REASON_RATE_LIMITED);
     }
 
     /**
@@ -219,6 +244,22 @@ class GatePilotProxyHandlerTest {
      */
     private GatePilotProxyHandler handler(ProxyRuntimeState runtimeState,
                                           AtomicReference<ClientRequest> forwardedRequest) {
+        return handler(runtimeState, forwardedRequest, noopAuditSink(), noopMetricsSink());
+    }
+
+    /**
+     * 创建默认成功转发处理器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param forwardedRequest 转发请求记录器
+     * @param runtimeAuditSink 运行审计采集器
+     * @param runtimeMetricsSink 运行指标采集器
+     * @return proxy 入口处理器
+     */
+    private GatePilotProxyHandler handler(ProxyRuntimeState runtimeState,
+                                          AtomicReference<ClientRequest> forwardedRequest,
+                                          RuntimeAuditSink runtimeAuditSink,
+                                          RuntimeMetricsSink runtimeMetricsSink) {
         WebClient webClient = WebClient.builder()
                 .exchangeFunction(request -> {
                     forwardedRequest.set(request);
@@ -233,6 +274,7 @@ class GatePilotProxyHandlerTest {
                 new RouteCircuitBreaker(),
                 new RateLimitPolicyResolver(),
                 allowRateLimiter(),
+                new ProxyRuntimeAuditRecorder(runtimeAuditSink, runtimeMetricsSink),
                 webClient
         );
     }
@@ -264,6 +306,24 @@ class GatePilotProxyHandlerTest {
                                           AtomicInteger forwardedCount,
                                           HttpStatus status,
                                           RuntimeRateLimiter rateLimiter) {
+        return handler(runtimeState, forwardedCount, status, rateLimiter, noopAuditSink());
+    }
+
+    /**
+     * 创建固定状态转发处理器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param forwardedCount 转发计数器
+     * @param status 上游状态
+     * @param rateLimiter 运行时限流器
+     * @param runtimeAuditSink 运行审计采集器
+     * @return proxy 入口处理器
+     */
+    private GatePilotProxyHandler handler(ProxyRuntimeState runtimeState,
+                                          AtomicInteger forwardedCount,
+                                          HttpStatus status,
+                                          RuntimeRateLimiter rateLimiter,
+                                          RuntimeAuditSink runtimeAuditSink) {
         WebClient webClient = WebClient.builder()
                 .exchangeFunction(request -> {
                     forwardedCount.incrementAndGet();
@@ -278,6 +338,7 @@ class GatePilotProxyHandlerTest {
                 new RouteCircuitBreaker(),
                 new RateLimitPolicyResolver(),
                 rateLimiter,
+                new ProxyRuntimeAuditRecorder(runtimeAuditSink, noopMetricsSink()),
                 webClient
         );
     }
@@ -290,6 +351,20 @@ class GatePilotProxyHandlerTest {
      * @return proxy 入口处理器
      */
     private GatePilotProxyHandler handlerWithError(ProxyRuntimeState runtimeState, AtomicInteger forwardedCount) {
+        return handlerWithError(runtimeState, forwardedCount, noopAuditSink());
+    }
+
+    /**
+     * 创建异常转发处理器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param forwardedCount 转发计数器
+     * @param runtimeAuditSink 运行审计采集器
+     * @return proxy 入口处理器
+     */
+    private GatePilotProxyHandler handlerWithError(ProxyRuntimeState runtimeState,
+                                                   AtomicInteger forwardedCount,
+                                                   RuntimeAuditSink runtimeAuditSink) {
         WebClient webClient = WebClient.builder()
                 .exchangeFunction(request -> {
                     forwardedCount.incrementAndGet();
@@ -304,6 +379,7 @@ class GatePilotProxyHandlerTest {
                 new RouteCircuitBreaker(),
                 new RateLimitPolicyResolver(),
                 allowRateLimiter(),
+                new ProxyRuntimeAuditRecorder(runtimeAuditSink, noopMetricsSink()),
                 webClient
         );
     }
@@ -315,6 +391,28 @@ class GatePilotProxyHandlerTest {
      */
     private RuntimeRateLimiter allowRateLimiter() {
         return (limiterName, rule) -> RateLimitAcquireResult.ALLOWED;
+    }
+
+    /**
+     * 创建空审计采集器。
+     *
+     * @return 运行审计采集器
+     */
+    private RuntimeAuditSink noopAuditSink() {
+        // 默认测试只关心响应，不采集审计
+        return event -> {
+        };
+    }
+
+    /**
+     * 创建空指标采集器。
+     *
+     * @return 运行指标采集器
+     */
+    private RuntimeMetricsSink noopMetricsSink() {
+        // 默认测试只关心响应，不采集指标
+        return (routeId, status, latencyMillis) -> {
+        };
     }
 
     /**
@@ -478,5 +576,84 @@ class GatePilotProxyHandlerTest {
         rateLimit.setRequestsPerSecond(1);
         policy.getConfig().put(PublishedConfigConstants.KEY_RATE_LIMIT, rateLimit);
         return policy;
+    }
+
+    /**
+     * 测试用运行审计采集器。
+     */
+    private static class CapturingRuntimeAuditSink implements RuntimeAuditSink {
+
+        /**
+         * 最近一次审计事件。
+         */
+        private final AtomicReference<RuntimeAuditSink.RuntimeAuditEvent> lastEvent = new AtomicReference<>();
+
+        /**
+         * 记录运行审计事件。
+         *
+         * @param event 审计事件
+         */
+        @Override
+        public void emit(RuntimeAuditSink.RuntimeAuditEvent event) {
+            // 测试只保留最后一次事件
+            lastEvent.set(event);
+        }
+
+        /**
+         * 获取最近一次审计事件。
+         *
+         * @return 最近一次审计事件
+         */
+        private RuntimeAuditSink.RuntimeAuditEvent lastEvent() {
+            return lastEvent.get();
+        }
+    }
+
+    /**
+     * 测试用运行指标采集器。
+     */
+    private static class CapturingRuntimeMetricsSink implements RuntimeMetricsSink {
+
+        /**
+         * 最近一次路由标识。
+         */
+        private final AtomicReference<String> routeId = new AtomicReference<>();
+
+        /**
+         * 最近一次状态码。
+         */
+        private final AtomicInteger status = new AtomicInteger();
+
+        /**
+         * 记录路由请求指标。
+         *
+         * @param routeId 路由标识
+         * @param status 响应状态码
+         * @param latencyMillis 延迟
+         */
+        @Override
+        public void recordRouteRequest(String routeId, int status, long latencyMillis) {
+            // 测试只关心路由和状态
+            this.routeId.set(routeId);
+            this.status.set(status);
+        }
+
+        /**
+         * 获取最近一次路由标识。
+         *
+         * @return 路由标识
+         */
+        private String routeId() {
+            return routeId.get();
+        }
+
+        /**
+         * 获取最近一次状态码。
+         *
+         * @return 状态码
+         */
+        private int status() {
+            return status.get();
+        }
     }
 }

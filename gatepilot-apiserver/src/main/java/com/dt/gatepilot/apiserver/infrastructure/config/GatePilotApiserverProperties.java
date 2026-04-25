@@ -22,21 +22,21 @@ public class GatePilotApiserverProperties {
     public static class Store {
 
         /**
-         * 存储类型，开发测试使用 memory，生产使用 jdbc。
+         * 存储类型，开发测试使用 memory，生产使用 database。
          */
         private String type = GatePilotApiserverConstants.STORE_TYPE_MEMORY;
 
         /**
-         * JDBC 存储配置。
+         * 数据库存储配置。
          */
-        private Jdbc jdbc = new Jdbc();
+        private Database database = new Database();
     }
 
     /**
-     * JDBC 资源存储配置。
+     * 数据库资源存储配置。
      */
     @Data
-    public static class Jdbc {
+    public static class Database {
 
         /**
          * 是否启动时初始化资源表结构。

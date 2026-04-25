@@ -219,7 +219,7 @@ console
 - [x] 参考旧 `GatewayCircuitBreakerFilter` 改造熔断和 fallback 能力。
 - [x] 接入 getboot-limiter 执行基础路由级 / 参数级限流。
 - [ ] 参考旧 `GatewaySentinelRuleRegistrar` 改造 Sentinel 规则注册能力。
-- [ ] 参考旧审计过滤器改造访问审计采集能力。
+- [x] 参考旧审计过滤器改造访问审计采集能力。
 - [ ] 改造内部运维入口保护。
 - [ ] 改造上游健康主动探测。
 - [ ] 保留并验证路由、转发、限流、熔断、重试、染色、灰度、蓝绿执行能力。
@@ -276,7 +276,7 @@ console
 - [x] agent apiserver 客户端复用 getboot-http-client 增强后的 `WebClient.Builder`，不手写 Trace Header 的测试覆盖。
 - [x] app 单体模式通过 getboot-observability 回写 `X-Trace-Id` 的集成测试覆盖。
 - [x] 发布意图到 `PublishedConfig`、配置快照、agent pull 的最小链路测试通过。
-- [x] JDBC 资源存储保存、更新、分页测试通过。
+- [x] MyBatis-Plus 资源存储保存、更新、分页测试通过。
 - [ ] 分服务模式最小链路验证通过。
 - [ ] 配置发布链路端到端验证通过。
 - [ ] proxy 控制面不可用时 last-good 启动验证通过。

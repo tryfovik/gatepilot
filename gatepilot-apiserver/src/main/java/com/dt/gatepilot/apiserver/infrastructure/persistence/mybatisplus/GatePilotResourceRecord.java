@@ -1,4 +1,4 @@
-package com.dt.gatepilot.apiserver.infrastructure.persistence.jdbc;
+package com.dt.gatepilot.apiserver.infrastructure.persistence.mybatisplus;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -11,7 +11,7 @@ import lombok.Data;
  * GatePilot 资源表记录。
  */
 @Data
-@TableName(JdbcResourceStoreConstants.TABLE_NAME)
+@TableName(MybatisPlusResourceStoreConstants.TABLE_NAME)
 public class GatePilotResourceRecord {
 
     /**
