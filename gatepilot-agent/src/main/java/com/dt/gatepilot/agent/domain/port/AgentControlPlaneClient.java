@@ -4,6 +4,7 @@ import com.dt.gatepilot.agent.application.dto.AgentApplyResult;
 import com.dt.gatepilot.agent.application.dto.AgentConfigCursor;
 import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
 import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
+import com.dt.gatepilot.agent.application.dto.AgentRuntimeAuditBatch;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import java.util.Optional;
 
@@ -40,4 +41,11 @@ public interface AgentControlPlaneClient {
      * @param result 应用结果
      */
     void reportApplyResult(AgentApplyResult result);
+
+    /**
+     * 上报运行审计批次。
+     *
+     * @param batch 运行审计批次
+     */
+    void reportRuntimeAudits(AgentRuntimeAuditBatch batch);
 }

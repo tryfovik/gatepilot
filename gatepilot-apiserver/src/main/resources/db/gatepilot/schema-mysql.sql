@@ -12,3 +12,32 @@ create table if not exists gatepilot_resource (
     unique key uk_gatepilot_resource_key (kind, namespace, name),
     key idx_gatepilot_resource_updated_at (updated_at)
 );
+
+create table if not exists gatepilot_runtime_audit (
+    id bigint not null auto_increment,
+    namespace varchar(128) not null,
+    node_id varchar(128) not null,
+    trace_id varchar(128),
+    client_ip varchar(128),
+    method varchar(16),
+    path varchar(1024),
+    host varchar(256),
+    route_id varchar(256),
+    upstream_name varchar(256),
+    upstream_uri varchar(1024),
+    status int,
+    latency_millis bigint,
+    traffic_color varchar(64),
+    method_allowed bit,
+    authentication_required bit,
+    fallback bit,
+    outcome varchar(64),
+    reason varchar(128),
+    error varchar(512),
+    occurred_at datetime(6) not null,
+    primary key (id),
+    key idx_gatepilot_runtime_audit_ns_id (namespace, id),
+    key idx_gatepilot_runtime_audit_trace (trace_id),
+    key idx_gatepilot_runtime_audit_route (namespace, route_id, id),
+    key idx_gatepilot_runtime_audit_node (namespace, node_id, id)
+);

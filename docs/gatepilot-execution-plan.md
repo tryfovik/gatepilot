@@ -171,6 +171,7 @@ console
 - [x] 增加发布请求 API。
 - [x] 增加回滚请求 API。
 - [x] 增加 agent 注册、心跳、配置拉取和状态上报 API。
+- [x] 增加 agent 运行审计上报、apiserver 持久化和查询 API。
 
 ### Phase 4：controller-manager
 
@@ -195,6 +196,7 @@ console
 - [x] 实现 last-good config。
 - [x] 实现调用本机 proxy apply。
 - [x] 实现 apply result 上报。
+- [x] 实现运行审计批量上报。
 - [x] 实现节点健康、上游健康和指标摘要上报。
 - [x] 实现 agent 生命周期调度，启动注册、last-good 启动、定时 pull 和定时心跳。
 
@@ -250,7 +252,7 @@ console
 - [ ] 参考旧 `GatewayDiagnosticsService` 改造路由诊断能力到 apiserver 查询用例和 console 页面。
 - [ ] 参考旧 `GatewayManagementService` 改造 dry-run、diff、配置摘要能力到 apiserver / controller-manager。
 - [ ] 参考旧 `GatewayConfigSnapshotRepository` 改造快照概念到数据库持久化版本表。
-- [ ] 参考旧 `GatewayAccessAuditController` 改造审计查询能力到 apiserver 持久化查询 API。
+- [x] 参考旧 `GatewayAccessAuditController` 改造审计查询能力到 apiserver 持久化查询 API。
 - [ ] 参考旧 `GatewayRouteCatalogEndpoint` 改造路由目录展示到 console，不再依赖 Actuator 私有端点。
 - [ ] 所有旧能力完成新模型覆盖和测试后，物理删除历史模块源码。
 
@@ -263,6 +265,7 @@ console
 - [x] 装配 proxy。
 - [x] 承载 console 静态资源。
 - [x] 确认 app 中没有业务实现代码。
+- [x] 单体模式装配 proxy 运行审计到 agent 上报链路。
 - [x] 支持单体大包运行。
 - [x] 保留分服务部署能力。
 
@@ -277,6 +280,7 @@ console
 - [x] app 单体模式通过 getboot-observability 回写 `X-Trace-Id` 的集成测试覆盖。
 - [x] 发布意图到 `PublishedConfig`、配置快照、agent pull 的最小链路测试通过。
 - [x] MyBatis-Plus 资源存储保存、更新、分页测试通过。
+- [x] agent / apiserver / app 运行审计上报、持久化、查询和进程内桥接测试通过。
 - [ ] 分服务模式最小链路验证通过。
 - [ ] 配置发布链路端到端验证通过。
 - [ ] proxy 控制面不可用时 last-good 启动验证通过。

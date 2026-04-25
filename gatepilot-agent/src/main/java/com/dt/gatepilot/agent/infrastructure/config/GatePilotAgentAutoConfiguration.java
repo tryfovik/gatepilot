@@ -1,12 +1,14 @@
 package com.dt.gatepilot.agent.infrastructure.config;
 
 import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
+import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditReporter;
 import com.dt.gatepilot.agent.application.service.AgentRuntimeCoordinator;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.domain.port.LocalConfigStore;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
 import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.scheduling.AgentLifecycleManager;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -85,9 +87,28 @@ public class GatePilotAgentAutoConfiguration {
     }
 
     /**
+     * 创建运行审计上报器。
+     *
+     * @param nodeProfile 节点身份
+     * @param controlPlaneClient 控制面客户端
+     * @param properties agent 配置
+     * @return 运行审计上报器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(AgentControlPlaneClient.class)
+    public AgentRuntimeAuditReporter agentRuntimeAuditReporter(AgentNodeProfile nodeProfile,
+                                                               AgentControlPlaneClient controlPlaneClient,
+                                                               GatePilotAgentProperties properties) {
+        // agent 只负责把本机运行事件批量送回控制面
+        return new AgentRuntimeAuditReporter(nodeProfile, controlPlaneClient, properties);
+    }
+
+    /**
      * 创建 agent 生命周期调度器。
      *
      * @param coordinator agent 运行编排器
+     * @param runtimeAuditReporterProvider 运行审计上报器提供器
      * @param properties agent 配置
      * @return agent 生命周期调度器
      */
@@ -95,8 +116,10 @@ public class GatePilotAgentAutoConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnBean(AgentRuntimeCoordinator.class)
     public AgentLifecycleManager agentLifecycleManager(AgentRuntimeCoordinator coordinator,
+                                                       ObjectProvider<AgentRuntimeAuditReporter>
+                                                               runtimeAuditReporterProvider,
                                                        GatePilotAgentProperties properties) {
         // 生命周期调度只触发编排器，不承载配置发布和转发逻辑
-        return new AgentLifecycleManager(coordinator, properties);
+        return new AgentLifecycleManager(coordinator, runtimeAuditReporterProvider.getIfAvailable(), properties);
     }
 }

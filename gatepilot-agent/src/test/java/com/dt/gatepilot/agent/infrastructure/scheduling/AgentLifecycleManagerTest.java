@@ -4,6 +4,7 @@ import com.dt.gatepilot.agent.application.dto.AgentApplyResult;
 import com.dt.gatepilot.agent.application.dto.AgentConfigCursor;
 import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
 import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
+import com.dt.gatepilot.agent.application.dto.AgentRuntimeAuditBatch;
 import com.dt.gatepilot.agent.application.service.AgentRuntimeCoordinator;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
@@ -130,6 +131,11 @@ class AgentLifecycleManagerTest {
         @Override
         public void reportApplyResult(AgentApplyResult result) {
             reportCount++;
+        }
+
+        @Override
+        public void reportRuntimeAudits(AgentRuntimeAuditBatch batch) {
+            // 当前测试只关心生命周期主链路
         }
     }
 

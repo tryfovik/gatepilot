@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dt.gatepilot.apiserver.infrastructure.persistence.mybatisplus.audit.RuntimeAuditMapper">
+
+    <resultMap id="RuntimeAuditEntityMap"
+               type="com.dt.gatepilot.apiserver.infrastructure.persistence.mybatisplus.audit.RuntimeAuditEntity">
+        <id property="id" column="id"/>
+        <result property="namespace" column="namespace"/>
+        <result property="nodeId" column="node_id"/>
+        <result property="traceId" column="trace_id"/>
+        <result property="clientIp" column="client_ip"/>
+        <result property="method" column="method"/>
+        <result property="path" column="path"/>
+        <result property="host" column="host"/>
+        <result property="routeId" column="route_id"/>
+        <result property="upstreamName" column="upstream_name"/>
+        <result property="upstreamUri" column="upstream_uri"/>
+        <result property="status" column="status"/>
+        <result property="latencyMillis" column="latency_millis"/>
+        <result property="trafficColor" column="traffic_color"/>
+        <result property="methodAllowed" column="method_allowed"/>
+        <result property="authenticationRequired" column="authentication_required"/>
+        <result property="fallback" column="fallback"/>
+        <result property="outcome" column="outcome"/>
+        <result property="reason" column="reason"/>
+        <result property="error" column="error"/>
+        <result property="occurredAt" column="occurred_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, namespace, node_id, trace_id, client_ip, method, path, host, route_id,
+        upstream_name, upstream_uri, status, latency_millis, traffic_color,
+        method_allowed, authentication_required, fallback, outcome, reason, error, occurred_at
+    </sql>
+
+    <sql id="AuditTable">
+        gatepilot_runtime_audit
+    </sql>
+
+    <sql id="QueryWhere">
+        where id &gt; #{cursor}
+        <if test="query.namespace != null and query.namespace != ''">
+          and namespace = #{query.namespace}
+        </if>
+        <if test="query.nodeId != null and query.nodeId != ''">
+          and node_id = #{query.nodeId}
+        </if>
+        <if test="query.routeId != null and query.routeId != ''">
+          and route_id = #{query.routeId}
+        </if>
+        <if test="query.traceId != null and query.traceId != ''">
+          and trace_id = #{query.traceId}
+        </if>
+        <if test="query.outcome != null and query.outcome != ''">
+          and outcome = #{query.outcome}
+        </if>
+    </sql>
+
+    <sql id="CountWhere">
+        where 1 = 1
+        <if test="query.namespace != null and query.namespace != ''">
+          and namespace = #{query.namespace}
+        </if>
+        <if test="query.nodeId != null and query.nodeId != ''">
+          and node_id = #{query.nodeId}
+        </if>
+        <if test="query.routeId != null and query.routeId != ''">
+          and route_id = #{query.routeId}
+        </if>
+        <if test="query.traceId != null and query.traceId != ''">
+          and trace_id = #{query.traceId}
+        </if>
+        <if test="query.outcome != null and query.outcome != ''">
+          and outcome = #{query.outcome}
+        </if>
+    </sql>
+
+    <select id="selectPageByCursor" resultMap="RuntimeAuditEntityMap">
+        select
+        <include refid="BaseColumns"/>
+        from
+        <include refid="AuditTable"/>
+        <include refid="QueryWhere"/>
+        order by id asc
+        limit #{limit}
+    </select>
+
+    <select id="countByQuery" resultType="int">
+        select count(1)
+        from
+        <include refid="AuditTable"/>
+        <include refid="CountWhere"/>
+    </select>
+</mapper>

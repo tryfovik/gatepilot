@@ -30,6 +30,11 @@ public final class AgentControlPlaneApiPaths {
      */
     public static final String APPLY_RESULTS = "/apply-results";
 
+    /**
+     * 运行审计上报路径。
+     */
+    public static final String AUDITS = "/audits";
+
     private AgentControlPlaneApiPaths() {
         // agent 协议路径常量不允许实例化
     }

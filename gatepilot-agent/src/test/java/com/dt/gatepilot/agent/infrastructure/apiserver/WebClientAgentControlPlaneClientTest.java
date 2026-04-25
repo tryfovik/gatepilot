@@ -1,6 +1,8 @@
 package com.dt.gatepilot.agent.infrastructure.apiserver;
 
 import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
+import com.dt.gatepilot.agent.application.dto.AgentRuntimeAuditBatch;
+import com.dt.gatepilot.agent.application.dto.AgentRuntimeAuditEvent;
 import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
 import com.getboot.exception.api.exception.BusinessException;
 import java.util.List;
@@ -52,6 +54,21 @@ class WebClientAgentControlPlaneClientTest {
                 .hasMessage("发布正在处理中")
                 .extracting("errorCodeValue")
                 .isEqualTo(409);
+    }
+
+    @Test
+    void shouldPostRuntimeAuditsToAgentAuditPath() {
+        AtomicReference<ClientRequest> capturedRequest = new AtomicReference<>();
+        WebClientAgentControlPlaneClient client = newClient(capturedRequest, successBody());
+        AgentRuntimeAuditBatch batch = new AgentRuntimeAuditBatch();
+        batch.setNamespace("default");
+        batch.setNodeId("node-1");
+        batch.getEvents().add(new AgentRuntimeAuditEvent());
+
+        client.reportRuntimeAudits(batch);
+
+        assertThat(capturedRequest.get().url().toString())
+                .isEqualTo("http://apiserver.test/api/gatepilot/v1/agents/audits");
     }
 
     private WebClientAgentControlPlaneClient newClient(AtomicReference<ClientRequest> capturedRequest,

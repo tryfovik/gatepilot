@@ -31,6 +31,11 @@ public final class GatePilotApiPaths {
     public static final String AGENTS = API_V1_PREFIX + "/agents";
 
     /**
+     * 运行审计查询路径。
+     */
+    public static final String AUDITS = API_V1_PREFIX + "/audits";
+
+    /**
      * agent 注册路径。
      */
     public static final String AGENT_REGISTER = "/register";
@@ -49,6 +54,11 @@ public final class GatePilotApiPaths {
      * agent 应用结果上报路径。
      */
     public static final String AGENT_APPLY_RESULTS = "/apply-results";
+
+    /**
+     * agent 运行审计上报路径。
+     */
+    public static final String AGENT_AUDITS = "/audits";
 
     /**
      * 发布 dry-run 路径。

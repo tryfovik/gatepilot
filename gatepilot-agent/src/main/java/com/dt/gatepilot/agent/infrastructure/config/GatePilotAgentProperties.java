@@ -1,5 +1,6 @@
 package com.dt.gatepilot.agent.infrastructure.config;
 
+import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditConstants;
 import com.dt.gatepilot.domain.enums.NodeRole;
 import com.dt.gatepilot.domain.resource.meta.LabelSelector;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
@@ -126,4 +127,41 @@ public class GatePilotAgentProperties {
      * 心跳上报初始延迟，单位毫秒。
      */
     private long heartbeatInitialDelayMs = AgentRuntimeConstants.DEFAULT_HEARTBEAT_INITIAL_DELAY_MS;
+
+    /**
+     * 运行审计上报配置。
+     */
+    private Audit audit = new Audit();
+
+    /**
+     * 运行审计上报配置。
+     */
+    @Data
+    public static class Audit {
+
+        /**
+         * 是否启用运行审计上报。
+         */
+        private boolean enabled = true;
+
+        /**
+         * 审计事件缓冲容量。
+         */
+        private int bufferCapacity = AgentRuntimeAuditConstants.DEFAULT_BUFFER_CAPACITY;
+
+        /**
+         * 单批上报条数。
+         */
+        private int flushBatchSize = AgentRuntimeAuditConstants.DEFAULT_FLUSH_BATCH_SIZE;
+
+        /**
+         * 审计上报周期，单位毫秒。
+         */
+        private long flushIntervalMs = AgentRuntimeAuditConstants.DEFAULT_FLUSH_INTERVAL_MS;
+
+        /**
+         * 审计上报初始延迟，单位毫秒。
+         */
+        private long flushInitialDelayMs = AgentRuntimeAuditConstants.DEFAULT_FLUSH_INITIAL_DELAY_MS;
+    }
 }

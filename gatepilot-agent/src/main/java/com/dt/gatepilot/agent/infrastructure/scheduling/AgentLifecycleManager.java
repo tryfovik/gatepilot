@@ -1,6 +1,8 @@
 package com.dt.gatepilot.agent.infrastructure.scheduling;
 
 import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
+import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditConstants;
+import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditReporter;
 import com.dt.gatepilot.agent.application.service.AgentRuntimeCoordinator;
 import com.dt.gatepilot.agent.infrastructure.config.AgentRuntimeConstants;
 import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
@@ -18,6 +20,8 @@ public class AgentLifecycleManager implements ApplicationRunner {
 
     private final AgentRuntimeCoordinator coordinator;
 
+    private final AgentRuntimeAuditReporter runtimeAuditReporter;
+
     private final GatePilotAgentProperties properties;
 
     /**
@@ -27,7 +31,21 @@ public class AgentLifecycleManager implements ApplicationRunner {
      * @param properties agent 配置
      */
     public AgentLifecycleManager(AgentRuntimeCoordinator coordinator, GatePilotAgentProperties properties) {
+        this(coordinator, null, properties);
+    }
+
+    /**
+     * 创建 agent 生命周期调度器。
+     *
+     * @param coordinator agent 运行编排器
+     * @param runtimeAuditReporter 运行审计上报器
+     * @param properties agent 配置
+     */
+    public AgentLifecycleManager(AgentRuntimeCoordinator coordinator,
+                                 AgentRuntimeAuditReporter runtimeAuditReporter,
+                                 GatePilotAgentProperties properties) {
         this.coordinator = coordinator;
+        this.runtimeAuditReporter = runtimeAuditReporter;
         this.properties = properties;
     }
 
@@ -81,6 +99,21 @@ public class AgentLifecycleManager implements ApplicationRunner {
             coordinator.heartbeat(new AgentHeartbeatSnapshot());
             return null;
         }, AgentLifecycleConstants.ACTION_HEARTBEAT);
+    }
+
+    /**
+     * 定时上报运行审计。
+     */
+    @Scheduled(
+            fixedDelayString = AgentRuntimeConstants.AUDIT_FLUSH_INTERVAL_PLACEHOLDER,
+            initialDelayString = AgentRuntimeConstants.AUDIT_FLUSH_INITIAL_DELAY_PLACEHOLDER
+    )
+    public void flushAudits() {
+        if (!properties.isLifecycleEnabled() || !properties.getAudit().isEnabled() || runtimeAuditReporter == null) {
+            return;
+        }
+        // 审计上报是旁路链路，失败不能影响配置同步调度
+        runSafely(() -> runtimeAuditReporter.flush(), AgentRuntimeAuditConstants.ACTION_FLUSH_AUDITS);
     }
 
     private void runSafely(Supplier<?> action, String actionName) {

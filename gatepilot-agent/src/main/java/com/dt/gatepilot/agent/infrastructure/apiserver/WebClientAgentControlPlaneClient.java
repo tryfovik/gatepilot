@@ -4,9 +4,10 @@ import com.dt.gatepilot.agent.application.dto.AgentApplyResult;
 import com.dt.gatepilot.agent.application.dto.AgentConfigCursor;
 import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
 import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
-import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
-import com.dt.gatepilot.agent.infrastructure.config.AgentRuntimeConstants;
+import com.dt.gatepilot.agent.application.dto.AgentRuntimeAuditBatch;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
+import com.dt.gatepilot.agent.infrastructure.config.AgentRuntimeConstants;
+import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.getboot.exception.api.exception.BusinessException;
@@ -74,6 +75,13 @@ public class WebClientAgentControlPlaneClient implements AgentControlPlaneClient
     public void reportApplyResult(AgentApplyResult result) {
         post(AgentControlPlaneApiPaths.APPLY_RESULTS, result,
                 new ParameterizedTypeReference<ApiResponse<GatewayNode>>() {
+        });
+    }
+
+    @Override
+    public void reportRuntimeAudits(AgentRuntimeAuditBatch batch) {
+        post(AgentControlPlaneApiPaths.AUDITS, batch,
+                new ParameterizedTypeReference<ApiResponse<Object>>() {
         });
     }
 

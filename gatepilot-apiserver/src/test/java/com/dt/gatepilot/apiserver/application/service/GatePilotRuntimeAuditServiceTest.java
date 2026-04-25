@@ -1,0 +1,56 @@
+package com.dt.gatepilot.apiserver.application.service;
+
+import com.dt.gatepilot.apiserver.application.command.ReportRuntimeAuditCommand;
+import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportResult;
+import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditQuery;
+import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditRecord;
+import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryRuntimeAuditStore;
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * 运行审计应用服务测试。
+ */
+class GatePilotRuntimeAuditServiceTest {
+
+    @Test
+    void shouldReportAndListRuntimeAudits() {
+        GatePilotRuntimeAuditService service = new GatePilotRuntimeAuditService(new InMemoryRuntimeAuditStore());
+        ReportRuntimeAuditCommand command = new ReportRuntimeAuditCommand();
+        command.setNamespace("default");
+        command.setNodeId("node-1");
+        command.getEvents().add(item("trace-1", "route-a", "SUCCESS"));
+        command.getEvents().add(item("trace-2", "route-b", "LIMITED"));
+
+        RuntimeAuditReportResult result = service.report(command);
+        CursorPage<RuntimeAuditRecord> page = service.list(query("default", "route-a", 10));
+
+        assertThat(result.getAcceptedCount()).isEqualTo(2);
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getItems()).hasSize(1);
+        assertThat(page.getItems().get(0).getTraceId()).isEqualTo("trace-1");
+        assertThat(page.getItems().get(0).getNodeId()).isEqualTo("node-1");
+    }
+
+    private ReportRuntimeAuditCommand.RuntimeAuditItem item(String traceId, String routeId, String outcome) {
+        ReportRuntimeAuditCommand.RuntimeAuditItem item = new ReportRuntimeAuditCommand.RuntimeAuditItem();
+        // 测试只填查询链路会使用的字段
+        item.setTraceId(traceId);
+        item.setRouteId(routeId);
+        item.setOutcome(outcome);
+        item.setOccurredAt(Instant.now());
+        return item;
+    }
+
+    private RuntimeAuditQuery query(String namespace, String routeId, int limit) {
+        RuntimeAuditQuery query = new RuntimeAuditQuery();
+        // 查询条件保持和 Console 常用过滤一致
+        query.setNamespace(namespace);
+        query.setRouteId(routeId);
+        query.setLimit(limit);
+        return query;
+    }
+}
