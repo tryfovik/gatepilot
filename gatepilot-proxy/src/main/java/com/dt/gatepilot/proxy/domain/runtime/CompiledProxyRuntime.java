@@ -1,9 +1,9 @@
 package com.dt.gatepilot.proxy.domain.runtime;
 
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import lombok.Data;
 
@@ -56,11 +56,15 @@ public class CompiledProxyRuntime {
      * @return 路由
      */
     public CompiledRoute match(String host, String path) {
-        return routes.stream()
-                .filter(route -> route.getHosts().isEmpty() || route.getHosts().contains(host))
-                .filter(route -> path != null && path.startsWith(route.getPathPrefix()))
-                .max(Comparator.comparingInt(route -> route.getPathPrefix().length()))
-                .orElse(null);
+        String normalizedPath = normalizePath(path);
+        if (normalizedPath == null) {
+            return null;
+        }
+        CompiledRoute exactHostRoute = matchByHost(normalizeHost(host), normalizedPath);
+        if (exactHostRoute != null) {
+            return exactHostRoute;
+        }
+        return matchByHost("*", normalizedPath);
     }
 
     /**
@@ -89,5 +93,55 @@ public class CompiledProxyRuntime {
         setVersion(config.getSpec().getVersion());
         setConfigHash(config.getSpec().getConfigHash());
         setConfigShard(config.getSpec().getConfigShard());
+    }
+
+    private CompiledRoute matchByHost(String host, String path) {
+        if (host == null) {
+            return null;
+        }
+        String candidate = path;
+        while (candidate != null) {
+            CompiledRoute route = routesByHostAndPath.get(new RouteMatchKey(host, candidate));
+            if (route != null) {
+                return route;
+            }
+            candidate = parentPath(candidate);
+        }
+        return null;
+    }
+
+    private String parentPath(String path) {
+        int lastSlash = path.lastIndexOf('/');
+        if (lastSlash <= 0) {
+            return "/".equals(path) ? null : "/";
+        }
+        return path.substring(0, lastSlash);
+    }
+
+    private String normalizePath(String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        String normalized = path.startsWith("/") ? path : "/" + path;
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex >= 0) {
+            normalized = normalized.substring(0, queryIndex);
+        }
+        while (normalized.length() > 1 && normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private String normalizeHost(String host) {
+        if (host == null || host.isBlank()) {
+            return null;
+        }
+        String normalized = host.trim().toLowerCase(Locale.ROOT);
+        int portIndex = normalized.indexOf(':');
+        if (portIndex > 0) {
+            return normalized.substring(0, portIndex);
+        }
+        return normalized;
     }
 }

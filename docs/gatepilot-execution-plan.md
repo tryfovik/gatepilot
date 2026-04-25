@@ -198,8 +198,8 @@ console
 - [x] proxy 支持失败保留 last-good。
 - [x] proxy 支持 `PublishedConfig` 预编译为运行态快照。
 - [x] proxy 热路径运行态使用本地内存索引，不访问控制面。
-- [ ] 从旧 `GatewayRouteDefinitionLocator` 迁移路由编译和命中算法。
-- [ ] 从旧 `GatewayTrafficColorResolver` / `GatewayTrafficColorFilter` 迁移流量染色执行能力。
+- [x] 从旧 `GatewayRouteDefinitionLocator` 迁移路由编译和命中算法。
+- [x] 从旧 `GatewayTrafficColorResolver` / `GatewayTrafficColorFilter` 迁移流量染色执行能力。
 - [ ] 从旧 `GatewayAuthenticationFilter` 迁移路由级认证能力。
 - [ ] 从旧 `GatewayMethodAccessFilter` 迁移 HTTP 方法白名单能力。
 - [ ] 从旧 `GatewayCircuitBreakerFilter` 迁移熔断和 fallback 能力。
