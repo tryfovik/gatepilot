@@ -691,7 +691,7 @@ Client
 | --- | --- | --- | --- | --- |
 | `platform-gateway-legacy-config/GatewayProperties` | 旧 YAML 配置模型，包含项目、路由、认证、CORS、健康检查、上下文头、染色、审计、治理策略 | `gatepilot-domain` 资源模型和 `gatepilot-apiserver` admission 校验 | 部分覆盖 | 只能作为字段设计参考，不能继续让生产依赖本地 YAML 作为事实来源 |
 | `platform-gateway-legacy-config/GatewayRouteDefinitionLocator` | 路由编译和路由命中 | `gatepilot-proxy/domain/runtime` | 已覆盖编译索引和最长前缀命中，转发执行未完成 | 改成从 `PublishedConfig` 预编译，不再从 `GatewayProperties` 读取 |
-| `platform-gateway-legacy-config/GatewayTrafficColorResolver` | Header、Cookie、Query、IP 等染色解析 | `gatepilot-proxy/domain/runtime` | 部分覆盖，Header / Cookie / 权重 / 默认色已有测试，Query / IP 仍缺 | 保留解析规则，输入改成 proxy 运行态请求上下文和已发布策略 |
+| `platform-gateway-legacy-config/GatewayTrafficColorResolver` | Header、Cookie、Query、IP 等染色解析 | `gatepilot-proxy/domain/runtime` | 已覆盖 Header / Cookie / Query / IP / 权重 / 默认色解析，过滤链执行和响应头回写仍缺 | 保留解析规则，输入改成 proxy 运行态请求上下文和已发布策略 |
 | `platform-gateway-legacy-config/GatewayPropertiesValidator` | 配置合法性校验 | `gatepilot-apiserver/application` 和 `gatepilot-controller-manager/application` | 部分覆盖 | 拆成资源 admission 校验、发布 dry-run 校验、PublishedConfig 编译校验 |
 | `platform-gateway-runtime/GatewayAuthenticationFilter` | 路由级认证 | `gatepilot-proxy` | 只覆盖策略判断，getboot-auth 执行未接入 | 参考旧判断逻辑，继续复用 getboot-auth，策略来自 `PublishedConfig`，失败响应使用 getboot 统一规则 |
 | `platform-gateway-runtime/GatewayMethodAccessFilter` | HTTP 方法白名单 | `gatepilot-proxy` | 只覆盖策略判断，WebFlux 过滤链执行未接入 | 改为读取编译后的 route policy，热路径不能访问控制面 |
