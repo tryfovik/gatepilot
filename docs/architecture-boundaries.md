@@ -805,7 +805,7 @@ Client
 | 历史 runtime 模块/GatewayMethodAccessFilter | HTTP 方法白名单 | `gatepilot-proxy` | 已覆盖策略判断和 WebFlux 405 执行 | 改为读取编译后的 route policy，热路径不能访问控制面 |
 | 历史 runtime 模块/InternalRouteAccessFilter | 内部运维入口保护 | `gatepilot-proxy` 或 `gatepilot-apiserver` 各自入口保护 | 已覆盖 proxy 内部入口保护并删除旧实现 | 按入口分开，proxy 保护本机 apply / health / state，apiserver 保护管理 API |
 | 历史 runtime 模块/GatewayTrafficColorFilter | 流量染色执行和响应头回写 | `gatepilot-proxy` | 已覆盖解析、请求头透传和响应头回写，旧实现已删除 | 与灰度、蓝绿选择统一走运行态策略快照 |
-| 历史 runtime 模块/GatewayCircuitBreakerFilter | 轻量熔断和 fallback | `gatepilot-proxy` | 已覆盖本机滑动窗口状态机、OPEN / HALF_OPEN / CLOSED 转换、getboot `ApiResponse` fallback 和 getboot-governance / Sentinel 规则发布，旧实现已删除 | 策略来自 `PublishedConfig`，状态只存在 proxy 本机内存，后续限流和治理公共能力仍优先接 getboot |
+| 历史 runtime 模块/GatewayCircuitBreakerFilter | 轻量熔断和 fallback | `gatepilot-proxy` | 已覆盖本机滑动窗口状态机、OPEN / HALF_OPEN / CLOSED 转换和 getboot `ApiResponse` fallback，旧实现已删除 | 已评估 getboot-governance / Sentinel：当前公共模块只覆盖 Sentinel 配置桥接、Gateway 过滤器和限流规则，不能等价承接 HTTP 状态码熔断；本机实现暂保留但禁止继续扩展算法，后续先补 getboot-governance 统一熔断 SPI 再替换 |
 | 历史 runtime 模块/GatewayAccessAuditFilter | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | 已覆盖 proxy 采集、agent 批量上报和 apiserver 持久化查询 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
 | 历史 runtime 模块/UpstreamHealthIndicator | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | 已覆盖 proxy 主动探测、agent 状态上报和 console 节点展示，旧实现已删除 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |
 | 历史 server 模块/GatewaySentinelRuleRegistrar | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 已覆盖 `PublishedConfig` -> getboot-limiter 运行时适配和 Sentinel 网关规则发布，旧实现已删除 | 当前不直接迁移旧 YAML Sentinel 注册器；后续若接 Sentinel，仍由 `PublishedConfig` 编译生成规则 |
