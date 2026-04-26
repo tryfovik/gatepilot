@@ -1,6 +1,9 @@
 package com.dt.gatepilot.controller.application.service;
 
+import com.dt.gatepilot.controller.application.command.ReconcileRequest;
+import com.dt.gatepilot.controller.domain.model.GatewayDesiredState;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
+import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
 import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
@@ -12,8 +15,6 @@ import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
 import com.dt.gatepilot.domain.resource.route.GatewayRoute;
 import com.dt.gatepilot.domain.resource.upstream.Upstream;
-import com.dt.gatepilot.controller.application.command.ReconcileRequest;
-import com.dt.gatepilot.controller.domain.model.GatewayDesiredState;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -178,10 +179,25 @@ public class PublishedConfigAssembler {
         snapshot.setSourceRef(ref(ResourceKind.UPSTREAM, upstream.getMetadata().getNamespace(),
                 upstream.getMetadata().getName(), upstream.getMetadata().getUid()));
         snapshot.setProtocol(upstream.getSpec().getProtocol());
-        snapshot.setLoadBalance(Optional.ofNullable(upstream.getSpec().getLoadBalance()).map(Enum::name).orElse(null));
+        snapshot.setLoadBalance(loadBalance(upstream));
         snapshot.setEndpoints(upstream.getSpec().getEndpoints().stream().map(this::endpointSnapshot).toList());
         snapshot.setHealthCheck(healthCheckSnapshot(upstream.getSpec().getHealthCheck()));
         return snapshot;
+    }
+
+    private String loadBalance(Upstream upstream) {
+        LoadBalanceStrategy strategy = upstream.getSpec().getLoadBalance();
+        if (strategy == null) {
+            return null;
+        }
+        if (!strategy.isSupported()) {
+            // controller-manager 再拦一次，防止绕过 dry-run 的发布进入数据面
+            throw new IllegalArgumentException(PublishedConfigAssemblerConstants.ERROR_UNSUPPORTED_LOAD_BALANCE_PREFIX
+                    + upstream.getMetadata().getName()
+                    + PublishedConfigAssemblerConstants.ERROR_DETAIL_SEPARATOR
+                    + strategy.name());
+        }
+        return strategy.name();
     }
 
     private PublishedConfig.PublishedEndpoint endpointSnapshot(Upstream.UpstreamEndpoint endpoint) {

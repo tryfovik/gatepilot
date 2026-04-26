@@ -1,26 +1,27 @@
 package com.dt.gatepilot.apiserver.application.service;
 
+import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
+import com.dt.gatepilot.apiserver.application.command.CreateRollbackCommand;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseResult;
+import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.domain.enums.EventSeverity;
+import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
 import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
+import com.dt.gatepilot.domain.resource.event.GatewayEvent;
+import com.dt.gatepilot.domain.resource.event.GatewayEventConstants;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
+import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
+import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
 import com.dt.gatepilot.domain.resource.route.GatewayRoute;
 import com.dt.gatepilot.domain.resource.upstream.Upstream;
-import com.dt.gatepilot.domain.resource.event.GatewayEventConstants;
-import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
-import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
-import com.dt.gatepilot.domain.resource.meta.ResourceReference;
-import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
-import com.dt.gatepilot.domain.resource.event.GatewayEvent;
-import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
-import com.dt.gatepilot.apiserver.application.command.CreateRollbackCommand;
-import com.dt.gatepilot.apiserver.domain.model.CursorPage;
-import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
-import com.dt.gatepilot.apiserver.application.dto.ReleaseResult;
-import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
-import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
-import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.getboot.exception.api.code.CommonErrorCode;
 import com.getboot.exception.api.exception.BusinessException;
 import java.time.Instant;
@@ -367,6 +368,20 @@ public class GatePilotReleaseService {
                         GatePilotReleaseConstants.MESSAGE_UPSTREAM_ENDPOINT_MISSING_PREFIX
                                 + upstream.getMetadata().getName());
             }
+            validateUpstreamLoadBalance(response, upstream);
+        }
+    }
+
+    private void validateUpstreamLoadBalance(ReleaseDryRunResult response, Upstream upstream) {
+        LoadBalanceStrategy strategy = upstream.getSpec().getLoadBalance();
+        if (strategy != null && !strategy.isSupported()) {
+            // 未被成熟组件承接的策略必须在发布前阻断
+            addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
+                    GatePilotReleaseConstants.REASON_UPSTREAM_LOAD_BALANCE_UNSUPPORTED,
+                    GatePilotReleaseConstants.MESSAGE_UPSTREAM_LOAD_BALANCE_UNSUPPORTED_PREFIX
+                            + upstream.getMetadata().getName()
+                            + GatePilotReleaseConstants.REFERENCE_SEPARATOR
+                            + strategy.name());
         }
     }
 

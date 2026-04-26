@@ -28,5 +28,17 @@ public enum LoadBalanceStrategy {
     /**
      * 一致性哈希。
      */
-    CONSISTENT_HASH
+    CONSISTENT_HASH;
+
+    /**
+     * 判断当前策略是否已有运行组件承接。
+     *
+     * @return 是否可在当前运行态执行
+     */
+    public boolean isSupported() {
+        return switch (this) {
+            case ROUND_ROBIN, WEIGHTED_ROUND_ROBIN, RANDOM -> true;
+            case LEAST_CONNECTIONS, CONSISTENT_HASH -> false;
+        };
+    }
 }

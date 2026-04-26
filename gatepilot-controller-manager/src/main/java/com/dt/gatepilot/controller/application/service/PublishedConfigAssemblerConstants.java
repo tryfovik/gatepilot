@@ -35,6 +35,16 @@ public final class PublishedConfigAssemblerConstants {
      */
     public static final String DIGEST_SHA_256 = "SHA-256";
 
+    /**
+     * 不支持负载均衡策略错误前缀。
+     */
+    public static final String ERROR_UNSUPPORTED_LOAD_BALANCE_PREFIX = "unsupported load balance strategy: ";
+
+    /**
+     * 错误详情分隔符。
+     */
+    public static final String ERROR_DETAIL_SEPARATOR = " -> ";
+
     private PublishedConfigAssemblerConstants() {
         // PublishedConfig 组装常量不允许实例化
     }

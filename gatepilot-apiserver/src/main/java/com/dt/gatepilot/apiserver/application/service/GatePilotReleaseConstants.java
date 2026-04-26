@@ -116,6 +116,11 @@ public final class GatePilotReleaseConstants {
     public static final String REASON_UPSTREAM_ENDPOINT_MISSING = "UpstreamEndpointMissing";
 
     /**
+     * 上游负载均衡策略不支持原因码。
+     */
+    public static final String REASON_UPSTREAM_LOAD_BALANCE_UNSUPPORTED = "UpstreamLoadBalanceUnsupported";
+
+    /**
      * 发布策略上游缺失原因码。
      */
     public static final String REASON_RELEASE_UPSTREAM_MISSING = "ReleaseUpstreamMissing";
@@ -174,6 +179,12 @@ public final class GatePilotReleaseConstants {
      * 上游端点缺失提示前缀。
      */
     public static final String MESSAGE_UPSTREAM_ENDPOINT_MISSING_PREFIX = "上游没有可用端点: ";
+
+    /**
+     * 上游负载均衡策略不支持提示前缀。
+     */
+    public static final String MESSAGE_UPSTREAM_LOAD_BALANCE_UNSUPPORTED_PREFIX =
+            "上游负载均衡策略当前没有成熟组件承接: ";
 
     /**
      * 发布策略上游缺失提示前缀。

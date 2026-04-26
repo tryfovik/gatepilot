@@ -304,6 +304,7 @@ controller-manager 与 apiserver 的关系：
 - `gatepilot-proxy/infrastructure/loadbalancer` 只负责把 `PublishedConfig` 中的 upstream endpoints 转换成 Spring Cloud `ServiceInstance` 列表，并按本机健康状态过滤实例。
 - 轮询、随机和加权轮询交给 Spring Cloud LoadBalancer 的 `RoundRobinLoadBalancer`、`RandomLoadBalancer` 和 `WeightedServiceInstanceListSupplier`。
 - 一致性哈希、最少连接等策略如果没有成熟组件支撑，必须先在控制面校验为不支持或引入明确组件适配，禁止回到 proxy 热路径手写算法。
+- 当前 `LEAST_CONNECTIONS` 和 `CONSISTENT_HASH` 只保留模型枚举，发布 dry-run、controller-manager 组装和 proxy apply 都必须拒绝。
 - 健康探测状态可以影响实例列表，但健康探测本身必须保持非业务转发通道，不能替代 SCG 业务转发链路。
 - Spring Cloud LoadBalancer `HealthCheckServiceInstanceListSupplier` 只作为后续接入参考，不能直接替换当前上游健康探测；替换前必须满足动态实例重取、单 upstream path / timeout / 阈值、agent 健康摘要上报和全部端点失败开放。
 

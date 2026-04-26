@@ -1,21 +1,22 @@
 package com.dt.gatepilot.apiserver.application.service;
 
-import com.dt.gatepilot.domain.enums.ResourceKind;
-import com.dt.gatepilot.domain.resource.meta.ResourceReference;
-import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
-import com.dt.gatepilot.domain.resource.route.GatewayRoute;
-import com.dt.gatepilot.domain.resource.upstream.Upstream;
-import com.dt.gatepilot.domain.resource.project.GatewayProject;
-import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
 import com.dt.gatepilot.apiserver.application.command.CreateRollbackCommand;
-import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
 import com.dt.gatepilot.apiserver.application.dto.ReleaseResult;
+import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryGatePilotResourceStore;
+import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
+import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
+import com.dt.gatepilot.domain.resource.meta.ResourceReference;
+import com.dt.gatepilot.domain.resource.project.GatewayProject;
+import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
+import com.dt.gatepilot.domain.resource.route.GatewayRoute;
+import com.dt.gatepilot.domain.resource.upstream.Upstream;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -124,6 +125,23 @@ class GatePilotReleaseServiceTest {
     }
 
     @Test
+    void shouldRejectUnsupportedLoadBalanceStrategyOnDryRun() {
+        saveProject("default", "game");
+        saveUnsupportedLoadBalanceUpstream();
+        saveRouteForUpstream("hash-route", "hash-upstream");
+        CreateReleaseCommand request = new CreateReleaseCommand();
+        request.setNamespace("default");
+        request.setProjectName("game");
+
+        ReleaseDryRunResult response = releaseService.dryRun(request);
+
+        assertThat(response.isPassed()).isFalse();
+        assertThat(response.getMessages())
+                .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
+                .contains(GatePilotReleaseConstants.REASON_UPSTREAM_LOAD_BALANCE_UNSUPPORTED);
+    }
+
+    @Test
     void shouldCreateRollbackEventAndMarkSnapshot() {
         saveProject("default", "game");
         PublishedConfig config = publishedConfig("default", "game", "v1", "shard-a");
@@ -183,14 +201,30 @@ class GatePilotReleaseServiceTest {
         resourceService.save(upstreamType, "default", "main-upstream", upstream);
     }
 
+    private void saveUnsupportedLoadBalanceUpstream() {
+        Upstream upstream = new Upstream();
+        upstream.getSpec().setProjectRef(projectRef("default", "game"));
+        upstream.getSpec().setLoadBalance(LoadBalanceStrategy.CONSISTENT_HASH);
+        Upstream.UpstreamEndpoint endpoint = new Upstream.UpstreamEndpoint();
+        endpoint.setHost("127.0.0.1");
+        endpoint.setPort(8080);
+        upstream.getSpec().getEndpoints().add(endpoint);
+        GatePilotResourceType upstreamType = resourceService.requireResourceType(ResourceKind.UPSTREAM);
+        resourceService.save(upstreamType, "default", "hash-upstream", upstream);
+    }
+
     private void saveValidRoute(int index) {
+        saveRouteForUpstream("game-route-" + index, "main-upstream");
+    }
+
+    private void saveRouteForUpstream(String routeName, String upstreamName) {
         GatewayRoute route = new GatewayRoute();
         route.getSpec().setProjectRef(projectRef("default", "game"));
         route.getSpec().getHosts().add("game.example.com");
-        route.getSpec().getPath().setValue("/api/game/" + index);
-        route.getSpec().setUpstreamRef(resourceRef(ResourceKind.UPSTREAM, "default", "main-upstream"));
+        route.getSpec().getPath().setValue("/api/game/" + routeName);
+        route.getSpec().setUpstreamRef(resourceRef(ResourceKind.UPSTREAM, "default", upstreamName));
         GatePilotResourceType routeType = resourceService.requireResourceType(ResourceKind.GATEWAY_ROUTE);
-        resourceService.save(routeType, "default", "game-route-" + index, route);
+        resourceService.save(routeType, "default", routeName, route);
     }
 
     private ResourceReference projectRef(String namespace, String name) {

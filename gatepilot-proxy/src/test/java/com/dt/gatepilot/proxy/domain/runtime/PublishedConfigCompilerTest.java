@@ -59,6 +59,19 @@ class PublishedConfigCompilerTest {
     }
 
     @Test
+    void shouldRejectUnsupportedLoadBalanceStrategy() {
+        PublishedConfig config = config("v1", "hash-v1");
+        PublishedConfig.PublishedUpstream upstream = new PublishedConfig.PublishedUpstream();
+        upstream.setName("hash-upstream");
+        upstream.setLoadBalance("CONSISTENT_HASH");
+        config.getSpec().getUpstreams().add(upstream);
+
+        assertThatThrownBy(() -> new PublishedConfigCompiler().compile(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(ProxyLoadBalanceConstants.ERROR_UNSUPPORTED_STRATEGY_PREFIX);
+    }
+
+    @Test
     void shouldPrecompileRoutePoliciesWithoutDependingOnRawConfigMap() {
         PublishedConfig config = config("v1", "hash-v1");
         PublishedConfig.PublishedRoute route = route(ROUTE_ID, HOST, ROUTE_PATH);

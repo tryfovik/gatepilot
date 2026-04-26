@@ -81,12 +81,25 @@ public class PublishedConfigCompiler {
             CompiledUpstream upstream = new CompiledUpstream();
             upstream.setName(source.getName());
             upstream.setProtocol(source.getProtocol());
-            upstream.setLoadBalance(source.getLoadBalance());
+            upstream.setLoadBalance(normalizeLoadBalance(source.getLoadBalance()));
             upstream.setEndpoints(source.getEndpoints().stream().map(this::compileEndpoint).toList());
             upstream.setHealthCheck(compileHealthCheck(source.getHealthCheck()));
             upstreams.put(upstream.getName(), upstream);
         }
         return upstreams;
+    }
+
+    private String normalizeLoadBalance(String strategy) {
+        if (strategy == null || strategy.isBlank()) {
+            return ProxyLoadBalanceConstants.DEFAULT_STRATEGY;
+        }
+        String normalized = strategy.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        if (!ProxyLoadBalanceConstants.SUPPORTED_STRATEGIES.contains(normalized)) {
+            // proxy apply 兜底拒绝旧产物，避免静默降级成轮询
+            throw new IllegalArgumentException(ProxyLoadBalanceConstants.ERROR_UNSUPPORTED_STRATEGY_PREFIX
+                    + normalized);
+        }
+        return normalized;
     }
 
     private CompiledUpstream.CompiledEndpoint compileEndpoint(PublishedConfig.PublishedEndpoint source) {
