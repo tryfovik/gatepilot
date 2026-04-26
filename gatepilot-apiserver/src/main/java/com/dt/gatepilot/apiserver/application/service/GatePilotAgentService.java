@@ -15,6 +15,7 @@ import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResult;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -27,6 +28,7 @@ import org.springframework.util.StringUtils;
  * agent 协议服务。
  */
 @Service
+@ConditionalOnGatePilotApiserverEnabled
 public class GatePilotAgentService {
 
     private final GatePilotResourceService resourceService;

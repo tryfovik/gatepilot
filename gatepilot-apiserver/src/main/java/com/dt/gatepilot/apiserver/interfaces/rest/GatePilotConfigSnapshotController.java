@@ -4,6 +4,7 @@ import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResult;
 import com.dt.gatepilot.apiserver.application.dto.ConfigSnapshotSummaryResponse;
 import com.dt.gatepilot.apiserver.application.service.GatePilotConfigSnapshotService;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.getboot.web.api.response.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +16,7 @@ import reactor.core.publisher.Mono;
  * 配置版本快照 API。
  */
 @RestController
+@ConditionalOnGatePilotApiserverEnabled
 @RequestMapping(GatePilotApiPaths.CONFIG_SNAPSHOTS)
 public class GatePilotConfigSnapshotController {
 

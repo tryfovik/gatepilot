@@ -4,6 +4,7 @@ import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyRequest;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyResult;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
+import com.dt.gatepilot.proxy.infrastructure.config.ConditionalOnGatePilotProxyEnabled;
 import com.getboot.web.api.response.ApiResponse;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,6 +16,7 @@ import reactor.core.publisher.Mono;
  * proxy runtime control API
  */
 @RestController
+@ConditionalOnGatePilotProxyEnabled
 @RequestMapping(ProxyRuntimeApiPaths.PROXY)
 public class ProxyRuntimeControlController {
 

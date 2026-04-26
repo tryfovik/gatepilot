@@ -11,6 +11,11 @@ public final class ControllerManagerConstants {
     public static final String CONFIG_PREFIX = "gatepilot.controller-manager";
 
     /**
+     * controller-manager 启用开关配置名
+     */
+    public static final String ENABLED_PROPERTY = "enabled";
+
+    /**
      * 默认 controller 标识。
      */
     public static final String DEFAULT_CONTROLLER_ID = "local-controller";

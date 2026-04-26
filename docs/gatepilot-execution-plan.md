@@ -330,7 +330,7 @@ console
 - [x] 大路由表预编译和 proxy 原子切换压测通过。
 - [x] configShard / isolationGroup 分片发布验证通过。
 - [x] 高流量项目通过扩 proxy 副本承载，不修改转发代码。
-- [ ] Kubernetes 基础部署验证通过：VIP / Nginx 入口不承载 GatePilot 项目治理，proxy Deployment + Service + HPA 可扩副本。
+- [x] Kubernetes 基础部署验证通过：VIP / Nginx 入口不承载 GatePilot 项目治理，proxy Deployment + Service + HPA 可扩副本。
 - [x] agent 从网关配置读取 namespace、nodeId、zone、isolationGroup、configShards 并注册为 `GatewayNode`。
 - [x] controller-manager 多副本通过 getboot-lock 等价机制完成 leader / standby 验证。
 

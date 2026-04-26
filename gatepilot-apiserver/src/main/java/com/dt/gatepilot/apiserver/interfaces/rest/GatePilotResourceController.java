@@ -2,6 +2,7 @@ package com.dt.gatepilot.apiserver.interfaces.rest;
 
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.application.service.GatePilotResourceService;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.getboot.web.api.response.ApiResponse;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,6 +19,7 @@ import reactor.core.publisher.Mono;
  * GatePilot 声明式资源 API。
  */
 @RestController
+@ConditionalOnGatePilotApiserverEnabled
 @RequestMapping(GatePilotApiPaths.RESOURCES)
 public class GatePilotResourceController {
 

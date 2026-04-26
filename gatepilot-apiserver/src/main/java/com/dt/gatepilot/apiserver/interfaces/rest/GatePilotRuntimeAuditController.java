@@ -7,6 +7,7 @@ import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditConstants;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditQuery;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditRecord;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.getboot.web.api.response.ApiResponse;
 import jakarta.validation.Valid;
@@ -21,6 +22,7 @@ import reactor.core.publisher.Mono;
  * 运行审计 API。
  */
 @RestController
+@ConditionalOnGatePilotApiserverEnabled
 public class GatePilotRuntimeAuditController {
 
     /**

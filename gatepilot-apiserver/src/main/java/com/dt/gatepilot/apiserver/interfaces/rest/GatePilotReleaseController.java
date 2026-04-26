@@ -5,6 +5,7 @@ import com.dt.gatepilot.apiserver.application.command.CreateRollbackCommand;
 import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
 import com.dt.gatepilot.apiserver.application.dto.ReleaseResult;
 import com.dt.gatepilot.apiserver.application.service.GatePilotReleaseService;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.getboot.web.api.response.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,7 @@ import reactor.core.publisher.Mono;
  * GatePilot 发布请求 API。
  */
 @RestController
+@ConditionalOnGatePilotApiserverEnabled
 @RequestMapping(GatePilotApiPaths.RELEASES)
 public class GatePilotReleaseController {
 

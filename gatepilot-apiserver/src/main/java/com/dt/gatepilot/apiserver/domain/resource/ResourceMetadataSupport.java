@@ -1,5 +1,6 @@
 package com.dt.gatepilot.apiserver.domain.resource;
 
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
  * 资源 metadata 访问工具，避免 apiserver 依赖反射字符串。
  */
 @Component
+@ConditionalOnGatePilotApiserverEnabled
 public class ResourceMetadataSupport {
 
     /**

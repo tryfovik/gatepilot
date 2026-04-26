@@ -7,6 +7,7 @@ import com.dt.gatepilot.apiserver.application.command.AgentHeartbeatCommand;
 import com.dt.gatepilot.apiserver.application.command.RegisterAgentCommand;
 import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResult;
 import com.dt.gatepilot.apiserver.application.service.GatePilotAgentService;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.getboot.web.api.response.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +20,7 @@ import reactor.core.publisher.Mono;
  * agent 与 apiserver 的同步协议 API。
  */
 @RestController
+@ConditionalOnGatePilotApiserverEnabled
 @RequestMapping(GatePilotApiPaths.AGENTS)
 public class GatePilotAgentController {
 

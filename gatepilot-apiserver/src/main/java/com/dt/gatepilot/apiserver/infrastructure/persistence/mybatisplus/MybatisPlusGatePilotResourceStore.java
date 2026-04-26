@@ -4,6 +4,7 @@ import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.repository.GatePilotResourceStore;
 import com.dt.gatepilot.apiserver.domain.repository.ResourceStoreConstants;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverConstants;
 import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
@@ -26,6 +27,7 @@ import org.springframework.util.StringUtils;
  * 基于 MyBatis-Plus 的 GatePilot 资源存储实现。
  */
 @Repository
+@ConditionalOnGatePilotApiserverEnabled
 @ConditionalOnProperty(prefix = GatePilotApiserverConstants.STORE_CONFIG_PREFIX,
         name = GatePilotApiserverConstants.STORE_TYPE_PROPERTY,
         havingValue = GatePilotApiserverConstants.STORE_TYPE_DATABASE)

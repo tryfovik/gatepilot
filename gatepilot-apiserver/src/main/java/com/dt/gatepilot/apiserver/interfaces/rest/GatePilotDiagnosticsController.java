@@ -4,6 +4,7 @@ import com.dt.gatepilot.apiserver.application.dto.RouteCatalogResponse;
 import com.dt.gatepilot.apiserver.application.dto.RouteDiagnosticsRequest;
 import com.dt.gatepilot.apiserver.application.dto.RouteDiagnosticsResponse;
 import com.dt.gatepilot.apiserver.application.service.GatePilotDiagnosticsService;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.getboot.web.api.response.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,7 @@ import reactor.core.publisher.Mono;
  * GatePilot 诊断查询 API。
  */
 @RestController
+@ConditionalOnGatePilotApiserverEnabled
 @RequestMapping(GatePilotApiPaths.DIAGNOSTICS)
 public class GatePilotDiagnosticsController {
 

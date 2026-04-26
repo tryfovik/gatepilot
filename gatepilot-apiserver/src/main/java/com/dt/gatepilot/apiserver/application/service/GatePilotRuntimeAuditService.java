@@ -6,6 +6,7 @@ import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditQuery;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditRecord;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditStore;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
  * 运行审计应用服务。
  */
 @Service
+@ConditionalOnGatePilotApiserverEnabled
 public class GatePilotRuntimeAuditService {
 
     /**

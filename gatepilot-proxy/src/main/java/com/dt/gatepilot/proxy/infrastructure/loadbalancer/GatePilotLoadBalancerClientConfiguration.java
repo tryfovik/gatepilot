@@ -1,6 +1,7 @@
 package com.dt.gatepilot.proxy.infrastructure.loadbalancer;
 
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
+import com.dt.gatepilot.proxy.infrastructure.config.ConditionalOnGatePilotProxyEnabled;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -15,6 +16,7 @@ import org.springframework.core.env.Environment;
  * GatePilot Spring Cloud LoadBalancer 客户端配置
  */
 @Configuration(proxyBeanMethods = false)
+@ConditionalOnGatePilotProxyEnabled
 public class GatePilotLoadBalancerClientConfiguration {
 
     /**

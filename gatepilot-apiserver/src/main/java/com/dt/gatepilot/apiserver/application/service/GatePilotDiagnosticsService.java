@@ -5,6 +5,7 @@ import com.dt.gatepilot.apiserver.application.dto.RouteDiagnosticsRequest;
 import com.dt.gatepilot.apiserver.application.dto.RouteDiagnosticsResponse;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.domain.enums.AuthType;
 import com.dt.gatepilot.domain.enums.HttpMethod;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
@@ -35,6 +36,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * GatePilot 诊断查询服务。
  */
 @Service
+@ConditionalOnGatePilotApiserverEnabled
 public class GatePilotDiagnosticsService {
 
     private final GatePilotResourceService resourceService;

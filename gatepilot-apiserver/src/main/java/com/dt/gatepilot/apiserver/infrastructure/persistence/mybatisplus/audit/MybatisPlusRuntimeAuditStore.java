@@ -5,6 +5,7 @@ import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditQuery;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditRecord;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditStore;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverConstants;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -18,6 +19,7 @@ import org.springframework.util.StringUtils;
  * 基于 MyBatis-Plus 的运行审计存储。
  */
 @Repository
+@ConditionalOnGatePilotApiserverEnabled
 @ConditionalOnProperty(prefix = GatePilotApiserverConstants.STORE_CONFIG_PREFIX,
         name = GatePilotApiserverConstants.STORE_TYPE_PROPERTY,
         havingValue = GatePilotApiserverConstants.STORE_TYPE_DATABASE)

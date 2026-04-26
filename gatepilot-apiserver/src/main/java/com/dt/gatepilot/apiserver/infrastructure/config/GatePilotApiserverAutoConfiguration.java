@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
  * GatePilot apiserver 自动配置。
  */
 @Configuration
+@ConditionalOnGatePilotApiserverEnabled
 @EnableConfigurationProperties(GatePilotApiserverProperties.class)
 public class GatePilotApiserverAutoConfiguration {
 }

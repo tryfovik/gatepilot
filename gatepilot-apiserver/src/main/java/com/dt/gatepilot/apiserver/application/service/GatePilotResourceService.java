@@ -6,6 +6,7 @@ import com.dt.gatepilot.apiserver.domain.repository.GatePilotResourceStore;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
@@ -17,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
  * GatePilot 声明式资源服务。
  */
 @Service
+@ConditionalOnGatePilotApiserverEnabled
 public class GatePilotResourceService {
 
     private static final int DEFAULT_LIMIT = 50;

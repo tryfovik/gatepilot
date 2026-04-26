@@ -1,5 +1,6 @@
 package com.dt.gatepilot.apiserver.infrastructure.persistence.mybatisplus;
 
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverConstants;
 import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverProperties;
 import jakarta.annotation.PostConstruct;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
  * GatePilot 资源表初始化器。
  */
 @Component
+@ConditionalOnGatePilotApiserverEnabled
 @ConditionalOnProperty(prefix = GatePilotApiserverConstants.STORE_CONFIG_PREFIX,
         name = GatePilotApiserverConstants.STORE_TYPE_PROPERTY,
         havingValue = GatePilotApiserverConstants.STORE_TYPE_DATABASE)

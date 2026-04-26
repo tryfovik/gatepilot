@@ -17,6 +17,7 @@ import com.dt.gatepilot.controller.infrastructure.scheduling.ReleaseReconcileExe
 import com.dt.gatepilot.controller.infrastructure.scheduling.ReleaseReconcileScheduler;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +27,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * GatePilot controller-manager 自动配置。
  */
 @Configuration
+@ConditionalOnProperty(prefix = ControllerManagerConstants.CONFIG_PREFIX,
+        name = ControllerManagerConstants.ENABLED_PROPERTY,
+        havingValue = "true",
+        matchIfMissing = true)
 @EnableScheduling
 @EnableConfigurationProperties(GatePilotControllerManagerProperties.class)
 public class GatePilotControllerManagerAutoConfiguration {

@@ -11,6 +11,11 @@ public final class GatePilotApiserverConstants {
     public static final String CONFIG_PREFIX = "gatepilot.apiserver";
 
     /**
+     * apiserver 启用开关配置名。
+     */
+    public static final String ENABLED_PROPERTY = "enabled";
+
+    /**
      * 资源存储配置前缀。
      */
     public static final String STORE_CONFIG_PREFIX = CONFIG_PREFIX + ".store";

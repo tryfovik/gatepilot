@@ -11,6 +11,7 @@ import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.repository.ResourceStoreConstants;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.getboot.exception.api.code.CommonErrorCode;
@@ -33,6 +34,7 @@ import org.springframework.util.StringUtils;
  * 配置版本快照服务，负责快照保存、查找和版本 diff。
  */
 @Service
+@ConditionalOnGatePilotApiserverEnabled
 public class GatePilotConfigSnapshotService {
 
     private static final int LOOKUP_LIMIT = 500;

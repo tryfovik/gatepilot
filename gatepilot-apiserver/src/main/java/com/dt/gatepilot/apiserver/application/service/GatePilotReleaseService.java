@@ -20,6 +20,7 @@ import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
 import com.dt.gatepilot.apiserver.application.dto.ReleaseResult;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.getboot.exception.api.code.CommonErrorCode;
 import com.getboot.exception.api.exception.BusinessException;
 import java.time.Instant;
@@ -37,6 +38,7 @@ import org.springframework.web.server.ResponseStatusException;
  * 发布请求服务，负责接收发布意图并记录等待 controller-manager reconcile 的事件。
  */
 @Service
+@ConditionalOnGatePilotApiserverEnabled
 public class GatePilotReleaseService {
 
     private final GatePilotResourceService resourceService;

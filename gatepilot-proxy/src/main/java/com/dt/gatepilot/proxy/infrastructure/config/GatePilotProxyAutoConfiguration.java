@@ -48,6 +48,7 @@ import org.springframework.web.reactive.function.client.WebClient;
  * GatePilot proxy 自动配置。
  */
 @AutoConfiguration
+@ConditionalOnGatePilotProxyEnabled
 @ConditionalOnClass(RouteLocator.class)
 @EnableScheduling
 public class GatePilotProxyAutoConfiguration {

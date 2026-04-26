@@ -1,5 +1,6 @@
 package com.dt.gatepilot.apiserver.domain.resource;
 
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component;
  * GatePilot 资源类型注册表。
  */
 @Component
+@ConditionalOnGatePilotApiserverEnabled
 public class GatePilotResourceRegistry {
 
     private final Map<String, GatePilotResourceType> resourcesByPath = new LinkedHashMap<>();
