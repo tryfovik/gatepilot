@@ -1,0 +1,99 @@
+package com.dt.gatepilot.apiserver.application.service;
+
+import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
+import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateApplyResponse;
+import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDryRunResponse;
+import com.dt.gatepilot.apiserver.application.dto.ProjectTemplatePreviewResponse;
+import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateRenderRequest;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
+import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
+import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryGatePilotResourceStore;
+import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * 项目接入模板服务测试
+ */
+class ProjectTemplateServiceTest {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final GatePilotResourceService resourceService = new GatePilotResourceService(
+            new GatePilotResourceRegistry(),
+            new InMemoryGatePilotResourceStore(new ResourceMetadataSupport()),
+            objectMapper
+    );
+
+    private final GatePilotConfigSnapshotService snapshotService =
+            new GatePilotConfigSnapshotService(resourceService, objectMapper);
+
+    private final GatePilotReleaseService releaseService =
+            new GatePilotReleaseService(resourceService, snapshotService);
+
+    private final ProjectTemplateService templateService =
+            new ProjectTemplateService(resourceService);
+
+    @Test
+    void shouldPreviewAndApplyProjectTemplateResources() {
+        ProjectTemplateRenderRequest request = request();
+
+        ProjectTemplateDryRunResponse dryRun = templateService.dryRun(request);
+        ProjectTemplateApplyResponse apply = templateService.apply(request);
+        ProjectTemplatePreviewResponse previewAfterApply = templateService.preview(request);
+        ProjectTemplateApplyResponse secondApply = templateService.apply(request);
+        ReleaseDryRunResult releaseDryRun = releaseService.dryRun(releaseRequest());
+
+        assertThat(dryRun.isPassed()).isTrue();
+        assertThat(apply.getSavedResourceCount()).isEqualTo(6);
+        assertThat(secondApply.getSavedResourceCount()).isZero();
+        assertThat(previewAfterApply.getDiff().isChanged()).isFalse();
+        assertThat(previewAfterApply.getResources())
+                .extracting(ProjectTemplatePreviewResponse.RenderedResource::getAction)
+                .containsOnly(ProjectTemplateConstants.ACTION_UNCHANGED);
+        assertThat(releaseDryRun.isPassed()).isTrue();
+        assertThat(releaseDryRun.getRouteCount()).isEqualTo(1);
+        assertThat(releaseDryRun.getUpstreamCount()).isEqualTo(2);
+        assertThat(releaseDryRun.getPolicyCount()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldRejectUnsupportedLoadBalanceStrategy() {
+        ProjectTemplateRenderRequest request = request();
+        request.getUpstream().setLoadBalance(LoadBalanceStrategy.CONSISTENT_HASH);
+
+        ProjectTemplateDryRunResponse dryRun = templateService.dryRun(request);
+
+        assertThat(dryRun.isPassed()).isFalse();
+        assertThat(dryRun.getMessages())
+                .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
+                .contains(ProjectTemplateConstants.REASON_TEMPLATE_INVALID);
+    }
+
+    private ProjectTemplateRenderRequest request() {
+        ProjectTemplateRenderRequest request = new ProjectTemplateRenderRequest();
+        request.setNamespace("default");
+        request.setProjectName("game");
+        request.setDisplayName("游戏服务");
+        request.getRoute().setHost("game.example.com");
+        request.getRoute().setPath("/api/game");
+        request.getUpstream().setHost("10.0.0.1");
+        request.getUpstream().setPort(8080);
+        request.getCandidate().setEnabled(true);
+        request.getCandidate().setHost("10.0.0.2");
+        request.getCandidate().setPort(8080);
+        request.getRelease().setEnabled(true);
+        request.getRelease().setCandidateWeight(20);
+        return request;
+    }
+
+    private CreateReleaseCommand releaseRequest() {
+        CreateReleaseCommand command = new CreateReleaseCommand();
+        command.setNamespace("default");
+        command.setProjectName("game");
+        return command;
+    }
+}

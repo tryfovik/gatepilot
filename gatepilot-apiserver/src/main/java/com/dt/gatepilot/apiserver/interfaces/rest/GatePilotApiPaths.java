@@ -41,6 +41,11 @@ public final class GatePilotApiPaths {
     public static final String DIAGNOSTICS = API_V1_PREFIX + "/diagnostics";
 
     /**
+     * 模板 API 路径。
+     */
+    public static final String TEMPLATES = API_V1_PREFIX + "/templates";
+
+    /**
      * agent 注册路径。
      */
     public static final String AGENT_REGISTER = "/register";
@@ -89,6 +94,21 @@ public final class GatePilotApiPaths {
      * 路由诊断路径。
      */
     public static final String DIAGNOSTICS_ROUTE = "/route";
+
+    /**
+     * 项目模板预览路径。
+     */
+    public static final String TEMPLATE_PROJECT_PREVIEW = "/projects/preview";
+
+    /**
+     * 项目模板 dry-run 路径。
+     */
+    public static final String TEMPLATE_PROJECT_DRY_RUN = "/projects/dry-run";
+
+    /**
+     * 项目模板保存路径。
+     */
+    public static final String TEMPLATE_PROJECT_APPLY = "/projects/apply";
 
     private GatePilotApiPaths() {
         // REST 路径常量不允许实例化
