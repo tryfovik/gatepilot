@@ -3,7 +3,7 @@ package com.dt.gatepilot.embedded.infrastructure.assembly;
 import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditReporter;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
 import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
-import com.dt.gatepilot.embedded.infrastructure.config.GatePilotDeploymentModeConstants;
+import com.dt.gatepilot.domain.deployment.GatePilotDeploymentModeConstants;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;

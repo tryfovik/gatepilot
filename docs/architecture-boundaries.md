@@ -246,7 +246,7 @@ controller-manager 与 apiserver 的关系：
 - 写入本地 last-good 配置。
 - last-good 默认使用文件持久化，生产部署必须挂载本地卷或等价持久卷；`store-type`、`directory` 等配置项可以由 Nacos 下发，即使 Nacos 是集群，last-good 数据本身也要留在节点本地，保证 proxy 启动兜底不依赖远程读取。
 - 写入 staged config。
-- 通知本机 proxy apply 配置。
+- 通知本机 proxy apply 配置：单体模式走 embedded 进程内桥接，集群分服务模式走 proxy runtime control HTTP API。
 - 上报 apply 成功或失败原因。
 - 上报节点状态、当前配置版本、路由健康、上游健康和简要运行指标。
 - 控制面不可用时使用 last-good 启动。
@@ -278,6 +278,7 @@ controller-manager 与 apiserver 的关系：
 - 运行审计事件采集。
 - 运行指标采集。
 - 向 agent 暴露本机 apply / health / state 能力。
+- 暴露给 agent 的 runtime control API 只允许消费 `PublishedConfig` 并切换运行态，不能保存草稿、版本快照、发布历史或管理配置。
 
 限流执行规则：
 
@@ -724,7 +725,8 @@ Client
 - GatePilot proxy 负责项目级路由、转发、限流、熔断、重试、染色、蓝绿 / 灰度执行和审计采集。
 - GatePilot apiserver 仍然是配置事实来源，生产配置写数据库；Kubernetes 资源不能绕过 apiserver 直接改数据面。
 - controller-manager 多副本运行时使用 Kubernetes Lease 或等价机制做 leader election，避免多个 controller 同时推进同一发布。
-- 每个 proxy Pod 建议携带 agent sidecar；agent 只从网关配置读取 namespace、nodeId、zone、isolationGroup、configShards 后注册为 `GatewayNode`，这些配置由 Nacos 等配置中心统一下发。
+- 每个 proxy Pod 建议携带 agent sidecar；agent 只从网关配置读取 namespace、nodeId、zone、isolationGroup、configShards 和 proxy runtime control 地址后注册为 `GatewayNode`，这些配置由 Nacos 等配置中心统一下发。
+- agent 与 proxy 同 JVM 时使用 embedded 进程内桥接；分服务或 sidecar 形态下使用本机 HTTP runtime control 通知 proxy apply，不经过 apiserver 绕回数据面。
 - 高流量项目使用独立 Deployment、Service、HPA、PDB、configShard 和 isolationGroup，Nginx 按 host 或入口路径转发到对应 proxy Service。
 
 近期只考虑 Kubernetes 基础部署联动，不做 CRD / Gateway API / Envoy / xDS 等深集成，避免把当前阶段复杂度拉高。下面能力只作为长期路线保留，不能插队影响当前开发主线：

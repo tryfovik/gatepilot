@@ -320,19 +320,19 @@ console
 - [x] MyBatis-Plus 资源存储保存、更新、分页测试通过。
 - [x] agent / apiserver / app 运行审计上报、持久化、查询和进程内桥接测试通过。
 - [x] apiserver 不再依赖 controller-manager，app 不再承载进程内适配实现。
-- [ ] 分服务模式最小链路验证通过。
-- [ ] 配置发布链路端到端验证通过。
+- [x] 分服务模式最小链路验证通过。
+- [x] 配置发布链路端到端验证通过。
 - [x] proxy 控制面不可用时 last-good 启动验证通过。
 - [x] proxy 上游负载均衡改为 Spring Cloud LoadBalancer 组件执行，并补充实例列表、加权和 SCG `lb://` 测试。
 - [x] 多 proxy 副本注册、拉取配置、应用发布和状态聚合验证通过。
-- [ ] controller-manager 多副本 leader / standby 行为验证通过。
+- [x] controller-manager 多副本 leader / standby 行为验证通过。
 - [ ] 1000 项目资源装载、配置生成和分页查询压测通过。
 - [ ] 大路由表预编译和 proxy 原子切换压测通过。
 - [x] configShard / isolationGroup 分片发布验证通过。
 - [x] 高流量项目通过扩 proxy 副本承载，不修改转发代码。
 - [ ] Kubernetes 基础部署验证通过：VIP / Nginx 入口不承载 GatePilot 项目治理，proxy Deployment + Service + HPA 可扩副本。
 - [x] agent 从网关配置读取 namespace、nodeId、zone、isolationGroup、configShards 并注册为 `GatewayNode`。
-- [ ] controller-manager 多副本通过 Kubernetes Lease 或等价机制完成 leader / standby 验证。
+- [x] controller-manager 多副本通过 getboot-lock 等价机制完成 leader / standby 验证。
 
 ### Phase 9.5：架构债与 CR 待办
 

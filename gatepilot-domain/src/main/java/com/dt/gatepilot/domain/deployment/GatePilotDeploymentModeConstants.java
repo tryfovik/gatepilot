@@ -1,27 +1,27 @@
-package com.dt.gatepilot.embedded.infrastructure.config;
+package com.dt.gatepilot.domain.deployment;
 
 /**
- * GatePilot 部署模式配置常量。
+ * GatePilot 部署模式配置常量
  */
 public final class GatePilotDeploymentModeConstants {
 
     /**
-     * GatePilot 配置前缀。
+     * GatePilot 配置前缀
      */
     public static final String CONFIG_PREFIX = "gatepilot";
 
     /**
-     * 部署模式配置项。
+     * 部署模式配置项
      */
     public static final String MODE_PROPERTY = "mode";
 
     /**
-     * 单体合包模式。
+     * 单体合包模式
      */
     public static final String MODE_STANDALONE = "standalone";
 
     /**
-     * 集群分服务模式。
+     * 集群分服务模式
      */
     public static final String MODE_CLUSTER = "cluster";
 

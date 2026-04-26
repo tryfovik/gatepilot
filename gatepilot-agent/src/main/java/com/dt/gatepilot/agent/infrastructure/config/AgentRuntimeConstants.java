@@ -78,6 +78,11 @@ public final class AgentRuntimeConstants {
     public static final String DEFAULT_APISERVER_BASE_URL = "http://127.0.0.1:18080";
 
     /**
+     * 默认 proxy 地址
+     */
+    public static final String DEFAULT_PROXY_BASE_URL = "http://127.0.0.1:18081";
+
+    /**
      * 本地默认节点标识。
      */
     public static final String DEFAULT_NODE_ID = "local-node";

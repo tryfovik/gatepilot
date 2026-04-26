@@ -29,7 +29,7 @@ import com.dt.gatepilot.controller.domain.port.ReleaseIntentSource;
 import com.dt.gatepilot.controller.domain.port.RollbackConfigReader;
 import com.dt.gatepilot.controller.domain.model.GatewayDesiredState;
 import com.dt.gatepilot.controller.domain.model.ReleaseIntent;
-import com.dt.gatepilot.embedded.infrastructure.config.GatePilotDeploymentModeConstants;
+import com.dt.gatepilot.domain.deployment.GatePilotDeploymentModeConstants;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;

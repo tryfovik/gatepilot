@@ -11,7 +11,9 @@ import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
 import com.dt.gatepilot.agent.infrastructure.apiserver.HttpPullPublishedConfigSyncAdapter;
 import com.dt.gatepilot.agent.infrastructure.persistence.file.FileLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
+import com.dt.gatepilot.agent.infrastructure.proxy.HttpProxyApplyClient;
 import com.dt.gatepilot.agent.infrastructure.scheduling.AgentLifecycleManager;
+import com.dt.gatepilot.domain.deployment.GatePilotDeploymentModeConstants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -22,6 +24,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.util.StringUtils;
+import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * GatePilot agent 自动配置。
@@ -118,6 +121,23 @@ public class GatePilotAgentAutoConfiguration {
     public PublishedConfigSyncAdapter publishedConfigSyncAdapter(AgentControlPlaneClient controlPlaneClient) {
         // 默认只提供 HTTP pull，Nacos watch 后续通过替换这个 bean 接入
         return new HttpPullPublishedConfigSyncAdapter(controlPlaneClient);
+    }
+
+    /**
+     * 创建集群模式下的 proxy apply 客户端
+     *
+     * @param builder WebClient 构建器
+     * @param properties agent 配置
+     * @return proxy apply 客户端
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = GatePilotDeploymentModeConstants.CONFIG_PREFIX,
+            name = GatePilotDeploymentModeConstants.MODE_PROPERTY,
+            havingValue = GatePilotDeploymentModeConstants.MODE_CLUSTER)
+    public ProxyApplyClient proxyApplyClient(WebClient.Builder builder, GatePilotAgentProperties properties) {
+        // cluster 模式下 agent 通过本地 HTTP runtime control 通知 proxy apply
+        return new HttpProxyApplyClient(builder, properties);
     }
 
     /**

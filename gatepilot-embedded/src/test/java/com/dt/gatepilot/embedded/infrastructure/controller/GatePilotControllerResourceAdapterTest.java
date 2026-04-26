@@ -1,5 +1,13 @@
 package com.dt.gatepilot.embedded.infrastructure.controller;
 
+import com.dt.gatepilot.agent.application.dto.AgentApplyResult;
+import com.dt.gatepilot.agent.application.dto.AgentConfigCursor;
+import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
+import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
+import com.dt.gatepilot.agent.application.dto.AgentRuntimeAuditBatch;
+import com.dt.gatepilot.agent.application.service.AgentRuntimeCoordinator;
+import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
+import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
 import com.dt.gatepilot.domain.enums.NodeRole;
@@ -34,7 +42,12 @@ import com.dt.gatepilot.controller.application.service.NodeApplyStatusAggregator
 import com.dt.gatepilot.controller.application.service.PublishedConfigReconciler;
 import com.dt.gatepilot.controller.application.service.PublishedConfigStatusController;
 import com.dt.gatepilot.controller.application.service.ReleaseReconcileController;
+import com.dt.gatepilot.embedded.infrastructure.assembly.InProcessProxyApplyClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
+import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
+import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -205,6 +218,45 @@ class GatePilotControllerResourceAdapterTest {
         assertThat(secondPull.getPublishedConfig().getStatus().getAppliedNodeCount()).isZero();
     }
 
+    @Test
+    void shouldCompleteReleaseApplyPipelineThroughAgentAndProxy() {
+        saveProject();
+        saveUpstream();
+        saveRoute("/game");
+        saveNode();
+        ProxyRuntimeState runtimeState = new ProxyRuntimeState();
+        InMemoryLocalConfigStore localConfigStore = new InMemoryLocalConfigStore();
+        AgentRuntimeCoordinator coordinator = new AgentRuntimeCoordinator(
+                agentProfile(),
+                new EmbeddedAgentControlPlaneClient(),
+                localConfigStore,
+                new InProcessProxyApplyClient(new ProxyConfigApplier(new PublishedConfigCompiler(), runtimeState))
+        );
+
+        ReleaseResult release = releaseService.createRelease(releaseCommand("operator", "端到端发布"));
+        int processed = reconcileController.reconcileBatch(10);
+        Optional<AgentApplyResult> applyResult = coordinator.pullAndApply();
+        int refreshed = statusController.refreshBatch(10);
+        PublishedConfig storedConfig = latestPublishedConfig();
+        Optional<AgentApplyResult> secondApply = coordinator.pullAndApply();
+
+        assertThat(processed).isEqualTo(1);
+        assertThat(applyResult).hasValueSatisfying(result -> {
+            assertThat(result.getState()).isEqualTo(ConfigApplyState.APPLIED);
+            assertThat(result.getVersion()).isEqualTo(release.getVersion());
+        });
+        assertThat(localConfigStore.loadLastGood()).hasValueSatisfying(config ->
+                assertThat(config.getSpec().getVersion()).isEqualTo(release.getVersion()));
+        assertThat(runtimeState.current()).hasValueSatisfying(runtime -> {
+            assertThat(runtime.getVersion()).isEqualTo(release.getVersion());
+            assertThat(runtime.match("game.example.com", "/game/start")).isNotNull();
+        });
+        assertThat(refreshed).isEqualTo(1);
+        assertThat(storedConfig.getStatus().getApplyState()).isEqualTo(ConfigApplyState.APPLIED);
+        assertThat(storedConfig.getStatus().getAppliedNodeCount()).isEqualTo(1);
+        assertThat(secondApply).isEmpty();
+    }
+
     private CreateReleaseCommand releaseCommand(String createdBy, String description) {
         CreateReleaseCommand request = new CreateReleaseCommand();
         request.setNamespace("default");
@@ -300,6 +352,21 @@ class GatePilotControllerResourceAdapterTest {
                 config.getMetadata().getNamespace(), config.getMetadata().getName());
     }
 
+    private PublishedConfig latestPublishedConfig() {
+        return (PublishedConfig) resourceService.list(GatePilotResourcePaths.PUBLISHED_CONFIGS,
+                        "default", null, 10)
+                .getItems()
+                .get(0);
+    }
+
+    private AgentNodeProfile agentProfile() {
+        AgentNodeProfile profile = new AgentNodeProfile();
+        profile.setNamespace("default");
+        profile.setNodeId("node-1");
+        profile.getConfigShards().add("shard-a");
+        return profile;
+    }
+
     private ResourceReference projectRef() {
         ResourceReference reference = new ResourceReference();
         reference.setKind(ResourceKind.GATEWAY_PROJECT);
@@ -314,5 +381,42 @@ class GatePilotControllerResourceAdapterTest {
         reference.setNamespace("default");
         reference.setName("game-service");
         return reference;
+    }
+
+    private class EmbeddedAgentControlPlaneClient implements AgentControlPlaneClient {
+
+        @Override
+        public void register(AgentNodeProfile profile) {
+            // 当前端到端测试已预置节点资源
+        }
+
+        @Override
+        public void heartbeat(AgentHeartbeatSnapshot heartbeat) {
+            // 当前端到端测试只验证发布和 apply 主链路
+        }
+
+        @Override
+        public Optional<PublishedConfig> pullConfig(AgentConfigCursor cursor) {
+            PullAgentConfigCommand request = new PullAgentConfigCommand();
+            request.setNamespace(cursor.getNamespace());
+            request.setNodeId(cursor.getNodeId());
+            request.setZone(cursor.getZone());
+            request.setIsolationGroup(cursor.getIsolationGroup());
+            request.setCurrentVersion(cursor.getCurrentVersion());
+            request.setCurrentSequence(cursor.getCurrentSequence());
+            request.getConfigShards().addAll(cursor.getConfigShards());
+            return Optional.ofNullable(agentService.pullConfig(request).getPublishedConfig());
+        }
+
+        @Override
+        public void reportApplyResult(AgentApplyResult result) {
+            reportApply(result.getNodeId(), result.getVersion(), result.getConfigHash(),
+                    result.getState(), result.getMessage());
+        }
+
+        @Override
+        public void reportRuntimeAudits(AgentRuntimeAuditBatch batch) {
+            // 当前端到端测试不验证运行审计批量上报
+        }
     }
 }

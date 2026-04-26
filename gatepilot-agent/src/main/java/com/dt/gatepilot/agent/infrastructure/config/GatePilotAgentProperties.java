@@ -30,6 +30,11 @@ public class GatePilotAgentProperties {
     private String apiserverBaseUrl = AgentRuntimeConstants.DEFAULT_APISERVER_BASE_URL;
 
     /**
+     * proxy runtime control 基础地址
+     */
+    private String proxyBaseUrl = AgentRuntimeConstants.DEFAULT_PROXY_BASE_URL;
+
+    /**
      * 节点命名空间。
      */
     private String namespace = ResourceMetadataConstants.DEFAULT_NAMESPACE;

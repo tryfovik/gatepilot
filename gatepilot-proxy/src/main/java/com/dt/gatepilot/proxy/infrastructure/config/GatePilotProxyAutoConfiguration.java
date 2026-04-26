@@ -25,6 +25,7 @@ import com.dt.gatepilot.proxy.infrastructure.governance.SentinelGatewayRulePubli
 import com.dt.gatepilot.proxy.infrastructure.limiter.GetbootRuntimeRateLimiter;
 import com.dt.gatepilot.proxy.infrastructure.loadbalancer.GatePilotLoadBalancerClientConfiguration;
 import com.dt.gatepilot.proxy.infrastructure.loadbalancer.GatePilotLoadBalancerConstants;
+import com.dt.gatepilot.proxy.interfaces.control.ProxyRuntimeControlController;
 import com.dt.gatepilot.proxy.interfaces.gateway.GatePilotGatewayFilter;
 import com.dt.gatepilot.proxy.interfaces.gateway.GatePilotRouteLocator;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyRuntimeAuditRecorder;
@@ -93,6 +94,19 @@ public class GatePilotProxyAutoConfiguration {
         return new ProxyConfigApplier(compiler, runtimeState,
                 governanceRulePublisherProvider.getIfAvailable(() -> runtime -> {
                 }));
+    }
+
+    /**
+     * 创建 proxy runtime control API
+     *
+     * @param proxyConfigApplier proxy 配置应用器
+     * @return proxy runtime control API
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public ProxyRuntimeControlController proxyRuntimeControlController(ProxyConfigApplier proxyConfigApplier) {
+        // 只接收 agent 的配置应用请求，不提供管理配置能力
+        return new ProxyRuntimeControlController(proxyConfigApplier);
     }
 
     /**
