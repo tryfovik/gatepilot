@@ -69,6 +69,14 @@
               <div class="table-actions">
                 <button class="table-action" type="button" @click="setBase(item)">设基线</button>
                 <button class="table-action" type="button" @click="setTarget(item)">设目标</button>
+                <button
+                  class="table-action"
+                  type="button"
+                  :disabled="item.rollbackAllowed === false"
+                  @click="rollbackTo(item)"
+                >
+                  回滚
+                </button>
               </div>
             </td>
           </tr>
@@ -98,6 +106,7 @@
 
       <div v-if="diffLoading" class="state-box">正在对比...</div>
       <div v-else-if="diffError" class="state-box state-box--error">{{ diffError }}</div>
+      <div v-else-if="rollbackNotice" class="state-box state-box--compact">{{ rollbackNotice }}</div>
       <div v-else-if="!diff" class="state-box">暂无对比结果</div>
       <div v-else class="page-stack">
         <div class="metric-strip diff-strip">
@@ -164,6 +173,7 @@ import TimelineList from '../components/TimelineList.vue';
 import {
   ConfigDiffResponse,
   ConfigSnapshotSummaryResponse,
+  createRollback,
   diffConfigSnapshots,
   listConfigSnapshotSummaries
 } from '../api/client';
@@ -177,6 +187,7 @@ const loading = ref(false);
 const error = ref('');
 const diffLoading = ref(false);
 const diffError = ref('');
+const rollbackNotice = ref('');
 const confirmClear = ref(false);
 const items = ref<ConfigSnapshotSummaryResponse[]>([]);
 const diff = ref<ConfigDiffResponse | null>(null);
@@ -237,6 +248,7 @@ async function load() {
 
 async function compare() {
   diffError.value = '';
+  rollbackNotice.value = '';
   if (!namespace.value || !baseVersion.value || !targetVersion.value) {
     diffError.value = '请选择命名空间，并填写基线版本和目标版本';
     return;
@@ -252,6 +264,31 @@ async function compare() {
   } catch (err) {
     diff.value = null;
     diffError.value = err instanceof Error ? err.message : '对比失败';
+  } finally {
+    diffLoading.value = false;
+  }
+}
+
+async function rollbackTo(item: ConfigSnapshotSummaryResponse) {
+  diffError.value = '';
+  rollbackNotice.value = '';
+  if (!item.namespace || !item.projectName || !item.version) {
+    diffError.value = '快照缺少命名空间、项目或版本，不能回滚';
+    return;
+  }
+  diffLoading.value = true;
+  try {
+    const result = await createRollback({
+      namespace: item.namespace,
+      projectName: item.projectName,
+      targetVersion: item.version,
+      configShard: item.configShard || undefined,
+      description: `从快照页面回滚到 ${item.version}`,
+      createdBy: 'console'
+    });
+    rollbackNotice.value = `回滚请求已创建：${result.releaseId}`;
+  } catch (err) {
+    diffError.value = err instanceof Error ? err.message : '回滚失败';
   } finally {
     diffLoading.value = false;
   }

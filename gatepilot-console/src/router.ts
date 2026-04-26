@@ -3,9 +3,12 @@ import ConfigSnapshotsView from './views/ConfigSnapshotsView.vue';
 import DiagnosticsView from './views/DiagnosticsView.vue';
 import NodesView from './views/NodesView.vue';
 import OverviewView from './views/OverviewView.vue';
+import PolicyCenterView from './views/PolicyCenterView.vue';
 import ProjectTemplateView from './views/ProjectTemplateView.vue';
 import ResourceListView from './views/ResourceListView.vue';
+import ReleaseCenterView from './views/ReleaseCenterView.vue';
 import RouteCatalogView from './views/RouteCatalogView.vue';
+import RuntimeAuditView from './views/RuntimeAuditView.vue';
 
 const resourcePageProps = (resourceType: string, title: string, description: string) => ({
   resourceType,
@@ -32,13 +35,11 @@ export const router = createRouter({
     },
     {
       path: '/policies',
-      component: ResourceListView,
-      props: resourcePageProps('traffic-policies', '策略', '集中查看流量治理、认证和发布策略。')
+      component: PolicyCenterView
     },
     {
       path: '/releases',
-      component: ResourceListView,
-      props: resourcePageProps('published-configs', '发布', '查看 PublishedConfig、节点应用进度和失败原因。')
+      component: ReleaseCenterView
     },
     {
       path: '/snapshots',
@@ -59,8 +60,7 @@ export const router = createRouter({
     },
     {
       path: '/audits',
-      component: ResourceListView,
-      props: resourcePageProps('events', '审计', '查询操作审计、运行事件和关联 TraceId。')
+      component: RuntimeAuditView
     },
     {
       path: '/settings',

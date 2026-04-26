@@ -112,7 +112,7 @@
         </div>
 
         <div class="template-section">
-          <h3>治理与发布</h3>
+          <h3>治理与蓝绿发布</h3>
           <div class="form-grid">
             <label>
               <span>限流 QPS</span>
@@ -172,11 +172,11 @@
             </label>
             <label class="check-row">
               <input v-model="form.release.enabled" type="checkbox" />
-              <span>启用灰度发布</span>
+              <span>启用蓝绿 / 灰度</span>
             </label>
             <label class="check-row">
               <input v-model="form.candidate.enabled" type="checkbox" />
-              <span>创建候选上游</span>
+              <span>创建绿色 / 候选上游</span>
             </label>
             <label class="check-row">
               <input v-model="form.auth.anonymousAllowed" type="checkbox" />
@@ -294,7 +294,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { AlertTriangle, CheckCircle2, Eye, Rocket, Save } from 'lucide-vue-next';
 import MetricStrip from '../components/MetricStrip.vue';
 import ResourceDetailDrawer from '../components/ResourceDetailDrawer.vue';
@@ -359,6 +359,21 @@ const diffMetrics = computed(() => {
 const releaseRequestJson = computed(() => JSON.stringify(preview.value?.releaseRequest ?? {}, null, 2));
 
 onMounted(loadDefaults);
+
+watch(
+  () => form.release.strategy,
+  (strategy, previousStrategy) => {
+    if (strategy === 'BLUE_GREEN') {
+      form.release.candidateWeight = 100;
+      form.release.enabled = true;
+      form.candidate.enabled = true;
+      return;
+    }
+    if (previousStrategy === 'BLUE_GREEN' && form.release.candidateWeight === 100) {
+      form.release.candidateWeight = 10;
+    }
+  }
+);
 
 async function loadDefaults() {
   await runAction('defaults', async () => {

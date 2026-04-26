@@ -505,6 +505,7 @@ public class ProjectTemplateService {
         String projectName = safeName(text(request.getProjectName(), ProjectTemplateConstants.DEFAULT_PROJECT_NAME));
         Integer upstreamPort = value(upstream.getPort(), ProjectTemplateConstants.DEFAULT_HTTP_PORT);
         boolean releaseEnabled = Boolean.TRUE.equals(release.getEnabled()) || Boolean.TRUE.equals(candidate.getEnabled());
+        ReleaseStrategy releaseStrategy = value(release.getStrategy(), ReleaseStrategy.TRAFFIC_SPLIT);
         return new TemplateValues(
                 text(request.getNamespace(), ResourceMetadataConstants.DEFAULT_NAMESPACE),
                 projectName,
@@ -532,8 +533,8 @@ public class ProjectTemplateService {
                 value(governance.getBurstCapacity(), ProjectTemplateConstants.DEFAULT_BURST_CAPACITY),
                 value(governance.getRetryEnabled(), true),
                 value(governance.getMaxAttempts(), ProjectTemplateConstants.DEFAULT_MAX_ATTEMPTS),
-                value(release.getStrategy(), ReleaseStrategy.TRAFFIC_SPLIT),
-                value(release.getCandidateWeight(), ProjectTemplateConstants.DEFAULT_CANDIDATE_WEIGHT),
+                releaseStrategy,
+                candidateWeight(releaseStrategy, release.getCandidateWeight()),
                 text(release.getColorHeader(), ProjectTemplateConstants.DEFAULT_COLOR_HEADER),
                 text(release.getCandidateColor(), ProjectTemplateConstants.DEFAULT_CANDIDATE_COLOR),
                 value(auth.getType(), AuthType.NONE),
@@ -567,6 +568,14 @@ public class ProjectTemplateService {
 
     private <T> T value(T value, T fallback) {
         return value == null ? fallback : value;
+    }
+
+    private Integer candidateWeight(ReleaseStrategy releaseStrategy, Integer candidateWeight) {
+        if (releaseStrategy == ReleaseStrategy.BLUE_GREEN) {
+            // 蓝绿发布是稳定版本到绿色版本的整体切换
+            return ProjectTemplateConstants.MAX_TRAFFIC_WEIGHT;
+        }
+        return value(candidateWeight, ProjectTemplateConstants.DEFAULT_CANDIDATE_WEIGHT);
     }
 
     private record ResourceEnvelope(ResourceKind kind, String namespace, String name, Object resource) {

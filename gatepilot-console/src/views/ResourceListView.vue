@@ -29,6 +29,7 @@
           <th>名称</th>
           <th>命名空间</th>
           <th>状态</th>
+          <th>摘要</th>
           <th>版本</th>
           <th>更新时间</th>
           <th>操作</th>
@@ -44,6 +45,7 @@
           <td>
             <StatusBadge :label="phaseLabel(item.status?.phase)" :tone="phaseTone(item.status?.phase)" />
           </td>
+          <td>{{ summaryText(item) }}</td>
           <td>{{ item.spec?.version || item.status?.currentPublishedVersion || '-' }}</td>
           <td>{{ formatTime(item.metadata?.updatedAt) }}</td>
           <td>
@@ -79,6 +81,19 @@ interface ResourceItem {
   };
   spec?: {
     version?: string;
+    strategy?: string;
+    type?: string;
+    loadBalance?: string;
+    hosts?: string[];
+    endpoints?: unknown[];
+    rateLimit?: {
+      enabled?: boolean;
+      requestsPerSecond?: number;
+    };
+    retry?: {
+      enabled?: boolean;
+      maxAttempts?: number;
+    };
   };
   status?: {
     phase?: string;
@@ -130,6 +145,42 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+function summaryText(item: ResourceItem) {
+  if (item.spec?.strategy) {
+    return strategyLabel(item.spec.strategy);
+  }
+  if (item.spec?.type) {
+    return `认证 ${item.spec.type}`;
+  }
+  if (item.spec?.loadBalance) {
+    return `${item.spec.loadBalance} / ${item.spec.endpoints?.length ?? 0} 端点`;
+  }
+  if (item.spec?.hosts?.length) {
+    return item.spec.hosts.join(', ');
+  }
+  if (item.spec?.rateLimit || item.spec?.retry) {
+    const parts = [];
+    if (item.spec.rateLimit?.enabled) {
+      parts.push(`限流 ${item.spec.rateLimit.requestsPerSecond || '-'} RPS`);
+    }
+    if (item.spec.retry?.enabled) {
+      parts.push(`重试 ${item.spec.retry.maxAttempts || '-'} 次`);
+    }
+    return parts.join(' / ') || '-';
+  }
+  return '-';
+}
+
+function strategyLabel(value: string) {
+  const labels: Record<string, string> = {
+    BLUE_GREEN: '蓝绿发布',
+    CANARY: '灰度发布',
+    TRAFFIC_SPLIT: '权重分流',
+    SHADOW: '影子流量'
+  };
+  return labels[value] || value;
 }
 
 function phaseLabel(phase?: string) {

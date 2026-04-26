@@ -11,6 +11,8 @@ import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryGatePilotResourceStore;
 import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
+import com.dt.gatepilot.domain.enums.ReleaseStrategy;
+import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -72,6 +74,26 @@ class ProjectTemplateServiceTest {
         assertThat(dryRun.getMessages())
                 .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
                 .contains(ProjectTemplateConstants.REASON_TEMPLATE_INVALID);
+    }
+
+    @Test
+    void shouldRenderBlueGreenAsFullCandidateSwitch() {
+        ProjectTemplateRenderRequest request = request();
+        request.getRelease().setStrategy(ReleaseStrategy.BLUE_GREEN);
+        request.getRelease().setCandidateWeight(20);
+
+        ProjectTemplatePreviewResponse preview = templateService.preview(request);
+        ReleasePolicy releasePolicy = preview.getResources()
+                .stream()
+                .filter(resource -> resource.getKind().equals("RELEASE_POLICY"))
+                .map(ProjectTemplatePreviewResponse.RenderedResource::getResource)
+                .map(ReleasePolicy.class::cast)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(releasePolicy.getSpec().getTrafficSplits())
+                .extracting(ReleasePolicy.TrafficSplit::getWeight)
+                .containsExactly(0, ProjectTemplateConstants.MAX_TRAFFIC_WEIGHT);
     }
 
     @Test

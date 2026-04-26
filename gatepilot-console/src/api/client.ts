@@ -288,6 +288,19 @@ export interface DryRunMessage {
   message: string;
 }
 
+export interface ReleaseDryRunResult {
+  namespace: string;
+  projectName: string;
+  version: string;
+  configShard?: string;
+  passed: boolean;
+  routeCount: number;
+  upstreamCount: number;
+  policyCount: number;
+  checkedAt?: string;
+  messages: DryRunMessage[];
+}
+
 export interface ProjectTemplateDryRunResponse {
   passed: boolean;
   preview: ProjectTemplatePreviewResponse;
@@ -320,6 +333,39 @@ export interface ReleaseResult {
   phase: string;
   configShard?: string;
   createdAt?: string;
+}
+
+export interface CreateRollbackRequest {
+  namespace: string;
+  projectName: string;
+  targetVersion: string;
+  configShard?: string;
+  description?: string;
+  createdBy?: string;
+}
+
+export interface RuntimeAuditRecord {
+  id?: number;
+  namespace?: string;
+  nodeId?: string;
+  traceId?: string;
+  clientIp?: string;
+  method?: string;
+  path?: string;
+  host?: string;
+  routeId?: string;
+  upstreamName?: string;
+  upstreamUri?: string;
+  status?: number;
+  latencyMillis?: number;
+  trafficColor?: string;
+  methodAllowed?: boolean;
+  authenticationRequired?: boolean;
+  fallback?: boolean;
+  outcome?: string;
+  reason?: string;
+  error?: string;
+  occurredAt?: string;
 }
 
 const apiBase = '/api/gatepilot/v1';
@@ -469,4 +515,38 @@ export async function applyProjectTemplate(
 
 export async function createRelease(request: CreateReleaseRequest): Promise<ReleaseResult> {
   return postJson<ReleaseResult>('/releases', request);
+}
+
+export async function dryRunRelease(request: CreateReleaseRequest): Promise<ReleaseDryRunResult> {
+  return postJson<ReleaseDryRunResult>('/releases/dry-run', request);
+}
+
+export async function createRollback(request: CreateRollbackRequest): Promise<ReleaseResult> {
+  return postJson<ReleaseResult>('/releases/rollback', request);
+}
+
+export async function listRuntimeAudits(params: {
+  namespace?: string;
+  nodeId?: string;
+  routeId?: string;
+  traceId?: string;
+  outcome?: string;
+  cursor?: string;
+  limit?: number;
+}): Promise<CursorPageResponse<RuntimeAuditRecord>> {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') {
+      search.set(key, String(value));
+    }
+  });
+  const response = await fetch(`${apiBase}/audits?${search.toString()}`);
+  if (!response.ok) {
+    throw new Error(`请求失败：${response.status}`);
+  }
+  const body = (await response.json()) as ApiResponse<CursorPageResponse<RuntimeAuditRecord>>;
+  if (body.status !== 'success') {
+    throw new Error(body.message || '请求失败');
+  }
+  return body.data;
 }
