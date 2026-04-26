@@ -26,6 +26,11 @@ public final class ProxyApplyConstants {
     public static final String REASON_COMPILE_FAILED = "CompileFailed";
 
     /**
+     * 治理规则发布失败原因码。
+     */
+    public static final String REASON_GOVERNANCE_RULE_PUBLISH_FAILED = "GovernanceRulePublishFailed";
+
+    /**
      * 空配置说明。
      */
     public static final String MESSAGE_EMPTY_CONFIG = "PublishedConfig 不能为空";

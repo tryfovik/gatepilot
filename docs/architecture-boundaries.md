@@ -151,6 +151,19 @@ private String version;
 
 这条规则没有“临时例外”。如果为了赶进度必须先落地，也应该先在 getboot 形成最小公共能力，再让 GatePilot 依赖；否则后续会把 GatePilot 拖成基础设施垃圾包。
 
+成熟组件优先级：
+
+| 能力类型 | 首选来源 | GatePilot 允许做的事 | 禁止做的事 |
+| --- | --- | --- | --- |
+| HTTP 数据面转发 | Spring Cloud Gateway | 路由命中、请求改写、策略适配 | 自己维护 WebClient 转发器 |
+| 上游负载均衡 | Spring Cloud LoadBalancer | `PublishedConfig` 到 `ServiceInstance` 的适配 | 自己维护轮询、随机、加权等通用算法 |
+| 重试 | Spring Cloud Gateway Retry | 把 `TrafficPolicy.retry` 映射成 SCG 配置 | 自己写通用重试执行器 |
+| 限流 | getboot-limiter | 把路由策略映射成限流规则 | 自己写本地或 Redis 限流算法 |
+| 认证 | getboot-auth | 做路由级策略判断和结果适配 | 自己实现认证框架 |
+| Trace / HTTP 客户端 | getboot-observability / getboot-http-client | 使用增强后的 Spring Bean | 手写 Trace Header 透传 |
+| 数据访问 | getboot-datasource / MyBatis-Plus | 写实体、Mapper、Service 和必要 mapper.xml | 手写 JDBC SQL 作为默认实现 |
+| 分布式互斥 | getboot-lock | 在调度入口声明锁语义 | 自己用数据库字段或内存锁冒充分布式锁 |
+
 GatePilot 默认 Trace 约定：
 
 ```yaml
@@ -258,6 +271,7 @@ controller-manager 与 apiserver 的关系：
 - 路由匹配。
 - 路径改写。
 - 上游转发，实际网络 I/O 交给 Spring Cloud Gateway。
+- 上游端点负载均衡，实际选择算法交给 Spring Cloud LoadBalancer。
 - 限流、熔断、重试、超时、请求体限制。
 - 流量染色执行。
 - 灰度和蓝绿发布执行。
@@ -274,10 +288,19 @@ controller-manager 与 apiserver 的关系：
 转发底座规则：
 
 - `gatepilot-proxy` 必须以 Spring Cloud Gateway 作为 HTTP 数据面转发底座。
-- GatePilot 负责 `PublishedConfig` 编译、路由命中、上游选择、染色、限流、熔断、重试策略适配、审计和指标采集。
+- GatePilot 负责 `PublishedConfig` 编译、路由命中、LoadBalancer 实例列表适配、染色、限流、熔断、重试策略适配、审计和指标采集。
 - Spring Cloud Gateway 负责请求转发、连接管理、响应写回、HTTP 客户端细节和成熟过滤器能力。
 - 禁止在 proxy 热路径重新维护一套 WebClient / Reactor Netty 手写业务转发器。
 - 健康探测、agent 同步这类非业务转发可以使用 getboot 增强后的 HTTP 客户端，但必须和业务流量转发通道分开。
+
+负载均衡执行规则：
+
+- `gatepilot-proxy` 必须以 Spring Cloud LoadBalancer 作为上游端点负载均衡组件。
+- GatePilot filter 只把已命中的 upstream 改写成 SCG `lb://` 目标地址，不在 filter 内选择具体 endpoint。
+- `gatepilot-proxy/infrastructure/loadbalancer` 只负责把 `PublishedConfig` 中的 upstream endpoints 转换成 Spring Cloud `ServiceInstance` 列表，并按本机健康状态过滤实例。
+- 轮询、随机和加权轮询交给 Spring Cloud LoadBalancer 的 `RoundRobinLoadBalancer`、`RandomLoadBalancer` 和 `WeightedServiceInstanceListSupplier`。
+- 一致性哈希、最少连接等策略如果没有成熟组件支撑，必须先在控制面校验为不支持或引入明确组件适配，禁止回到 proxy 热路径手写算法。
+- 健康探测状态可以影响实例列表，但健康探测本身必须保持非业务转发通道，不能替代 SCG 业务转发链路。
 
 禁止放：
 
@@ -735,7 +758,7 @@ Client
 - `gatepilot-embedded`
 - `gatepilot-app`
 
-历史模块不再参与主构建，也不能被 GatePilot 新模块依赖、导入或复制：
+历史模块已物理删除，也不能被 GatePilot 新模块依赖、导入或复制：
 
 - 历史管理模块和历史 admin-server 模块对应能力收敛到 `gatepilot-apiserver`。
 - 发布编排能力重建到 `gatepilot-controller-manager`。
@@ -767,22 +790,23 @@ Client
 
 | 旧实现位置 | 已有能力 | 改造目标 | 当前覆盖状态 | 改造要求 |
 | --- | --- | --- | --- | --- |
-| 历史配置模块/GatewayProperties | 旧 YAML 配置模型，包含项目、路由、认证、CORS、健康检查、上下文头、染色、审计、治理策略 | `gatepilot-domain` 资源模型和 `gatepilot-apiserver` admission 校验 | 部分覆盖 | 只能作为字段设计参考，不能继续让生产依赖本地 YAML 作为事实来源 |
+| 历史配置模块/GatewayProperties | 旧 YAML 配置模型，包含项目、路由、认证、CORS、健康检查、上下文头、染色、审计、治理策略 | `gatepilot-domain` 资源模型和 `gatepilot-apiserver` admission 校验 | 已覆盖并删除旧实现 | 只能作为字段设计参考，不能继续让生产依赖本地 YAML 作为事实来源 |
 | 历史配置模块/GatewayRouteDefinitionLocator | 路由编译和路由命中 | `gatepilot-proxy/domain/runtime` + `interfaces/gateway` | 已覆盖编译索引、最长前缀命中，并接入 Spring Cloud Gateway 承担业务转发 | 改成从 `PublishedConfig` 预编译，不再从 `GatewayProperties` 读取 |
+| GatePilot 早期 UpstreamEndpointSelector | 上游多端点轮询、随机、加权和哈希选择 | `gatepilot-proxy/infrastructure/loadbalancer` + Spring Cloud LoadBalancer | 已删除手写选择器，已改为 SCG `lb://` + Spring Cloud LoadBalancer 实例选择 | GatePilot 只适配 ServiceInstance 列表和本机健康状态；一致性哈希、最少连接没有成熟组件前不得在 proxy 热路径自造 |
 | 历史配置模块/GatewayTrafficColorResolver | Header、Cookie、Query、IP 等染色解析 | `gatepilot-proxy/domain/runtime` + `interfaces/gateway` | 已覆盖 Header / Cookie / Query / IP / 权重 / 默认色解析，并通过 SCG 治理过滤器执行请求头透传和响应头回写 | 保留解析规则，输入改成 proxy 运行态请求上下文和已发布策略 |
-| 历史配置模块/GatewayPropertiesValidator | 配置合法性校验 | `gatepilot-apiserver/application` 和 `gatepilot-controller-manager/application` | 部分覆盖 | 拆成资源 admission 校验、发布 dry-run 校验、PublishedConfig 编译校验 |
-| 历史 runtime 模块/GatewayAuthenticationFilter | 路由级认证 | `gatepilot-proxy` | 只覆盖策略判断，getboot-auth 执行未接入 | 参考旧判断逻辑，继续复用 getboot-auth，策略来自 `PublishedConfig`，失败响应使用 getboot 统一规则 |
+| 历史配置模块/GatewayPropertiesValidator | 配置合法性校验 | `gatepilot-apiserver/application` 和 `gatepilot-controller-manager/application` | 已覆盖发布 dry-run、引用校验、PublishedConfig 编译校验并删除旧实现 | 拆成资源 admission 校验、发布 dry-run 校验、PublishedConfig 编译校验 |
+| 历史 runtime 模块/GatewayAuthenticationFilter | 路由级认证 | `gatepilot-proxy` | 已覆盖策略判断并接入 getboot-auth，旧实现已删除 | 参考旧判断逻辑，继续复用 getboot-auth，策略来自 `PublishedConfig`，失败响应使用 getboot 统一规则 |
 | 历史 runtime 模块/GatewayMethodAccessFilter | HTTP 方法白名单 | `gatepilot-proxy` | 已覆盖策略判断和 WebFlux 405 执行 | 改为读取编译后的 route policy，热路径不能访问控制面 |
-| 历史 runtime 模块/InternalRouteAccessFilter | 内部运维入口保护 | `gatepilot-proxy` 或 `gatepilot-apiserver` 各自入口保护 | 未覆盖 | 按入口分开，proxy 保护本机 apply / health / state，apiserver 保护管理 API |
-| 历史 runtime 模块/GatewayTrafficColorFilter | 流量染色执行和响应头回写 | `gatepilot-proxy` | 已覆盖解析、请求头透传和响应头回写，规则级自定义 propagateHeaders 仍缺 | 与灰度、蓝绿选择统一走运行态策略快照 |
-| 历史 runtime 模块/GatewayCircuitBreakerFilter | 轻量熔断和 fallback | `gatepilot-proxy` | 已覆盖本机滑动窗口状态机、OPEN / HALF_OPEN / CLOSED 转换和 getboot `ApiResponse` fallback，Sentinel / getboot-governance 仍未接入 | 策略来自 `PublishedConfig`，状态只存在 proxy 本机内存，后续限流和治理公共能力仍优先接 getboot |
+| 历史 runtime 模块/InternalRouteAccessFilter | 内部运维入口保护 | `gatepilot-proxy` 或 `gatepilot-apiserver` 各自入口保护 | 已覆盖 proxy 内部入口保护并删除旧实现 | 按入口分开，proxy 保护本机 apply / health / state，apiserver 保护管理 API |
+| 历史 runtime 模块/GatewayTrafficColorFilter | 流量染色执行和响应头回写 | `gatepilot-proxy` | 已覆盖解析、请求头透传和响应头回写，旧实现已删除 | 与灰度、蓝绿选择统一走运行态策略快照 |
+| 历史 runtime 模块/GatewayCircuitBreakerFilter | 轻量熔断和 fallback | `gatepilot-proxy` | 已覆盖本机滑动窗口状态机、OPEN / HALF_OPEN / CLOSED 转换、getboot `ApiResponse` fallback 和 getboot-governance / Sentinel 规则发布，旧实现已删除 | 策略来自 `PublishedConfig`，状态只存在 proxy 本机内存，后续限流和治理公共能力仍优先接 getboot |
 | 历史 runtime 模块/GatewayAccessAuditFilter | 访问审计采集 | `gatepilot-proxy` 采集，`gatepilot-agent` 上报，`gatepilot-apiserver` 持久化查询 | 已覆盖 proxy 采集、agent 批量上报和 apiserver 持久化查询 | proxy 不保留管理查询 API，审计明细必须分页和持久化 |
-| 历史 runtime 模块/UpstreamHealthIndicator | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | agent 上报模型已预留，主动探测未完成 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |
-| 历史 server 模块/GatewaySentinelRuleRegistrar | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 基础限流已改为 `PublishedConfig` -> getboot-limiter 运行时适配，Sentinel 网关规则注册未覆盖 | 当前不直接迁移旧 YAML Sentinel 注册器；后续若接 Sentinel，仍由 `PublishedConfig` 编译生成规则 |
-| 历史管理模块/GatewayDiagnosticsService | 路由诊断、策略诊断、染色和发布变体解释 | `gatepilot-apiserver/application` 和 `gatepilot-console` 页面 | Console 页面骨架已有，诊断用例未完成 | 诊断基于已发布配置、节点状态和审计数据，不直接读取 proxy 内存 |
-| 历史管理模块/GatewayManagementService | 配置导出、dry-run、diff、版本快照 | `gatepilot-apiserver` 和 `gatepilot-controller-manager` | 资源查询、diff、快照基础已覆盖，配置摘要和完整 dry-run 仍缺 | 管理 API 和发布编排拆开，快照和版本必须持久化到数据库 |
+| 历史 runtime 模块/UpstreamHealthIndicator | 上游健康探测 | `gatepilot-agent` 或 `gatepilot-proxy` 本机指标采集 | 已覆盖 proxy 主动探测、agent 状态上报和 console 节点展示，旧实现已删除 | agent 统一上报节点和上游健康，apiserver 负责查询展示 |
+| 历史 server 模块/GatewaySentinelRuleRegistrar | Sentinel 网关规则注册 | `gatepilot-proxy/infrastructure` | 已覆盖 `PublishedConfig` -> getboot-limiter 运行时适配和 Sentinel 网关规则发布，旧实现已删除 | 当前不直接迁移旧 YAML Sentinel 注册器；后续若接 Sentinel，仍由 `PublishedConfig` 编译生成规则 |
+| 历史管理模块/GatewayDiagnosticsService | 路由诊断、策略诊断、染色和发布变体解释 | `gatepilot-apiserver/application` 和 `gatepilot-console` 页面 | 已覆盖 apiserver 诊断用例和 console 页面，旧实现已删除 | 诊断基于已发布配置、节点状态和审计数据，不直接读取 proxy 内存 |
+| 历史管理模块/GatewayManagementService | 配置导出、dry-run、diff、版本快照 | `gatepilot-apiserver` 和 `gatepilot-controller-manager` | 已覆盖资源查询、dry-run、diff、快照摘要和数据库持久化，旧实现已删除 | 管理 API 和发布编排拆开，快照和版本必须持久化到数据库 |
 | 历史管理模块/GatewayAccessAuditController | 审计查询 API | `gatepilot-apiserver/interfaces/rest` | 已覆盖 apiserver 持久化查询 API | 查询 apiserver 持久化审计，不查 proxy 本地内存 |
-| 历史管理模块/GatewayRouteCatalogEndpoint | 当前路由目录展示 | `gatepilot-apiserver` 查询 API 和 `gatepilot-console` | 部分覆盖，资源列表已有，PublishedConfig / 节点 apply 联合视图未完成 | 展示资源、PublishedConfig 和节点 apply 状态，不再做 Actuator 私有端点 |
+| 历史管理模块/GatewayRouteCatalogEndpoint | 当前路由目录展示 | `gatepilot-apiserver` 查询 API 和 `gatepilot-console` | 已覆盖 route catalog、PublishedConfig 和节点 apply 摘要展示，旧实现已删除 | 展示资源、PublishedConfig 和节点 apply 状态，不再做 Actuator 私有端点 |
 
 ### 改造顺序
 

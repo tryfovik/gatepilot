@@ -26,6 +26,8 @@
 - 对外 HTTP 入参、出参类统一命名为 `Request` / `Response`；`Command` 只用于明确的写入意图或领域命令，查询类不能误命名为 Command；新 Controller 出参不再使用泛化 `Result` 命名。
 - 后端服务间 RPC 统一优先走 getboot-rpc / Dubbo，禁止 GatePilot 新增 OpenFeign；console REST、agent 配置同步、proxy HTTP 转发要按各自通道归类，不能混成普通跨服务 RPC。
 - proxy HTTP 业务转发统一复用 Spring Cloud Gateway，不再维护手写 WebClient 业务转发器；GatePilot filter 只做运行态决策、请求改写、治理和审计。
+- proxy 上游端点负载均衡统一复用 Spring Cloud LoadBalancer；GatePilot 只提供 `PublishedConfig` 到 ServiceInstance 的适配，不在热路径自造轮询、随机、加权等通用算法。
+- 通用工程能力优先复用 getboot 或成熟组件。网关业务模型可以自研，连接管理、负载均衡、限流、锁、Trace、数据库访问、重试、认证这类基础设施能力不能在 GatePilot 里重新造一套。
 
 目标模块：
 
@@ -60,7 +62,7 @@ infrastructure  出站实现：数据库、HTTP 客户端、Spring 配置、调�
 - [GatePilot 架构边界规范](architecture-boundaries.md)
 - [GatePilot Console 设计规范](console-design-guidelines.md)
 
-历史网关代码不是当前开发主线，也不是可以直接搬运的实现来源。里面的路由编译、过滤器、染色、熔断、审计、诊断、校验和 Sentinel 注册只能作为能力样本、算法参考、测试素材和工程经验。旧模块不参与 Maven 主构建，改造前必须先看 [旧能力改造清单](architecture-boundaries.md#12-旧能力改造清单)，以 GatePilot 资源模型、`PublishedConfig` 和 DDD 边界为准，禁止按旧模型、旧接口、旧包结构直接搬代码。新模型尚未覆盖的旧能力不能直接删，必须先完成改造和测试。
+历史网关代码不是当前开发主线，也不是可以直接搬运的实现来源。里面的路由编译、过滤器、染色、熔断、审计、诊断、校验和 Sentinel 注册已经按 GatePilot 新模型完成对账并物理删除旧模块。后续如果从历史提交里查实现，只能作为算法参考和测试素材，必须以 GatePilot 资源模型、`PublishedConfig` 和 DDD 边界为准，禁止按旧模型、旧接口、旧包结构直接搬代码。
 
 后端开发还必须参考上层 getboot 规范：
 
@@ -82,6 +84,23 @@ infrastructure  出站实现：数据库、HTTP 客户端、Spring 配置、调�
 通信能力新增时也按同一条规则处理：后端服务间 RPC 先查 getboot-rpc / Dubbo；OpenFeign 不作为 GatePilot 的跨服务通信选项；agent 配置同步通道可以 HTTP pull / long polling / Nacos watch，但必须显式归入同步适配器，不允许伪装成业务 RPC。
 
 新增前端页面时，先写页面设计说明，明确参考 Kong Konnect、Kubernetes Dashboard、Argo CD 或 Grafana 的哪类页面结构。
+
+成熟组件复用对账：
+
+| 能力 | 当前方案 | 状态 | 后续要求 |
+| --- | --- | --- | --- |
+| HTTP 业务转发 | Spring Cloud Gateway | 已接入 | 禁止回到手写 WebClient / Reactor Netty 转发 |
+| 上游端点负载均衡 | Spring Cloud LoadBalancer | 已接入 | 轮询、随机、加权由组件执行，GatePilot 只适配实例列表 |
+| HTTP 重试 | Spring Cloud Gateway RetryGatewayFilterFactory | 已接入 | 只做策略映射，不写独立重试执行器 |
+| 路由级限流 | getboot-limiter | 已接入 | 分布式限流运行实现由部署包显式配置 |
+| 路由级认证 | getboot-auth | 已接入 | GatePilot 只做策略判断和错误响应适配 |
+| Trace / Header 透传 | getboot-observability + getboot-http-client | 已接入 | 缺能力时先补 getboot，不在 agent 里手写 Header |
+| 数据库存储 | getboot-datasource + MyBatis-Plus | 已接入 | 普通 CRUD 走 Mapper / Service，复杂 SQL 走 mapper.xml |
+| 发布调度互斥 | getboot-lock | 已接入 | 多副本 controller-manager 必须验证锁缺失不静默退化 |
+| 统一响应 | getboot ApiResponse | 已接入 | 禁止 GatePilot 自定义 ApiResult / Result |
+| 本机熔断状态机 | GatePilot 本地实现 | 待 CR | 优先评估 getboot-governance / Sentinel / Resilience4j |
+| 上游主动健康探测 | GatePilot 本地实现 | 待 CR | 优先评估 Spring Cloud LoadBalancer HealthCheck 或 getboot 统一健康能力 |
+| 运行指标采集 | GatePilot 端口占位 | 待 CR | 优先评估 Micrometer / getboot metrics 能力 |
 
 ## 3. 发布链路
 
@@ -213,7 +232,7 @@ console
 
 ### Phase 6：proxy
 
-- [ ] 将旧数据面模块能力按 GatePilot 运行模型收敛到 `gatepilot-proxy`。
+- [x] 将旧数据面模块能力按 GatePilot 运行模型收敛到 `gatepilot-proxy`。
 - [x] 移除 proxy 中的配置查看、版本快照、Web 管理、审计查询职责。
 - [x] proxy 只从 agent 获取 `PublishedConfig`。
 - [x] proxy 支持原子切换运行状态。
@@ -229,12 +248,12 @@ console
 - [x] 接入 Spring Cloud Gateway 执行业务 HTTP 路由转发，移除手写 WebClient 业务转发入口。
 - [x] 接入 SCG 治理过滤器执行染色解析、请求头透传和响应头回写。
 - [x] 接入 ReleasePolicy `trafficSplits`，按灰度 / 蓝绿命中的颜色切换实际上游。
-- [x] 接入上游多端点轮询和加权轮询选择，避免所有流量固定打第一个 endpoint。
+- [x] 接入 Spring Cloud LoadBalancer 执行上游多端点轮询、随机和加权轮询，移除 proxy 手写端点选择器。
 - [x] 改造 Query / IP 染色规则。
 - [x] 接入 TrafficPolicy `retry` 执行幂等请求重试，重试时重新选择上游端点。
 - [x] 参考旧 `GatewayCircuitBreakerFilter` 改造熔断和 fallback 能力。
 - [x] 接入 getboot-limiter 执行基础路由级 / 参数级限流。
-- [ ] 参考旧 `GatewaySentinelRuleRegistrar` 改造 Sentinel 规则注册能力。
+- [x] 参考旧 `GatewaySentinelRuleRegistrar` 改造 Sentinel 规则注册能力。
 - [x] 参考旧审计过滤器改造访问审计采集能力。
 - [x] 改造内部运维入口保护。
 - [x] 改造上游健康主动探测。
@@ -268,7 +287,7 @@ console
 - [x] 参考旧 `GatewayConfigSnapshotRepository` 改造快照概念到数据库持久化版本表。
 - [x] 参考旧 `GatewayAccessAuditController` 改造审计查询能力到 apiserver 持久化查询 API。
 - [x] 参考旧 `GatewayRouteCatalogEndpoint` 改造路由目录展示到 console，不再依赖 Actuator 私有端点。
-- [ ] 所有旧能力完成新模型覆盖和测试后，物理删除历史模块源码。
+- [x] 所有旧能力完成新模型覆盖和测试后，物理删除历史模块源码。
 
 ### Phase 8：app 合包
 
@@ -294,6 +313,7 @@ console
 - [x] apiserver Controller 返回协议使用 getboot `ApiResponse` 的测试覆盖。
 - [x] agent apiserver 客户端复用 getboot-http-client 增强后的 `WebClient.Builder`，不手写 Trace Header 的测试覆盖。
 - [x] app 单体模式通过 getboot-observability 回写 `X-Trace-Id` 的集成测试覆盖。
+- [x] getboot-http-client RestTemplate Trace 定制器按命名拦截器注入，兼容 Spring Cloud LoadBalancer 注册的 RestTemplate 拦截器。
 - [x] embedded 单体、集群和未配置部署模式的装配切换测试覆盖。
 - [x] 发布意图到 `PublishedConfig`、配置快照、agent pull 的最小链路测试通过。
 - [x] MyBatis-Plus 资源存储保存、更新、分页测试通过。
@@ -302,6 +322,7 @@ console
 - [ ] 分服务模式最小链路验证通过。
 - [ ] 配置发布链路端到端验证通过。
 - [x] proxy 控制面不可用时 last-good 启动验证通过。
+- [x] proxy 上游负载均衡改为 Spring Cloud LoadBalancer 组件执行，并补充实例列表、加权和 SCG `lb://` 测试。
 - [ ] 多 proxy 副本注册、拉取配置、应用发布和状态聚合验证通过。
 - [ ] controller-manager 多副本 leader / standby 行为验证通过。
 - [ ] 1000 项目资源装载、配置生成和分页查询压测通过。
@@ -321,6 +342,10 @@ console
 - [ ] CR MyBatis-Plus 资源表索引、乐观锁和发布事件 claim 原子性，避免多 controller-manager 抢占时只靠内存判断。
 - [x] CR agent last-good 存储当前仍是内存实现的问题，补文件或外部卷持久化，保证 proxy 控制面不可用时可恢复启动。
 - [ ] CR proxy 运行态策略解析中的 Map 兼容逻辑，确认大配置下没有反射/转换热点拖慢转发路径。
+- [ ] CR proxy 本机熔断状态机是否继续保留，优先评估接入 getboot-governance / Sentinel 或 Resilience4j，避免长期维护自研熔断算法。
+- [ ] CR proxy 上游健康探测是否可收敛到 Spring Cloud LoadBalancer HealthCheck 或 getboot 统一健康检查能力，避免长期维护重复探测逻辑。
+- [ ] CR `LoadBalanceStrategy` 中一致性哈希、最少连接等策略的控制面校验和组件选型；没有成熟组件前禁止在 proxy 热路径继续补手写算法。
+- [ ] CR proxy 运行指标采集接入 Micrometer 或 getboot metrics 能力，避免 RuntimeMetricsSink 长期停留在空实现。
 
 ### Phase 10：配置复杂度治理（后续，不纳入今天收尾范围）
 

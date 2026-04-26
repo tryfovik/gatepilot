@@ -18,6 +18,11 @@ public final class ProxyHttpConstants {
     public static final String SCHEME_HTTPS = "https";
 
     /**
+     * Spring Cloud LoadBalancer 协议。
+     */
+    public static final String SCHEME_LOAD_BALANCER = "lb";
+
+    /**
      * 根路径。
      */
     public static final String ROOT_PATH = "/";

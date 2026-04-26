@@ -57,11 +57,20 @@
         </dependency>
         <dependency>
             <groupId>com.dt</groupId>
+            <artifactId>getboot-governance</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>com.dt</groupId>
             <artifactId>getboot-support</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

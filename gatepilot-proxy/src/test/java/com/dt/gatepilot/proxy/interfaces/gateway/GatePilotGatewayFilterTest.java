@@ -22,7 +22,7 @@ import com.dt.gatepilot.proxy.domain.runtime.RetryPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
-import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointSelector;
+import com.dt.gatepilot.proxy.infrastructure.loadbalancer.GatePilotLoadBalancerServiceIds;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyRuntimeAuditRecorder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.InetSocketAddress;
@@ -67,7 +67,7 @@ class GatePilotGatewayFilterTest {
         filter.filter(exchange, successChain(forwardedExchange)).block(Duration.ofSeconds(1));
 
         URI targetUri = forwardedExchange.get().getRequiredAttribute(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR);
-        assertThat(targetUri.toString()).isEqualTo("http://upstream.local:8080/admin/users?preview=enabled");
+        assertThat(targetUri.toString()).isEqualTo(loadBalancedUri("admin-upstream", "/admin/users?preview=enabled"));
         assertThat(forwardedExchange.get().getRequest().getHeaders().getFirst("X-Traffic-Color"))
                 .isEqualTo("yellow");
         assertThat(forwardedExchange.get().getRequest().getHeaders().getFirst("X-Route-Id")).isEqualTo("admin");
@@ -78,7 +78,7 @@ class GatePilotGatewayFilterTest {
         assertThat(auditSink.lastEvent().status()).isEqualTo(HttpStatus.OK.value());
         assertThat(auditSink.lastEvent().trafficColor()).isEqualTo("yellow");
         assertThat(auditSink.lastEvent().upstreamUri())
-                .isEqualTo("http://upstream.local:8080/admin/users?preview=enabled");
+                .isEqualTo(loadBalancedUri("admin-upstream", "/admin/users?preview=enabled"));
         assertThat(metricsSink.routeId()).isEqualTo("admin");
         assertThat(metricsSink.status()).isEqualTo(HttpStatus.OK.value());
     }
@@ -116,10 +116,10 @@ class GatePilotGatewayFilterTest {
     }
 
     /**
-     * 应在多端点上游中轮询准备 SCG 转发地址。
+     * 应在多端点上游中准备 LoadBalancer 转发地址。
      */
     @Test
-    void shouldRoundRobinAcrossUpstreamEndpoints() {
+    void shouldPrepareLoadBalancedUriForMultipleEndpoints() {
         GatePilotGatewayFilter filter = filter(runtimeWithMultipleEndpoints());
         List<URI> targetUris = new ArrayList<>();
 
@@ -130,8 +130,8 @@ class GatePilotGatewayFilterTest {
 
         assertThat(targetUris).extracting(URI::toString)
                 .containsExactly(
-                        "http://upstream.local:8080/admin/users",
-                        "http://upstream-b.local:8081/admin/users"
+                        loadBalancedUri("admin-upstream", "/admin/users"),
+                        loadBalancedUri("admin-upstream", "/admin/users")
                 );
     }
 
@@ -153,7 +153,7 @@ class GatePilotGatewayFilterTest {
 
         assertThat(exchange.getResponse().getHeaders().getFirst("X-Traffic-Color")).isEqualTo("canary");
         assertThat(targetUris).extracting(URI::toString)
-                .containsExactly("http://candidate.local:9090/admin/users");
+                .containsExactly(loadBalancedUri("candidate-upstream", "/admin/users"));
     }
 
     /**
@@ -274,7 +274,6 @@ class GatePilotGatewayFilterTest {
                 rateLimiter,
                 new RetryPolicyResolver(),
                 new ReleaseUpstreamResolver(),
-                new UpstreamEndpointSelector(),
                 authChecker,
                 new ProxyRuntimeAuditRecorder(auditSink, metricsSink),
                 new RetryGatewayFilterFactory(),
@@ -288,6 +287,10 @@ class GatePilotGatewayFilterTest {
 
     private RuntimeAuthChecker allowAuthChecker() {
         return RuntimeAuthResult::pass;
+    }
+
+    private String loadBalancedUri(String upstreamName, String pathAndQuery) {
+        return "lb://" + GatePilotLoadBalancerServiceIds.fromUpstreamName(upstreamName) + pathAndQuery;
     }
 
     private RuntimeAuditSink noopAuditSink() {

@@ -65,7 +65,7 @@ public class PublishedConfigCompiler {
     }
 
     private CompiledUpstream.CompiledEndpoint compileEndpoint(PublishedConfig.PublishedEndpoint source) {
-        // endpoint 先保持轻量映射，负载均衡后续再扩展
+        // endpoint 保持轻量映射，负载均衡适配层再转换成组件实例
         CompiledUpstream.CompiledEndpoint endpoint = new CompiledUpstream.CompiledEndpoint();
         endpoint.setHost(source.getHost());
         endpoint.setPort(source.getPort());
@@ -79,7 +79,7 @@ public class PublishedConfigCompiler {
         if (source == null) {
             return healthCheck;
         }
-        // 健康检查只影响本地端点选择，不影响控制面发布状态
+        // 健康检查只影响本地实例列表，不影响控制面发布状态
         healthCheck.setEnabled(source.getEnabled());
         healthCheck.setPath(source.getPath());
         healthCheck.setTimeout(source.getTimeout());

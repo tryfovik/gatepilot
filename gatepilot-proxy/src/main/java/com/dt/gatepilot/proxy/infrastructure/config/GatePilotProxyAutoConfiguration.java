@@ -2,6 +2,7 @@ package com.dt.gatepilot.proxy.infrastructure.config;
 
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuthChecker;
+import com.dt.gatepilot.proxy.domain.port.RuntimeGovernanceRulePublisher;
 import com.dt.gatepilot.proxy.domain.port.RuntimeMetricsSink;
 import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
@@ -16,11 +17,14 @@ import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
-import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointSelector;
 import com.dt.gatepilot.proxy.infrastructure.auth.GetbootRuntimeAuthChecker;
 import com.dt.gatepilot.proxy.infrastructure.health.UpstreamHealthProbe;
 import com.dt.gatepilot.proxy.infrastructure.health.UpstreamHealthProbeScheduler;
+import com.dt.gatepilot.proxy.infrastructure.governance.ProxySentinelConstants;
+import com.dt.gatepilot.proxy.infrastructure.governance.SentinelGatewayRulePublisher;
 import com.dt.gatepilot.proxy.infrastructure.limiter.GetbootRuntimeRateLimiter;
+import com.dt.gatepilot.proxy.infrastructure.loadbalancer.GatePilotLoadBalancerClientConfiguration;
+import com.dt.gatepilot.proxy.infrastructure.loadbalancer.GatePilotLoadBalancerConstants;
 import com.dt.gatepilot.proxy.interfaces.gateway.GatePilotGatewayFilter;
 import com.dt.gatepilot.proxy.interfaces.gateway.GatePilotRouteLocator;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyRuntimeAuditRecorder;
@@ -32,6 +36,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cloud.loadbalancer.annotation.LoadBalancerClientSpecification;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.cloud.gateway.filter.factory.RetryGatewayFilterFactory;
@@ -75,13 +80,40 @@ public class GatePilotProxyAutoConfiguration {
      *
      * @param compiler PublishedConfig 编译器
      * @param runtimeState proxy 运行态
+     * @param governanceRulePublisherProvider 治理规则发布端口提供器
      * @return proxy 配置应用器
      */
     @Bean
     @ConditionalOnMissingBean
-    public ProxyConfigApplier proxyConfigApplier(PublishedConfigCompiler compiler, ProxyRuntimeState runtimeState) {
+    public ProxyConfigApplier proxyConfigApplier(PublishedConfigCompiler compiler,
+                                                 ProxyRuntimeState runtimeState,
+                                                 ObjectProvider<RuntimeGovernanceRulePublisher>
+                                                         governanceRulePublisherProvider) {
         // apply 负责把新配置编译后切到运行态
-        return new ProxyConfigApplier(compiler, runtimeState);
+        return new ProxyConfigApplier(compiler, runtimeState,
+                governanceRulePublisherProvider.getIfAvailable(() -> runtime -> {
+                }));
+    }
+
+    /**
+     * 创建 Sentinel 网关规则发布器。
+     *
+     * @param rateLimitPolicyResolver 限流策略解析器
+     * @return Sentinel 网关规则发布器
+     */
+    @Bean
+    @ConditionalOnMissingBean(RuntimeGovernanceRulePublisher.class)
+    @ConditionalOnClass(name = {
+            "com.alibaba.csp.sentinel.adapter.gateway.common.rule.GatewayRuleManager",
+            "com.alibaba.csp.sentinel.adapter.gateway.common.api.GatewayApiDefinitionManager"
+    })
+    @ConditionalOnProperty(prefix = ProxySentinelConstants.GETBOOT_GOVERNANCE_PREFIX,
+            name = {ProxySentinelConstants.ENABLED_PROPERTY, ProxySentinelConstants.SENTINEL_ENABLED_PROPERTY},
+            havingValue = ProxySentinelConstants.ENABLED_VALUE)
+    public RuntimeGovernanceRulePublisher sentinelRuntimeGovernanceRulePublisher(
+            RateLimitPolicyResolver rateLimitPolicyResolver) {
+        // Sentinel 接入开关和配置统一走 getboot-governance
+        return new SentinelGatewayRulePublisher(rateLimitPolicyResolver);
     }
 
     /**
@@ -181,19 +213,6 @@ public class GatePilotProxyAutoConfiguration {
     }
 
     /**
-     * 创建上游端点选择器。
-     *
-     * @param healthRegistry 端点健康状态表
-     * @return 上游端点选择器
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    public UpstreamEndpointSelector upstreamEndpointSelector(UpstreamEndpointHealthRegistry healthRegistry) {
-        // 端点选择器只维护本机轻量游标
-        return new UpstreamEndpointSelector(healthRegistry);
-    }
-
-    /**
      * 创建上游健康探测器。
      *
      * @param runtimeState proxy 运行态
@@ -225,6 +244,21 @@ public class GatePilotProxyAutoConfiguration {
     public UpstreamHealthProbeScheduler upstreamHealthProbeScheduler(UpstreamHealthProbe probe) {
         // 调度器只触发本地探测，不访问控制面
         return new UpstreamHealthProbeScheduler(probe);
+    }
+
+    /**
+     * 创建 GatePilot LoadBalancer 默认配置。
+     *
+     * @return LoadBalancer 默认配置
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = GatePilotLoadBalancerConstants.CLIENT_SPECIFICATION_BEAN_NAME)
+    public LoadBalancerClientSpecification gatePilotLoadBalancerClientSpecification() {
+        // 所有 GatePilot upstream 都使用同一套 LoadBalancer 适配
+        return new LoadBalancerClientSpecification(
+                GatePilotLoadBalancerConstants.DEFAULT_SPECIFICATION_NAME,
+                new Class<?>[]{GatePilotLoadBalancerClientConfiguration.class}
+        );
     }
 
     /**
@@ -318,7 +352,6 @@ public class GatePilotProxyAutoConfiguration {
      * @param runtimeRateLimiter 运行时限流器
      * @param retryPolicyResolver 重试策略解析器
      * @param releaseUpstreamResolver 发布上游解析器
-     * @param endpointSelector 上游端点选择器
      * @param runtimeAuthChecker 运行时认证校验器
      * @param auditRecorder 运行审计记录器
      * @param retryFactoryProvider SCG 重试过滤器工厂提供器
@@ -336,7 +369,6 @@ public class GatePilotProxyAutoConfiguration {
                                                          RuntimeRateLimiter runtimeRateLimiter,
                                                          RetryPolicyResolver retryPolicyResolver,
                                                          ReleaseUpstreamResolver releaseUpstreamResolver,
-                                                         UpstreamEndpointSelector endpointSelector,
                                                          RuntimeAuthChecker runtimeAuthChecker,
                                                          ProxyRuntimeAuditRecorder auditRecorder,
                                                          ObjectProvider<RetryGatewayFilterFactory> retryFactoryProvider,
@@ -352,7 +384,6 @@ public class GatePilotProxyAutoConfiguration {
                 runtimeRateLimiter,
                 retryPolicyResolver,
                 releaseUpstreamResolver,
-                endpointSelector,
                 runtimeAuthChecker,
                 auditRecorder,
                 retryFactoryProvider.getIfAvailable(RetryGatewayFilterFactory::new),

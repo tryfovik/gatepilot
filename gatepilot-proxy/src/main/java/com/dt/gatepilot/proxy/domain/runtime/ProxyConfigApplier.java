@@ -4,6 +4,7 @@ import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyConstants;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyRequest;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyResult;
+import com.dt.gatepilot.proxy.domain.port.RuntimeGovernanceRulePublisher;
 import java.time.Instant;
 
 /**
@@ -15,11 +16,14 @@ public class ProxyConfigApplier {
 
     private final ProxyRuntimeState runtimeState;
 
+    private final RuntimeGovernanceRulePublisher governanceRulePublisher;
+
     /**
      * 创建配置应用器。
      */
     public ProxyConfigApplier() {
-        this(new PublishedConfigCompiler(), new ProxyRuntimeState());
+        this(new PublishedConfigCompiler(), new ProxyRuntimeState(), runtime -> {
+        });
     }
 
     /**
@@ -29,8 +33,23 @@ public class ProxyConfigApplier {
      * @param runtimeState 运行态
      */
     public ProxyConfigApplier(PublishedConfigCompiler compiler, ProxyRuntimeState runtimeState) {
+        this(compiler, runtimeState, runtime -> {
+        });
+    }
+
+    /**
+     * 创建配置应用器。
+     *
+     * @param compiler 配置编译器
+     * @param runtimeState 运行态
+     * @param governanceRulePublisher 治理规则发布端口
+     */
+    public ProxyConfigApplier(PublishedConfigCompiler compiler,
+                              ProxyRuntimeState runtimeState,
+                              RuntimeGovernanceRulePublisher governanceRulePublisher) {
         this.compiler = compiler;
         this.runtimeState = runtimeState;
+        this.governanceRulePublisher = governanceRulePublisher;
     }
 
     /**
@@ -59,18 +78,26 @@ public class ProxyConfigApplier {
             return ProxyApplyResult.failed(version, configHash, ProxyApplyConstants.REASON_MISSING_CONFIG_HASH,
                     ProxyApplyConstants.MESSAGE_MISSING_CONFIG_HASH, startedAt);
         }
+        CompiledProxyRuntime compiledRuntime;
         try {
-            CompiledProxyRuntime compiledRuntime = compiler.compile(config);
-            if (!request.isDryRun()) {
-                // 编译成功后才原子切换，失败不影响旧运行态
-                runtimeState.switchTo(compiledRuntime);
-            }
-            return ProxyApplyResult.applied(version, configHash, startedAt);
+            compiledRuntime = compiler.compile(config);
         } catch (RuntimeException exception) {
             // 编译异常需要回传给 agent，再由 agent 上报控制面
             return ProxyApplyResult.failed(version, configHash, ProxyApplyConstants.REASON_COMPILE_FAILED,
                     exception.getMessage(), startedAt);
         }
+        if (!request.isDryRun()) {
+            try {
+                // 先发布治理规则，成功后才切换本地运行态
+                governanceRulePublisher.publish(compiledRuntime);
+            } catch (RuntimeException exception) {
+                return ProxyApplyResult.failed(version, configHash,
+                        ProxyApplyConstants.REASON_GOVERNANCE_RULE_PUBLISH_FAILED,
+                        exception.getMessage(), startedAt);
+            }
+            runtimeState.switchTo(compiledRuntime);
+        }
+        return ProxyApplyResult.applied(version, configHash, startedAt);
     }
 
     /**
@@ -86,4 +113,5 @@ public class ProxyConfigApplier {
         // 这里不引 Spring 工具类，保持 domain 轻量
         return value != null && !value.trim().isEmpty();
     }
+
 }

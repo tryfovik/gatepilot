@@ -21,24 +21,9 @@ public final class ProxyLoadBalanceConstants {
     public static final String STRATEGY_RANDOM = "RANDOM";
 
     /**
-     * 一致性哈希策略。
-     */
-    public static final String STRATEGY_CONSISTENT_HASH = "CONSISTENT_HASH";
-
-    /**
-     * 最少连接策略。
-     */
-    public static final String STRATEGY_LEAST_CONNECTIONS = "LEAST_CONNECTIONS";
-
-    /**
      * 最小端点权重。
      */
     public static final int MIN_ENDPOINT_WEIGHT = 1;
-
-    /**
-     * 哈希键分隔符。
-     */
-    public static final String HASH_KEY_SEPARATOR = "|";
 
     /**
      * 隐藏工具类构造器。

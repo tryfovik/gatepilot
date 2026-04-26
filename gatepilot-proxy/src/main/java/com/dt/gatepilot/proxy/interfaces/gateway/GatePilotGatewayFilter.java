@@ -1,6 +1,5 @@
 package com.dt.gatepilot.proxy.interfaces.gateway;
 
-import com.dt.gatepilot.domain.enums.Protocol;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuthChecker;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuthResult;
 import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
@@ -13,7 +12,6 @@ import com.dt.gatepilot.proxy.domain.runtime.CompiledRetryPolicy;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledRoute;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledUpstream;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyAuditConstants;
-import com.dt.gatepilot.proxy.domain.runtime.ProxyLoadBalanceConstants;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRateLimitConstants;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRetryConstants;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
@@ -29,7 +27,7 @@ import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorConstants;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorRequest;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
-import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointSelector;
+import com.dt.gatepilot.proxy.infrastructure.loadbalancer.GatePilotLoadBalancerServiceIds;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyHttpConstants;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyRuntimeAuditRecorder;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -116,11 +114,6 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
     private final ReleaseUpstreamResolver releaseUpstreamResolver;
 
     /**
-     * 上游端点选择器。
-     */
-    private final UpstreamEndpointSelector endpointSelector;
-
-    /**
      * 运行时认证校验器。
      */
     private final RuntimeAuthChecker runtimeAuthChecker;
@@ -152,7 +145,6 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
      * @param runtimeRateLimiter 运行时限流器
      * @param retryPolicyResolver 重试策略解析器
      * @param releaseUpstreamResolver 发布上游解析器
-     * @param endpointSelector 上游端点选择器
      * @param runtimeAuthChecker 运行时认证校验器
      * @param auditRecorder 运行审计记录器
      * @param retryGatewayFilterFactory SCG 重试过滤器工厂
@@ -167,7 +159,6 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
                                   RuntimeRateLimiter runtimeRateLimiter,
                                   RetryPolicyResolver retryPolicyResolver,
                                   ReleaseUpstreamResolver releaseUpstreamResolver,
-                                  UpstreamEndpointSelector endpointSelector,
                                   RuntimeAuthChecker runtimeAuthChecker,
                                   ProxyRuntimeAuditRecorder auditRecorder,
                                   RetryGatewayFilterFactory retryGatewayFilterFactory,
@@ -181,7 +172,6 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
         this.runtimeRateLimiter = runtimeRateLimiter;
         this.retryPolicyResolver = retryPolicyResolver;
         this.releaseUpstreamResolver = releaseUpstreamResolver;
-        this.endpointSelector = endpointSelector;
         this.runtimeAuthChecker = runtimeAuthChecker;
         this.auditRecorder = auditRecorder;
         this.retryGatewayFilterFactory = retryGatewayFilterFactory;
@@ -360,7 +350,7 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
     }
 
     private ServerWebExchange prepareForwardExchange(ServerWebExchange exchange, ForwardContext context) {
-        URI targetUri = targetUri(exchange, context);
+        URI targetUri = targetUri(context);
         context.setUpstreamUri(targetUri);
         exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR, targetUri);
         ServerHttpRequest request = exchange.getRequest()
@@ -405,12 +395,14 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
 
     private void recordForwardResult(ServerWebExchange exchange, ForwardContext context) {
         int status = responseStatus(exchange);
+        URI upstreamUri = resolvedUpstreamUri(exchange, context);
+        context.setUpstreamUri(upstreamUri);
         recordCircuitBreaker(context.circuitBreaker(), status, context.startNanos());
         auditRecorder.record(
                 exchange,
                 context.route(),
                 context.upstream().getName(),
-                context.upstreamUri(),
+                upstreamUri,
                 status,
                 context.trafficColor(),
                 true,
@@ -424,12 +416,14 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
     }
 
     private Mono<Void> recordForwardError(ServerWebExchange exchange, ForwardContext context, Throwable error) {
+        URI upstreamUri = resolvedUpstreamUri(exchange, context);
+        context.setUpstreamUri(upstreamUri);
         if (context.circuitBreaker() == null) {
             auditRecorder.record(
                     exchange,
                     context.route(),
                     context.upstream().getName(),
-                    context.upstreamUri(),
+                    upstreamUri,
                     ProxyAuditConstants.DEFAULT_ERROR_STATUS,
                     context.trafficColor(),
                     true,
@@ -453,13 +447,19 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
                 exchange,
                 context.route(),
                 context.upstream().getName(),
-                context.upstreamUri(),
+                upstreamUri,
                 context.trafficColor(),
                 context.circuitBreaker(),
                 context.startNanos(),
                 ProxyAuditConstants.REASON_UPSTREAM_ERROR,
                 error
         );
+    }
+
+    private URI resolvedUpstreamUri(ServerWebExchange exchange, ForwardContext context) {
+        URI requestUrl = exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR);
+        // LoadBalancer 解析后会把真实上游地址写回这个属性
+        return requestUrl == null ? context.upstreamUri() : requestUrl;
     }
 
     private RouteAccessRequest routeAccessRequest(ServerWebExchange exchange) {
@@ -501,17 +501,12 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
                 Objects.toString(exchange.getRequest().getMethod().name(), "").toUpperCase(Locale.ROOT));
     }
 
-    private URI targetUri(ServerWebExchange exchange, ForwardContext context) {
-        CompiledUpstream.CompiledEndpoint endpoint = endpointSelector.select(
-                context.upstream(), loadBalanceHashKey(exchange, context));
+    private URI targetUri(ForwardContext context) {
         String path = targetPath(context.originalPath(), context.route());
         UriComponentsBuilder builder = UriComponentsBuilder.newInstance()
-                .scheme(scheme(context.upstream()))
-                .host(endpoint.getHost())
+                .scheme(ProxyHttpConstants.SCHEME_LOAD_BALANCER)
+                .host(GatePilotLoadBalancerServiceIds.fromUpstreamName(context.upstream().getName()))
                 .path(path);
-        if (endpoint.getPort() != null) {
-            builder.port(endpoint.getPort());
-        }
         if (StringUtils.hasText(context.rawQuery())) {
             builder.query(context.rawQuery());
         }
@@ -540,22 +535,6 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
 
     private boolean hopByHop(String name) {
         return name == null || ProxyHttpConstants.HOP_BY_HOP_HEADERS.contains(name.toLowerCase(Locale.ROOT));
-    }
-
-    private String loadBalanceHashKey(ServerWebExchange exchange, ForwardContext context) {
-        String traceId = exchange.getRequest().getHeaders().getFirst(ProxyAuditConstants.DEFAULT_TRACE_HEADER_NAME);
-        if (StringUtils.hasText(traceId)) {
-            return context.route().getRouteId() + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR + traceId.trim();
-        }
-        return context.route().getRouteId()
-                + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR
-                + Objects.toString(host(exchange), "")
-                + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR
-                + Objects.toString(remoteAddress(exchange), "")
-                + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR
-                + context.originalPath()
-                + ProxyLoadBalanceConstants.HASH_KEY_SEPARATOR
-                + Objects.toString(context.rawQuery(), "");
     }
 
     private String targetPath(String requestPath, CompiledRoute route) {
@@ -589,14 +568,6 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
         return normalizedPrefix + (suffix.startsWith(ProxyHttpConstants.PATH_SEPARATOR)
                 ? suffix
                 : ProxyHttpConstants.PATH_SEPARATOR + suffix);
-    }
-
-    private String scheme(CompiledUpstream upstream) {
-        Protocol protocol = upstream.getProtocol();
-        if (protocol == Protocol.HTTPS || protocol == Protocol.WSS) {
-            return ProxyHttpConstants.SCHEME_HTTPS;
-        }
-        return ProxyHttpConstants.SCHEME_HTTP;
     }
 
     private Mono<Void> methodNotAllowed(ServerWebExchange exchange,

@@ -34,7 +34,7 @@ public class GatePilotRouteLocator implements RouteLocator {
      */
     @Override
     public Flux<Route> getRoutes() {
-        // 真实路由命中和上游选择由 GatePilot 运行态过滤器完成
+        // 真实路由命中和 LoadBalancer 目标改写由运行态过滤器完成
         return Flux.just(proxyRoute);
     }
 
