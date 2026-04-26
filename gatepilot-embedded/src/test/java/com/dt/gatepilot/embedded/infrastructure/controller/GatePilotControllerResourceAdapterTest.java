@@ -38,6 +38,8 @@ import com.dt.gatepilot.apiserver.application.service.GatePilotReleaseService;
 import com.dt.gatepilot.apiserver.application.service.GatePilotResourceService;
 import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryGatePilotResourceStore;
 import com.dt.gatepilot.controller.infrastructure.leader.LocalControllerLeaderElector;
+import com.dt.gatepilot.controller.domain.model.GatewayDesiredState;
+import com.dt.gatepilot.controller.domain.model.ReleaseIntent;
 import com.dt.gatepilot.controller.application.service.NodeApplyStatusAggregator;
 import com.dt.gatepilot.controller.application.service.PublishedConfigReconciler;
 import com.dt.gatepilot.controller.application.service.PublishedConfigStatusController;
@@ -257,6 +259,29 @@ class GatePilotControllerResourceAdapterTest {
         assertThat(secondApply).isEmpty();
     }
 
+    @Test
+    void shouldReadDesiredStateBeyondFirstResourcePage() {
+        saveProject();
+        for (int index = 0; index < 600; index++) {
+            ResourceReference noiseProject = projectRef("noise-" + index);
+            String noiseUpstreamName = "a-noise-upstream-" + String.format("%03d", index);
+            saveRoute("a-noise-route-" + String.format("%03d", index), "/noise-" + index,
+                    noiseProject, upstreamRef(noiseUpstreamName));
+            saveUpstream(noiseUpstreamName, noiseProject);
+        }
+        saveUpstream();
+        saveRoute("/game");
+
+        GatewayDesiredState desiredState = adapter.read(releaseIntent());
+
+        assertThat(desiredState.getRoutes())
+                .extracting(route -> route.getSpec().getPath().getValue())
+                .containsExactly("/game");
+        assertThat(desiredState.getUpstreams())
+                .extracting(item -> item.getMetadata().getName())
+                .containsExactly("game-service");
+    }
+
     private CreateReleaseCommand releaseCommand(String createdBy, String description) {
         CreateReleaseCommand request = new CreateReleaseCommand();
         request.setNamespace("default");
@@ -281,20 +306,28 @@ class GatePilotControllerResourceAdapterTest {
     }
 
     private void saveRoute(String path) {
+        saveRoute("game-api", path, projectRef(), upstreamRef());
+    }
+
+    private void saveRoute(String name, String path, ResourceReference projectRef, ResourceReference upstreamRef) {
         GatewayRoute route = new GatewayRoute();
-        route.getSpec().setProjectRef(projectRef());
+        route.getSpec().setProjectRef(projectRef);
         route.getSpec().getProtocols().add(Protocol.HTTP);
         route.getSpec().getHosts().add("game.example.com");
         route.getSpec().getPath().setType("Prefix");
         route.getSpec().getPath().setValue(path);
-        route.getSpec().setUpstreamRef(upstreamRef());
+        route.getSpec().setUpstreamRef(upstreamRef);
         GatePilotResourceType resourceType = resourceService.requireResourceType(ResourceKind.GATEWAY_ROUTE);
-        resourceService.save(resourceType, "default", "game-api", route);
+        resourceService.save(resourceType, "default", name, route);
     }
 
     private void saveUpstream() {
+        saveUpstream("game-service", projectRef());
+    }
+
+    private void saveUpstream(String name, ResourceReference projectRef) {
         Upstream upstream = new Upstream();
-        upstream.getSpec().setProjectRef(projectRef());
+        upstream.getSpec().setProjectRef(projectRef);
         upstream.getSpec().setProtocol(Protocol.HTTP);
         upstream.getSpec().setLoadBalance(LoadBalanceStrategy.WEIGHTED_ROUND_ROBIN);
         Upstream.UpstreamEndpoint endpoint = new Upstream.UpstreamEndpoint();
@@ -303,7 +336,7 @@ class GatePilotControllerResourceAdapterTest {
         endpoint.setWeight(100);
         upstream.getSpec().getEndpoints().add(endpoint);
         GatePilotResourceType resourceType = resourceService.requireResourceType(ResourceKind.UPSTREAM);
-        resourceService.save(resourceType, "default", "game-service", upstream);
+        resourceService.save(resourceType, "default", name, upstream);
     }
 
     private void saveNode() {
@@ -368,19 +401,35 @@ class GatePilotControllerResourceAdapterTest {
     }
 
     private ResourceReference projectRef() {
+        return projectRef("game");
+    }
+
+    private ResourceReference projectRef(String name) {
         ResourceReference reference = new ResourceReference();
         reference.setKind(ResourceKind.GATEWAY_PROJECT);
         reference.setNamespace("default");
-        reference.setName("game");
+        reference.setName(name);
         return reference;
     }
 
     private ResourceReference upstreamRef() {
+        return upstreamRef("game-service");
+    }
+
+    private ResourceReference upstreamRef(String name) {
         ResourceReference reference = new ResourceReference();
         reference.setKind(ResourceKind.UPSTREAM);
         reference.setNamespace("default");
-        reference.setName("game-service");
+        reference.setName(name);
         return reference;
+    }
+
+    private ReleaseIntent releaseIntent() {
+        ReleaseIntent intent = new ReleaseIntent();
+        intent.setNamespace("default");
+        intent.setProjectName("game");
+        intent.setConfigShard("shard-a");
+        return intent;
     }
 
     private class EmbeddedAgentControlPlaneClient implements AgentControlPlaneClient {

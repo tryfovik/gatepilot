@@ -6,9 +6,9 @@ package com.dt.gatepilot.apiserver.application.service;
 public final class GatePilotAgentConstants {
 
     /**
-     * PublishedConfig 拉取扫描上限
+     * PublishedConfig 拉取分页大小
      */
-    public static final int PUBLISHED_CONFIG_SCAN_LIMIT = 500;
+    public static final int PUBLISHED_CONFIG_PAGE_LIMIT = 500;
 
     /**
      * 没有可拉取配置提示

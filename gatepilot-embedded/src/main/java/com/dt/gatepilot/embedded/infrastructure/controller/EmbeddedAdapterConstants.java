@@ -6,9 +6,9 @@ package com.dt.gatepilot.embedded.infrastructure.controller;
 public final class EmbeddedAdapterConstants {
 
     /**
-     * 资源列表读取上限。
+     * 单页资源读取上限。
      */
-    public static final int RESOURCE_LIST_LIMIT = 500;
+    public static final int RESOURCE_PAGE_LIMIT = 500;
 
     /**
      * reconcile 完成消息。

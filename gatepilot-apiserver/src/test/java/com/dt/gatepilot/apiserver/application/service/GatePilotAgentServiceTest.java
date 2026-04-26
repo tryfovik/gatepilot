@@ -2,10 +2,15 @@ package com.dt.gatepilot.apiserver.application.service;
 
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.node.GatewayNodeStatus;
+import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.apiserver.application.command.AgentHeartbeatCommand;
+import com.dt.gatepilot.apiserver.application.command.PullAgentConfigCommand;
+import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResult;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryGatePilotResourceStore;
+import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -60,5 +65,34 @@ class GatePilotAgentServiceTest {
         assertThat(node.getStatus().getUpstreamHealth())
                 .extracting(GatewayNodeStatus.UpstreamHealth::getUpstreamName)
                 .containsExactly("order-service");
+    }
+
+    @Test
+    void shouldPullPublishedConfigBeyondFirstResourcePage() {
+        GatePilotResourceType resourceType = resourceService.requireResourceType(ResourceKind.PUBLISHED_CONFIG);
+        for (int index = 0; index < 600; index++) {
+            String name = "a-config-" + String.format("%03d", index);
+            resourceService.save(resourceType, "default", name, publishedConfig("old-" + index, index, "shard-a"));
+        }
+        resourceService.save(resourceType, "default", "z-target", publishedConfig("v-target", 1000L, "shard-a"));
+        PullAgentConfigCommand request = new PullAgentConfigCommand();
+        request.setNamespace("default");
+        request.setNodeId("node-1");
+        request.getConfigShards().add("shard-a");
+
+        AgentConfigPullResult result = agentService.pullConfig(request);
+
+        assertThat(result.isChanged()).isTrue();
+        assertThat(result.getPublishedConfig().getSpec().getVersion()).isEqualTo("v-target");
+    }
+
+    private PublishedConfig publishedConfig(String version, long sequence, String configShard) {
+        PublishedConfig config = new PublishedConfig();
+        // 测试配置只填 agent 拉取排序和过滤字段
+        config.getSpec().setVersion(version);
+        config.getSpec().setSequence(sequence);
+        config.getSpec().setConfigShard(configShard);
+        config.getSpec().setConfigHash("hash-" + version);
+        return config;
     }
 }

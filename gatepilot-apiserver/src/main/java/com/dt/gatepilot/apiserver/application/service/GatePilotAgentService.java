@@ -16,7 +16,9 @@ import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -105,11 +107,8 @@ public class GatePilotAgentService {
      * @return 拉取响应
      */
     public AgentConfigPullResult pullConfig(PullAgentConfigCommand request) {
-        CursorPage<Object> page = resourceService.list(GatePilotResourcePaths.PUBLISHED_CONFIGS,
-                request.getNamespace(), null, GatePilotAgentConstants.PUBLISHED_CONFIG_SCAN_LIMIT);
-        PublishedConfig latest = page.getItems()
+        PublishedConfig latest = listPublishedConfigs(request.getNamespace())
                 .stream()
-                .map(PublishedConfig.class::cast)
                 .filter(config -> request.getConfigShards().isEmpty()
                         || request.getConfigShards().contains(config.getSpec().getConfigShard()))
                 .filter(config -> isolationGroupMatches(config, request))
@@ -160,6 +159,22 @@ public class GatePilotAgentService {
         }
         GatePilotResourceType nodeType = resourceService.requireResourceType(ResourceKind.GATEWAY_NODE);
         return (GatewayNode) resourceService.save(nodeType, request.getNamespace(), request.getNodeId(), node);
+    }
+
+    private List<PublishedConfig> listPublishedConfigs(String namespace) {
+        List<PublishedConfig> configs = new ArrayList<>();
+        String cursor = null;
+        do {
+            CursorPage<Object> page = resourceService.list(GatePilotResourcePaths.PUBLISHED_CONFIGS,
+                    namespace, cursor, GatePilotAgentConstants.PUBLISHED_CONFIG_PAGE_LIMIT);
+            // agent 拉取必须跨页扫描，避免 1000 项目后漏掉后半段发布配置
+            page.getItems()
+                    .stream()
+                    .map(PublishedConfig.class::cast)
+                    .forEach(configs::add);
+            cursor = page.getNextCursor();
+        } while (StringUtils.hasText(cursor));
+        return configs;
     }
 
     private boolean isolationGroupMatches(PublishedConfig config, PullAgentConfigCommand request) {

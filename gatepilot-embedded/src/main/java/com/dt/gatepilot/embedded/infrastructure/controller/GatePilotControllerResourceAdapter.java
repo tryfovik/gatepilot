@@ -31,6 +31,7 @@ import com.dt.gatepilot.controller.domain.model.GatewayDesiredState;
 import com.dt.gatepilot.controller.domain.model.ReleaseIntent;
 import com.dt.gatepilot.domain.deployment.GatePilotDeploymentModeConstants;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -67,7 +68,7 @@ public class GatePilotControllerResourceAdapter
 
     @Override
     public List<ReleaseIntent> listPending(int limit) {
-        int effectiveLimit = Math.min(limit, EmbeddedAdapterConstants.RESOURCE_LIST_LIMIT);
+        int effectiveLimit = Math.min(limit, EmbeddedAdapterConstants.RESOURCE_PAGE_LIMIT);
         // controller 每轮只领取有限数量，避免单副本长时间占用
         return list(GatePilotResourcePaths.EVENTS, null, GatewayEvent.class)
                 .stream()
@@ -183,7 +184,7 @@ public class GatePilotControllerResourceAdapter
 
     @Override
     public List<PublishedConfig> listPublishedConfigs(int limit) {
-        int effectiveLimit = Math.min(limit, EmbeddedAdapterConstants.RESOURCE_LIST_LIMIT);
+        int effectiveLimit = Math.min(limit, EmbeddedAdapterConstants.RESOURCE_PAGE_LIMIT);
         CursorPage<Object> page = resourceService.list(GatePilotResourcePaths.PUBLISHED_CONFIGS, null, null,
                 effectiveLimit);
         return page.getItems()
@@ -253,13 +254,19 @@ public class GatePilotControllerResourceAdapter
     }
 
     private <T> List<T> list(String resourcePath, String namespace, Class<T> resourceType) {
-        CursorPage<Object> page = resourceService.list(resourcePath, namespace, null,
-                EmbeddedAdapterConstants.RESOURCE_LIST_LIMIT);
-        // adapter 只做类型转换，不在这里改写资源内容
-        return page.getItems()
-                .stream()
-                .map(resourceType::cast)
-                .toList();
+        List<T> resources = new ArrayList<>();
+        String cursor = null;
+        do {
+            CursorPage<Object> page = resourceService.list(resourcePath, namespace, cursor,
+                    EmbeddedAdapterConstants.RESOURCE_PAGE_LIMIT);
+            // adapter 只做分页读取和类型转换，不在这里改写资源内容
+            page.getItems()
+                    .stream()
+                    .map(resourceType::cast)
+                    .forEach(resources::add);
+            cursor = page.getNextCursor();
+        } while (StringUtils.hasText(cursor));
+        return resources;
     }
 
     private boolean isPendingReleaseIntent(GatewayEvent event) {
