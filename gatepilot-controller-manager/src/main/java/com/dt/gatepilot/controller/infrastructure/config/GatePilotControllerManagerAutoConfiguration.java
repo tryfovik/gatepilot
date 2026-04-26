@@ -1,13 +1,18 @@
 package com.dt.gatepilot.controller.infrastructure.config;
 
+import com.dt.gatepilot.controller.application.service.NodeApplyStatusAggregator;
 import com.dt.gatepilot.controller.application.service.PublishedConfigReconciler;
+import com.dt.gatepilot.controller.application.service.PublishedConfigStatusController;
 import com.dt.gatepilot.controller.application.service.ReleaseReconcileController;
 import com.dt.gatepilot.controller.domain.port.ControllerLeaderElector;
 import com.dt.gatepilot.controller.domain.port.GatewayDesiredStateReader;
+import com.dt.gatepilot.controller.domain.port.PublishedConfigStatusStore;
 import com.dt.gatepilot.controller.domain.port.ReconcileResultSink;
 import com.dt.gatepilot.controller.domain.port.ReleaseIntentSource;
 import com.dt.gatepilot.controller.domain.port.RollbackConfigReader;
 import com.dt.gatepilot.controller.infrastructure.leader.LocalControllerLeaderElector;
+import com.dt.gatepilot.controller.infrastructure.scheduling.PublishedConfigStatusRefreshExecutor;
+import com.dt.gatepilot.controller.infrastructure.scheduling.PublishedConfigStatusRefreshScheduler;
 import com.dt.gatepilot.controller.infrastructure.scheduling.ReleaseReconcileExecutor;
 import com.dt.gatepilot.controller.infrastructure.scheduling.ReleaseReconcileScheduler;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -105,5 +110,50 @@ public class GatePilotControllerManagerAutoConfiguration {
                                                                ReleaseReconcileExecutor reconcileExecutor) {
         // 调度器只触发 reconcile，不承载发布逻辑
         return new ReleaseReconcileScheduler(properties, reconcileExecutor);
+    }
+
+    /**
+     * 创建 PublishedConfig 状态刷新控制器
+     *
+     * @param leaderElector leader 选举器
+     * @param statusStore 状态存取端口
+     * @return PublishedConfig 状态刷新控制器
+     */
+    @Bean
+    @ConditionalOnBean(PublishedConfigStatusStore.class)
+    public PublishedConfigStatusController publishedConfigStatusController(ControllerLeaderElector leaderElector,
+                                                                           PublishedConfigStatusStore statusStore) {
+        // 状态刷新只聚合节点 apply 结果，不生成新发布配置
+        return new PublishedConfigStatusController(leaderElector, statusStore, new NodeApplyStatusAggregator());
+    }
+
+    /**
+     * 创建 PublishedConfig 状态刷新执行器
+     *
+     * @param statusController 状态刷新控制器
+     * @return 状态刷新执行器
+     */
+    @Bean
+    @ConditionalOnBean(PublishedConfigStatusController.class)
+    public PublishedConfigStatusRefreshExecutor publishedConfigStatusRefreshExecutor(
+            PublishedConfigStatusController statusController) {
+        // 执行器承载 getboot 分布式锁注解
+        return new PublishedConfigStatusRefreshExecutor(statusController);
+    }
+
+    /**
+     * 创建 PublishedConfig 状态刷新调度器
+     *
+     * @param properties controller-manager 配置
+     * @param refreshExecutor 状态刷新执行器
+     * @return 状态刷新调度器
+     */
+    @Bean
+    @ConditionalOnBean(PublishedConfigStatusRefreshExecutor.class)
+    public PublishedConfigStatusRefreshScheduler publishedConfigStatusRefreshScheduler(
+            GatePilotControllerManagerProperties properties,
+            PublishedConfigStatusRefreshExecutor refreshExecutor) {
+        // 状态聚合由 controller-manager 定时执行，apiserver 只负责查询
+        return new PublishedConfigStatusRefreshScheduler(properties, refreshExecutor);
     }
 }

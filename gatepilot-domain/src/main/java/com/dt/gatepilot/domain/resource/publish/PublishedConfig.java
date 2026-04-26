@@ -64,6 +64,11 @@ public class PublishedConfig {
         private String configShard;
 
         /**
+         * 隔离组，用于约束高流量项目只下发到对应网关副本池
+         */
+        private String isolationGroup;
+
+        /**
          * 配置序号，同一分片内单调递增。
          */
         private Long sequence;

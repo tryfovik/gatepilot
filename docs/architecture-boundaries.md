@@ -606,12 +606,12 @@ GatePilot 必须天然支持横向扩容，不能只适配单节点网关。扩�
 - controller-manager reconcile 必须幂等，同一个发布版本重复推进不能产生不同结果。
 - controller-manager 多副本部署时只能有一个 active leader 推进发布，其他副本 standby 或只读观察。
 - apiserver 多副本部署时必须共享同一个配置存储和版本存储，不能使用各进程本地内存作为事实来源。
-- agent pull / watch 需要带上当前配置版本、nodeId、zone 和能力信息，避免控制面误判节点状态。
+- agent pull / watch 需要带上当前配置版本、nodeId、zone、isolationGroup、configShards 和能力信息，避免控制面误判节点状态。
 - proxy 启动时控制面不可用，必须通过 agent 使用 last-good 配置启动；如果没有 last-good，要保持不接流量并上报原因。
 - 发布状态必须按节点聚合，至少能看到 desired、applied、failed 和每个失败节点的原因。
 - 同 zone 或同机房发布应支持分批推进，避免一次性把所有副本切到坏配置。
 
-这些约束意味着：扩一个网关副本，本质上只是新增一个 `GatewayNode`，由 agent 拉取同一份 `PublishedConfig`，proxy 原子应用配置，controller-manager 汇总节点应用结果。不能让 proxy 副本之间互相依赖，也不能让某个 proxy 副本成为配置主节点。
+这些约束意味着：扩一个网关副本，本质上只是新增一个同 configShard / isolationGroup 的 `GatewayNode`，由 agent 拉取同一份 `PublishedConfig`，proxy 原子应用配置，controller-manager 汇总节点应用结果。不能让 proxy 副本之间互相依赖，也不能让某个 proxy 副本成为配置主节点。
 
 ## 10. 大规模流量硬约束
 
@@ -625,6 +625,8 @@ GatePilot 的长期目标是接入大量项目和高并发大流量。架构上�
 - 路由匹配不能随项目数线性扫描，后续实现必须按 host、path prefix、method、priority 建立索引。
 - `PublishedConfig` 必须支持按 project、namespace、zone、isolationGroup、configShard 下发，避免所有节点消费全部配置。
 - agent pull / watch 必须携带 `nodeId`、`zone`、`isolationGroup`、`configShards`、当前版本和当前序号。
+- `PublishedConfig.spec.isolationGroup` 是高流量项目副本池隔离的运行时约束，agent 拉取配置时必须同时匹配 configShard 和 isolationGroup。
+- `targetNodeRefs` 用于记录发布时目标节点和排障，不得阻断发布后新扩容的同 configShard / isolationGroup 节点拉取当前配置。
 - apiserver 的列表、审计、事件、发布历史接口必须分页或游标化，禁止一次性返回全量。
 - controller-manager 生成配置必须按分片幂等推进，单个项目发布不能阻塞所有项目。
 - 高流量项目必须能通过资源字段调度到独立隔离组，不需要改代码。

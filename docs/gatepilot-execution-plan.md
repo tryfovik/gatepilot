@@ -207,6 +207,7 @@ console
 - [x] 根据资源生成 `PublishedConfig`。
 - [x] 汇总 agent apply result。
 - [x] 汇总节点发布状态。
+- [x] controller-manager 定时刷新 PublishedConfig 节点应用状态，避免 agent 上报后控制台仍看到旧状态。
 - [x] 记录发布事件。
 - [x] 建立 controller-manager 的资源读取、发布产物写入和事件写回 `domain.port`。
 - [x] 建立 embedded 到 controller-manager `domain.port` 的进程内资源存储适配器。
@@ -323,12 +324,12 @@ console
 - [ ] 配置发布链路端到端验证通过。
 - [x] proxy 控制面不可用时 last-good 启动验证通过。
 - [x] proxy 上游负载均衡改为 Spring Cloud LoadBalancer 组件执行，并补充实例列表、加权和 SCG `lb://` 测试。
-- [ ] 多 proxy 副本注册、拉取配置、应用发布和状态聚合验证通过。
+- [x] 多 proxy 副本注册、拉取配置、应用发布和状态聚合验证通过。
 - [ ] controller-manager 多副本 leader / standby 行为验证通过。
 - [ ] 1000 项目资源装载、配置生成和分页查询压测通过。
 - [ ] 大路由表预编译和 proxy 原子切换压测通过。
-- [ ] configShard / isolationGroup 分片发布验证通过。
-- [ ] 高流量项目通过扩 proxy 副本承载，不修改转发代码。
+- [x] configShard / isolationGroup 分片发布验证通过。
+- [x] 高流量项目通过扩 proxy 副本承载，不修改转发代码。
 - [ ] Kubernetes 基础部署验证通过：VIP / Nginx 入口不承载 GatePilot 项目治理，proxy Deployment + Service + HPA 可扩副本。
 - [x] agent 从网关配置读取 namespace、nodeId、zone、isolationGroup、configShards 并注册为 `GatewayNode`。
 - [ ] controller-manager 多副本通过 Kubernetes Lease 或等价机制完成 leader / standby 验证。

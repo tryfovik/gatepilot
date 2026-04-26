@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * agent 协议服务。
@@ -105,19 +106,20 @@ public class GatePilotAgentService {
      */
     public AgentConfigPullResult pullConfig(PullAgentConfigCommand request) {
         CursorPage<Object> page = resourceService.list(GatePilotResourcePaths.PUBLISHED_CONFIGS,
-                request.getNamespace(), null, 500);
+                request.getNamespace(), null, GatePilotAgentConstants.PUBLISHED_CONFIG_SCAN_LIMIT);
         PublishedConfig latest = page.getItems()
                 .stream()
                 .map(PublishedConfig.class::cast)
                 .filter(config -> request.getConfigShards().isEmpty()
                         || request.getConfigShards().contains(config.getSpec().getConfigShard()))
+                .filter(config -> isolationGroupMatches(config, request))
                 .max(Comparator.comparing(config -> Objects.requireNonNullElse(config.getSpec().getSequence(), 0L)))
                 .orElse(null);
         AgentConfigPullResult response = new AgentConfigPullResult();
         if (latest == null) {
             // 没有目标配置时让 agent 保持当前 last-good
             response.setChanged(false);
-            response.setMessage("暂无可拉取的 PublishedConfig");
+            response.setMessage(GatePilotAgentConstants.MESSAGE_NO_PUBLISHED_CONFIG);
             return response;
         }
         boolean changed = !Objects.equals(latest.getSpec().getVersion(), request.getCurrentVersion())
@@ -125,7 +127,9 @@ public class GatePilotAgentService {
                 > Objects.requireNonNullElse(request.getCurrentSequence(), 0L);
         response.setChanged(changed);
         response.setPublishedConfig(changed ? latest : null);
-        response.setMessage(changed ? "发现新配置" : "当前配置已是最新");
+        response.setMessage(changed
+                ? GatePilotAgentConstants.MESSAGE_CONFIG_CHANGED
+                : GatePilotAgentConstants.MESSAGE_CONFIG_NOT_CHANGED);
         return response;
     }
 
@@ -140,7 +144,7 @@ public class GatePilotAgentService {
         GatewayNodeStatus status = node.getStatus();
         // agent 上报的 apply 结果是节点状态的事实来源
         status.setApplyState(Objects.requireNonNullElse(request.getState(), ConfigApplyState.APPLIED));
-        status.setCurrentConfigVersion(request.getVersion());
+        status.setDesiredConfigVersion(request.getVersion());
         status.setLastHeartbeatAt(Instant.now());
         GatewayNodeStatus.ApplyResult result = status.getLastApplyResult();
         result.setVersion(request.getVersion());
@@ -151,10 +155,17 @@ public class GatePilotAgentService {
         result.setReason(request.getReason());
         result.setMessage(request.getMessage());
         if (status.getApplyState() == ConfigApplyState.APPLIED) {
+            status.setCurrentConfigVersion(request.getVersion());
             status.setLastGoodConfigVersion(request.getVersion());
         }
         GatePilotResourceType nodeType = resourceService.requireResourceType(ResourceKind.GATEWAY_NODE);
         return (GatewayNode) resourceService.save(nodeType, request.getNamespace(), request.getNodeId(), node);
+    }
+
+    private boolean isolationGroupMatches(PublishedConfig config, PullAgentConfigCommand request) {
+        String targetIsolationGroup = config.getSpec().getIsolationGroup();
+        return !StringUtils.hasText(targetIsolationGroup)
+                || Objects.equals(targetIsolationGroup, request.getIsolationGroup());
     }
 
     private GatewayNode loadOrCreateNode(String namespace, String nodeId) {

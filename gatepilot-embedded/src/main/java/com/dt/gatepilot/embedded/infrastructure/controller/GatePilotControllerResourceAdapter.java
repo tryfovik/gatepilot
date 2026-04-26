@@ -23,6 +23,7 @@ import com.dt.gatepilot.apiserver.application.service.GatePilotConfigSnapshotSer
 import com.dt.gatepilot.apiserver.application.service.GatePilotResourceService;
 import com.dt.gatepilot.controller.application.command.ReconcileResult;
 import com.dt.gatepilot.controller.domain.port.GatewayDesiredStateReader;
+import com.dt.gatepilot.controller.domain.port.PublishedConfigStatusStore;
 import com.dt.gatepilot.controller.domain.port.ReconcileResultSink;
 import com.dt.gatepilot.controller.domain.port.ReleaseIntentSource;
 import com.dt.gatepilot.controller.domain.port.RollbackConfigReader;
@@ -45,7 +46,8 @@ import org.springframework.util.StringUtils;
         name = GatePilotDeploymentModeConstants.MODE_PROPERTY,
         havingValue = GatePilotDeploymentModeConstants.MODE_STANDALONE)
 public class GatePilotControllerResourceAdapter
-        implements ReleaseIntentSource, GatewayDesiredStateReader, ReconcileResultSink, RollbackConfigReader {
+        implements ReleaseIntentSource, GatewayDesiredStateReader, ReconcileResultSink, RollbackConfigReader,
+        PublishedConfigStatusStore {
 
     private final GatePilotResourceService resourceService;
 
@@ -177,6 +179,33 @@ public class GatePilotControllerResourceAdapter
         if (result.getEvent() != null) {
             saveEvent(result.getEvent());
         }
+    }
+
+    @Override
+    public List<PublishedConfig> listPublishedConfigs(int limit) {
+        int effectiveLimit = Math.min(limit, EmbeddedAdapterConstants.RESOURCE_LIST_LIMIT);
+        CursorPage<Object> page = resourceService.list(GatePilotResourcePaths.PUBLISHED_CONFIGS, null, null,
+                effectiveLimit);
+        return page.getItems()
+                .stream()
+                .map(PublishedConfig.class::cast)
+                .toList();
+    }
+
+    @Override
+    public List<GatewayNode> listTargetNodes(PublishedConfig publishedConfig) {
+        return list(GatePilotResourcePaths.NODES, publishedConfig.getMetadata().getNamespace(), GatewayNode.class)
+                .stream()
+                .filter(node -> shardMatches(node, publishedConfig.getSpec().getConfigShard()))
+                .filter(node -> isolationGroupMatches(node, publishedConfig.getSpec().getIsolationGroup()))
+                .toList();
+    }
+
+    @Override
+    public void saveStatus(PublishedConfig publishedConfig) {
+        GatePilotResourceType publishedConfigType = resourceService.requireResourceType(ResourceKind.PUBLISHED_CONFIG);
+        resourceService.save(publishedConfigType, publishedConfig.getMetadata().getNamespace(),
+                publishedConfig.getMetadata().getName(), publishedConfig);
     }
 
     private List<GatewayRoute> projectRoutes(ReleaseIntent intent) {
@@ -311,6 +340,14 @@ public class GatePilotControllerResourceAdapter
         }
         return node.getSpec().getConfigShards().isEmpty()
                 || node.getSpec().getConfigShards().contains(configShard);
+    }
+
+    private boolean isolationGroupMatches(GatewayNode node, String isolationGroup) {
+        String nodeIsolationGroup = node.getSpec().getIsolationGroup();
+        if (StringUtils.hasText(isolationGroup)) {
+            return Objects.equals(isolationGroup, nodeIsolationGroup);
+        }
+        return !StringUtils.hasText(nodeIsolationGroup);
     }
 
     private boolean isolationGroupMatches(GatewayNode node, GatewayProject project) {

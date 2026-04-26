@@ -33,7 +33,7 @@ public class ReleaseReconcileScheduler {
     /**
      * 定时推进待发布意图。
      */
-    @Scheduled(fixedDelayString = "${gatepilot.controller-manager.reconcile-interval-ms:5000}")
+    @Scheduled(fixedDelayString = ControllerManagerConstants.RECONCILE_INTERVAL_PLACEHOLDER)
     public void reconcilePendingReleaseIntents() {
         if (!properties.isEnabled()) {
             return;

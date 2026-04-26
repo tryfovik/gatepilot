@@ -53,6 +53,7 @@ public class PublishedConfigAssembler {
         spec.setProjectRef(projectRef(request));
         spec.setVersion(request.getVersion());
         spec.setConfigShard(request.getConfigShard());
+        spec.setIsolationGroup(desiredState.getProject().getSpec().getIsolationGroup());
         spec.setSequence(request.getSequence());
         spec.setFullSnapshot(true);
         spec.setGeneratedAt(Instant.now());
@@ -91,6 +92,7 @@ public class PublishedConfigAssembler {
                 () -> projectRef(request)));
         spec.setVersion(request.getVersion());
         spec.setConfigShard(request.getConfigShard());
+        spec.setIsolationGroup(sourceSpec.getIsolationGroup());
         spec.setSequence(request.getSequence());
         spec.setFullSnapshot(true);
         spec.setBaseVersion(request.getTargetVersion());

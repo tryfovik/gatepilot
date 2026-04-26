@@ -26,14 +26,37 @@ public final class ControllerManagerConstants {
     public static final String RECONCILE_LOCK_KEY = "release-reconcile";
 
     /**
+     * PublishedConfig 状态刷新分布式锁键
+     */
+    public static final String STATUS_REFRESH_LOCK_KEY = "published-config-status-refresh";
+
+    /**
      * 发布 reconcile 锁等待时间。
      */
     public static final int RECONCILE_LOCK_WAIT_TIME_MS = 0;
 
     /**
+     * 发布 reconcile 调度间隔占位符
+     */
+    public static final String RECONCILE_INTERVAL_PLACEHOLDER =
+            "${gatepilot.controller-manager.reconcile-interval-ms:5000}";
+
+    /**
+     * PublishedConfig 状态刷新调度间隔占位符
+     */
+    public static final String STATUS_REFRESH_INTERVAL_PLACEHOLDER =
+            "${gatepilot.controller-manager.status-refresh-interval-ms:5000}";
+
+    /**
      * 发布 reconcile 锁占用提示。
      */
     public static final String MESSAGE_RECONCILE_LOCK_BUSY = "其他 controller-manager 正在推进发布，跳过本轮";
+
+    /**
+     * PublishedConfig 状态刷新锁占用提示
+     */
+    public static final String MESSAGE_STATUS_REFRESH_LOCK_BUSY =
+            "其他 controller-manager 正在刷新发布状态，跳过本轮";
 
     private ControllerManagerConstants() {
         // controller-manager 配置常量不允许实例化
