@@ -1,66 +1,115 @@
 # GatePilot
 
-GatePilot 是网关控制与运行系统，目标是支撑多项目、高并发、大流量下的统一入口、治理、发布和排障能力。
+GatePilot 是一个面向多项目、高并发和大流量场景的平台级网关系统。它把网关配置、发布控制、节点同步、流量治理和排障观测拆成清晰的控制面与数据面，让团队可以用声明式资源管理入口流量，用可视化控制台完成项目接入、灰度发布、蓝绿切换和问题诊断。
 
-父级 Maven 主构建只保留 GatePilot 新模块。历史模块源码暂时只作为能力对账样本存在，不参与主构建，不能被新模块依赖、导入或复制；等旧能力都按新模型重建并有测试覆盖后，再物理删除。
+如果你的系统正在接入越来越多的业务项目，网关配置越来越复杂，发布风险越来越高，排障链路越来越长，GatePilot 希望把这些事情收回到一个稳定、可扩展、可观察的平台里。
 
-## 文档
+## 亮点
 
-- [架构边界规范](docs/architecture-boundaries.md)
-- [执行计划](docs/gatepilot-execution-plan.md)
-- [Console 设计规范](docs/console-design-guidelines.md)
-- [Console 开发说明](gatepilot-console/README.md)
+- **声明式配置**：用 `GatewayProject`、`GatewayRoute`、`Upstream`、`TrafficPolicy`、`ReleasePolicy` 等资源描述期望状态。
+- **控制面 / 数据面分离**：控制面负责配置、发布、回滚、快照和审计；数据面只消费已发布配置并承载业务流量。
+- **高并发友好**：proxy 本地预编译路由索引，热路径不访问数据库和控制面，配置切换走原子替换。
+- **多副本可扩展**：apiserver、controller-manager、agent、proxy 都支持按职责部署和扩副本，controller-manager 使用分布式锁避免重复推进发布。
+- **灰度与蓝绿发布**：支持候选上游、权重分流、流量染色、发布请求、版本快照和回滚。
+- **治理能力内置**：支持路由转发、认证、限流、熔断、重试、上游健康检查、访问审计和运行指标。
+- **可视化控制台**：Vue Console 提供中文优先的项目接入向导、资源查看、节点状态、路由诊断、快照对比和审计查询。
+- **Kubernetes 友好**：proxy 可以独立扩容，适合接在 VIP / Nginx / Service 后面作为统一治理数据面。
+
+## 架构
+
+```text
+Console
+  -> Apiserver
+  -> Controller Manager
+  -> PublishedConfig
+  -> Agent
+  -> Proxy
+  -> Upstream Services
+```
+
+一次典型发布流程：
+
+```text
+填写项目接入向导
+  -> 渲染声明式资源
+  -> dry-run 校验
+  -> 保存资源
+  -> 创建发布请求
+  -> controller-manager 生成 PublishedConfig
+  -> agent 拉取并写入 staged / last-good
+  -> proxy 原子切换运行态
+  -> agent 上报应用结果
+  -> console 展示发布状态
+```
+
+业务请求只进入 proxy。proxy 不编辑配置、不保存版本、不提供管理页面，控制面短时不可用时可以继续使用 last-good 配置承载已有流量。
 
 ## 模块
 
-| 模块 | 职责 |
+| 模块 | 说明 |
 | --- | --- |
-| `gatepilot-domain` | 声明式资源定义、枚举和值对象。 |
-| `gatepilot-apiserver` | 管理后端，负责资源存储、查询、发布入口、回滚入口、快照、事件、agent 协议和审计查询。 |
-| `gatepilot-controller-manager` | 控制器集合，负责 watch / list 发布意图，reconcile 期望状态并生成 `PublishedConfig`。 |
-| `gatepilot-agent` | 节点侧代理，负责注册、心跳、拉取 `PublishedConfig`、staged / last-good、调用本机 proxy apply 和上报结果。 |
-| `gatepilot-proxy` | 数据面网关，只消费 `PublishedConfig` 并执行路由、转发、限流、熔断、重试、染色、蓝绿 / 灰度和审计采集。 |
-| `gatepilot-console` | Vue 管理台，只调用 apiserver API。 |
-| `gatepilot-app` | 单体合包装配模块，只组合各模块和 console 静态资源，不放业务代码。 |
+| `gatepilot-domain` | 资源模型、枚举和值对象 |
+| `gatepilot-apiserver` | 管理 API、资源存储、模板渲染、发布入口、快照、审计和 agent 协议 |
+| `gatepilot-controller-manager` | 发布 reconcile、配置快照生成、发布状态聚合 |
+| `gatepilot-agent` | 节点注册、心跳、配置拉取、last-good、proxy apply 协调和状态上报 |
+| `gatepilot-proxy` | 基于 Spring Cloud Gateway 的数据面转发、治理和审计采集 |
+| `gatepilot-console` | Vue 管理控制台 |
+| `gatepilot-embedded` | 单体模式下的进程内适配 |
+| `gatepilot-app` | 一体化启动包，只负责装配 |
 
-历史 `platform-gateway-*` 模块已经从父 POM 摘掉。它们不是开发入口，只用于确认旧能力没有丢失。
+## 适合场景
 
-## 边界
+- 一个网关要接入大量业务项目，需要统一配置、统一发布和统一排障。
+- 高流量项目需要独立扩 proxy 副本，不希望每次扩容都改 Java 代码。
+- 团队希望把灰度、蓝绿、染色、限流、熔断、审计和诊断做成平台能力。
+- 配置需要持久化、可回滚、可追踪，不能只靠本地 YAML 或临时脚本。
+- 运维入口在 Kubernetes、Nginx、VIP 等体系之上，网关只专注业务流量治理。
 
-- runtime 数据面不保存配置草稿，不做配置查看、版本快照、Web 管理和审计查询。
-- admin 能力落在 `gatepilot-apiserver`，负责配置存储、查看、发布、回滚、快照、审计和查询。
-- console 是前端，只调用 apiserver API。
-- controller-manager 只推进发布和回写状态，不对外提供管理查询 API。
-- agent 只做节点侧配置同步和 apply 协调，不决定发布策略。
-- app 只装配，不写业务逻辑。
+## 快速开始
 
-GatePilot 内部按 DDD 分层：`interfaces / application / domain / infrastructure`。禁止新增 `core`、`common`、`shared`、`support` 这类泛化垃圾包。公共能力先查 getboot，getboot 没有就先补 getboot，再由 GatePilot 依赖。
-
-## 运行链路
-
-```text
-console
-  -> apiserver admission 校验并保存声明式资源
-  -> apiserver 创建发布意图资源
-  -> controller-manager reconcile
-  -> controller-manager 生成 PublishedConfig
-  -> agent watch / pull PublishedConfig
-  -> agent 校验并写入 staged config
-  -> agent 通知 proxy apply
-  -> proxy 原子切换运行状态
-  -> agent 上报 apply result
-  -> controller-manager 汇总发布状态
-  -> apiserver 提供查询
-  -> console 展示结果
-```
-
-热路径只在 proxy 本地运行态快照中完成，不能访问控制面。
-
-## 开发
+构建后端：
 
 ```bash
 mvn -q test
 mvn -q -DskipTests package
 ```
 
-前端使用 Vue 3 + Vite + TypeScript，页面默认中文优先，风格参考成熟运维控制台，避免炫技式视觉。
+启动 Console：
+
+```bash
+cd gatepilot-console
+npm install
+npm run dev
+```
+
+默认访问地址：
+
+```text
+http://127.0.0.1:5174
+```
+
+Console 默认把 `/api/gatepilot` 代理到：
+
+```text
+http://127.0.0.1:18080
+```
+
+如果要体验完整闭环，请先启动 apiserver 或一体化应用，再打开 Console 的“接入”页面创建项目、保存资源并发布。
+
+## 生产部署建议
+
+- 控制面：apiserver + controller-manager，可多副本部署。
+- 数据面：proxy + agent 跟随部署，按流量水平横向扩容。
+- 存储：配置资源、发布产物、快照、节点状态和审计数据使用数据库持久化。
+- 入口：可以使用 VIP / Nginx / Kubernetes Service 承接外部流量，GatePilot proxy 负责项目级路由和治理。
+- 观测：指标、Trace、日志上下文和 Prometheus 暴露复用 getboot 可观测能力。
+
+## 开发约定
+
+- 公共能力优先复用 getboot，缺公共能力先补 getboot，再让 GatePilot 接入。
+- 后端按 DDD 分层：`interfaces / application / domain / infrastructure`。
+- 数据面热路径不能访问控制面和数据库。
+- Console 只调用 apiserver API，不直连数据库、agent 或 proxy。
+- 一体化启动包只做装配，不写业务实现。
+
+GatePilot 的目标很简单：让网关既能扛流量，也能被人看懂、管住、排得动问题。
