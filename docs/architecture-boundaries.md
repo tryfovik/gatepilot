@@ -173,7 +173,7 @@ GatePilot 服务通信边界：
 - 后端服务之间的 RPC 优先使用 getboot-rpc / Dubbo，包括 apiserver 与 controller-manager 未来分服务部署时的内部接口。
 - GatePilot 后端模块禁止新增 OpenFeign 依赖，禁止用 OpenFeign 作为默认跨服务通信方式。
 - agent 拉取配置、上报心跳和 apply result 属于节点配置同步通道，不属于普通业务 RPC；当前可通过 apiserver HTTP pull 实现，后续可以演进为 Nacos / long polling / watch 适配，但不能改成 OpenFeign。
-- proxy 转发业务 HTTP 流量时使用数据面转发客户端，这不是 GatePilot 服务间 RPC，不能为了统一 RPC 把业务转发改成 Dubbo。
+- proxy 转发业务 HTTP 流量时复用 Spring Cloud Gateway 的 RouteLocator、GlobalFilter 和 NettyRoutingFilter，这不是 GatePilot 服务间 RPC，不能为了统一 RPC 把业务转发改成 Dubbo，也不能回到手写 WebClient 转发。
 - 如果新增跨服务调用能力，先查 getboot-rpc；getboot-rpc 缺能力时先补 getboot-rpc，再回 GatePilot 接入。
 
 禁止放：
@@ -256,7 +256,7 @@ controller-manager 与 apiserver 的关系：
 - 执行已发布配置。
 - 路由匹配。
 - 路径改写。
-- 上游转发。
+- 上游转发，实际网络 I/O 交给 Spring Cloud Gateway。
 - 限流、熔断、重试、超时、请求体限制。
 - 流量染色执行。
 - 灰度和蓝绿发布执行。
@@ -269,6 +269,14 @@ controller-manager 与 apiserver 的关系：
 - GatePilot 不自造通用限流算法，运行时通过 `getboot-limiter` 编程式入口申请许可。
 - proxy 默认只依赖 getboot-limiter API，不把 `getboot-coordination` / Redisson 运行实现强制带入合包，避免未配置 Redis 时启动即连接本地 Redis。
 - 需要分布式限流的部署形态必须显式引入和配置 getboot-coordination，未就绪时 proxy 对启用限流的路由返回限流组件不可用。
+
+转发底座规则：
+
+- `gatepilot-proxy` 必须以 Spring Cloud Gateway 作为 HTTP 数据面转发底座。
+- GatePilot 负责 `PublishedConfig` 编译、路由命中、上游选择、染色、限流、熔断、重试策略适配、审计和指标采集。
+- Spring Cloud Gateway 负责请求转发、连接管理、响应写回、HTTP 客户端细节和成熟过滤器能力。
+- 禁止在 proxy 热路径重新维护一套 WebClient / Reactor Netty 手写业务转发器。
+- 健康探测、agent 同步这类非业务转发可以使用 getboot 增强后的 HTTP 客户端，但必须和业务流量转发通道分开。
 
 禁止放：
 
@@ -652,7 +660,7 @@ GatewayNode(proxy-001..proxy-200)
 
 Envoy 是业界常用的高性能代理数据面，xDS 是控制面向 Envoy 动态下发配置的一组协议族。它们解决的问题和 GatePilot 的长期方向类似：控制面生成配置，数据面热加载配置并承载流量。
 
-当前 GatePilot 先使用自研 Java proxy，贴合现有 Spring Cloud Gateway 体系。后续如果需要更高性能或接入服务网格生态，可以增加 Envoy 数据面适配：
+当前 GatePilot 先使用基于 Spring Cloud Gateway 的 Java proxy，复用成熟 HTTP 转发和过滤器体系。后续如果需要更高性能或接入服务网格生态，可以增加 Envoy 数据面适配：
 
 - controller-manager 在生成 `PublishedConfig` 的同时，也可以生成 xDS 需要的 listener、route、cluster、endpoint 配置。
 - agent 可以扩展为 xDS 管理客户端或 Envoy sidecar 管理器。
@@ -751,8 +759,8 @@ Client
 | 旧实现位置 | 已有能力 | 改造目标 | 当前覆盖状态 | 改造要求 |
 | --- | --- | --- | --- | --- |
 | 历史配置模块/GatewayProperties | 旧 YAML 配置模型，包含项目、路由、认证、CORS、健康检查、上下文头、染色、审计、治理策略 | `gatepilot-domain` 资源模型和 `gatepilot-apiserver` admission 校验 | 部分覆盖 | 只能作为字段设计参考，不能继续让生产依赖本地 YAML 作为事实来源 |
-| 历史配置模块/GatewayRouteDefinitionLocator | 路由编译和路由命中 | `gatepilot-proxy/domain/runtime` | 已覆盖编译索引、最长前缀命中和基础 WebFlux 转发，完整治理过滤链仍缺 | 改成从 `PublishedConfig` 预编译，不再从 `GatewayProperties` 读取 |
-| 历史配置模块/GatewayTrafficColorResolver | Header、Cookie、Query、IP 等染色解析 | `gatepilot-proxy/domain/runtime` | 已覆盖 Header / Cookie / Query / IP / 权重 / 默认色解析，过滤链执行和响应头回写仍缺 | 保留解析规则，输入改成 proxy 运行态请求上下文和已发布策略 |
+| 历史配置模块/GatewayRouteDefinitionLocator | 路由编译和路由命中 | `gatepilot-proxy/domain/runtime` + `interfaces/gateway` | 已覆盖编译索引、最长前缀命中，并接入 Spring Cloud Gateway 承担业务转发 | 改成从 `PublishedConfig` 预编译，不再从 `GatewayProperties` 读取 |
+| 历史配置模块/GatewayTrafficColorResolver | Header、Cookie、Query、IP 等染色解析 | `gatepilot-proxy/domain/runtime` + `interfaces/gateway` | 已覆盖 Header / Cookie / Query / IP / 权重 / 默认色解析，并通过 SCG 治理过滤器执行请求头透传和响应头回写 | 保留解析规则，输入改成 proxy 运行态请求上下文和已发布策略 |
 | 历史配置模块/GatewayPropertiesValidator | 配置合法性校验 | `gatepilot-apiserver/application` 和 `gatepilot-controller-manager/application` | 部分覆盖 | 拆成资源 admission 校验、发布 dry-run 校验、PublishedConfig 编译校验 |
 | 历史 runtime 模块/GatewayAuthenticationFilter | 路由级认证 | `gatepilot-proxy` | 只覆盖策略判断，getboot-auth 执行未接入 | 参考旧判断逻辑，继续复用 getboot-auth，策略来自 `PublishedConfig`，失败响应使用 getboot 统一规则 |
 | 历史 runtime 模块/GatewayMethodAccessFilter | HTTP 方法白名单 | `gatepilot-proxy` | 已覆盖策略判断和 WebFlux 405 执行 | 改为读取编译后的 route policy，热路径不能访问控制面 |

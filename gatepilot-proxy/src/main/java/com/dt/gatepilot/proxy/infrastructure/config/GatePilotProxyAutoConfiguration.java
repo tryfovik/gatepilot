@@ -21,9 +21,10 @@ import com.dt.gatepilot.proxy.infrastructure.auth.GetbootRuntimeAuthChecker;
 import com.dt.gatepilot.proxy.infrastructure.health.UpstreamHealthProbe;
 import com.dt.gatepilot.proxy.infrastructure.health.UpstreamHealthProbeScheduler;
 import com.dt.gatepilot.proxy.infrastructure.limiter.GetbootRuntimeRateLimiter;
-import com.dt.gatepilot.proxy.interfaces.web.GatePilotProxyHandler;
-import com.dt.gatepilot.proxy.interfaces.web.ProxyHttpConstants;
+import com.dt.gatepilot.proxy.interfaces.gateway.GatePilotGatewayFilter;
+import com.dt.gatepilot.proxy.interfaces.gateway.GatePilotRouteLocator;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyRuntimeAuditRecorder;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.getboot.auth.spi.SaTokenWebFluxAuthChecker;
 import com.getboot.limiter.api.registry.RateLimiterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
@@ -33,18 +34,15 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.cloud.gateway.filter.factory.RetryGatewayFilterFactory;
+import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.server.RequestPredicate;
-import org.springframework.web.reactive.function.server.RequestPredicates;
-import org.springframework.web.reactive.function.server.RouterFunction;
-import org.springframework.web.reactive.function.server.RouterFunctions;
-import org.springframework.web.reactive.function.server.ServerResponse;
 
 /**
  * GatePilot proxy 自动配置。
  */
 @AutoConfiguration
-@ConditionalOnClass(WebClient.class)
+@ConditionalOnClass(RouteLocator.class)
 @EnableScheduling
 public class GatePilotProxyAutoConfiguration {
 
@@ -297,7 +295,19 @@ public class GatePilotProxyAutoConfiguration {
     }
 
     /**
-     * 创建 proxy WebFlux 入口处理器。
+     * 创建 GatePilot SCG 入口路由。
+     *
+     * @return SCG 路由定位器
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "gatePilotRouteLocator")
+    public RouteLocator gatePilotRouteLocator() {
+        // 只注册数据面兜底入口，真实上游由运行态过滤器选择
+        return new GatePilotRouteLocator();
+    }
+
+    /**
+     * 创建 GatePilot SCG 治理过滤器。
      *
      * @param runtimeState proxy 运行态
      * @param accessEvaluator 路由访问判断器
@@ -311,26 +321,28 @@ public class GatePilotProxyAutoConfiguration {
      * @param endpointSelector 上游端点选择器
      * @param runtimeAuthChecker 运行时认证校验器
      * @param auditRecorder 运行审计记录器
-     * @param webClientBuilder WebClient 构造器
-     * @return proxy WebFlux 入口处理器
+     * @param retryFactoryProvider SCG 重试过滤器工厂提供器
+     * @param objectMapper JSON 序列化器
+     * @return GatePilot SCG 治理过滤器
      */
     @Bean
     @ConditionalOnMissingBean
-    public GatePilotProxyHandler gatePilotProxyHandler(ProxyRuntimeState runtimeState,
-                                                       RouteAccessEvaluator accessEvaluator,
-                                                       TrafficColorResolver trafficColorResolver,
-                                                       CircuitBreakerPolicyResolver circuitBreakerPolicyResolver,
-                                                       RouteCircuitBreaker routeCircuitBreaker,
-                                                       RateLimitPolicyResolver rateLimitPolicyResolver,
-                                                       RuntimeRateLimiter runtimeRateLimiter,
-                                                       RetryPolicyResolver retryPolicyResolver,
-                                                       ReleaseUpstreamResolver releaseUpstreamResolver,
-                                                       UpstreamEndpointSelector endpointSelector,
-                                                       RuntimeAuthChecker runtimeAuthChecker,
-                                                       ProxyRuntimeAuditRecorder auditRecorder,
-                                                       WebClient.Builder webClientBuilder) {
-        // WebClient.Builder 由 getboot-http-client 增强时可自动继承 Trace 透传
-        return new GatePilotProxyHandler(
+    public GatePilotGatewayFilter gatePilotGatewayFilter(ProxyRuntimeState runtimeState,
+                                                         RouteAccessEvaluator accessEvaluator,
+                                                         TrafficColorResolver trafficColorResolver,
+                                                         CircuitBreakerPolicyResolver circuitBreakerPolicyResolver,
+                                                         RouteCircuitBreaker routeCircuitBreaker,
+                                                         RateLimitPolicyResolver rateLimitPolicyResolver,
+                                                         RuntimeRateLimiter runtimeRateLimiter,
+                                                         RetryPolicyResolver retryPolicyResolver,
+                                                         ReleaseUpstreamResolver releaseUpstreamResolver,
+                                                         UpstreamEndpointSelector endpointSelector,
+                                                         RuntimeAuthChecker runtimeAuthChecker,
+                                                         ProxyRuntimeAuditRecorder auditRecorder,
+                                                         ObjectProvider<RetryGatewayFilterFactory> retryFactoryProvider,
+                                                         ObjectMapper objectMapper) {
+        // 转发交给 SCG，GatePilot 只做运行态决策和请求改写
+        return new GatePilotGatewayFilter(
                 runtimeState,
                 accessEvaluator,
                 trafficColorResolver,
@@ -343,31 +355,8 @@ public class GatePilotProxyAutoConfiguration {
                 endpointSelector,
                 runtimeAuthChecker,
                 auditRecorder,
-                webClientBuilder.build()
+                retryFactoryProvider.getIfAvailable(RetryGatewayFilterFactory::new),
+                objectMapper
         );
-    }
-
-    /**
-     * 创建 proxy WebFlux 路由。
-     *
-     * @param handler proxy WebFlux 入口处理器
-     * @return WebFlux 路由
-     */
-    @Bean
-    public RouterFunction<ServerResponse> gatePilotProxyRoutes(GatePilotProxyHandler handler) {
-        // proxy 入口只吃业务路径，管理 API 留给 apiserver
-        return RouterFunctions.route(proxyPath(), handler::handle);
-    }
-
-    /**
-     * 创建 proxy 路由匹配器。
-     *
-     * @return proxy 路由匹配器
-     */
-    private RequestPredicate proxyPath() {
-        // GatePilot 管理 API 不走数据面代理
-        return RequestPredicates.path(ProxyHttpConstants.API_PROXY_PATH)
-                .or(RequestPredicates.path(ProxyHttpConstants.INTERNAL_PROXY_PATH))
-                .and(request -> !request.path().startsWith(ProxyHttpConstants.GATEPILOT_API_PREFIX));
     }
 }

@@ -33,9 +33,19 @@ public final class ProxyHttpConstants {
     public static final String QUERY_SEPARATOR = "?";
 
     /**
+     * 管理 API 基础路径。
+     */
+    public static final String GATEPILOT_API_BASE = "/api/gatepilot";
+
+    /**
      * 管理 API 路径。
      */
     public static final String GATEPILOT_API_PREFIX = "/api/gatepilot/";
+
+    /**
+     * 业务 API 代理前缀。
+     */
+    public static final String API_PROXY_PREFIX = "/api";
 
     /**
      * 业务 API 代理路径。

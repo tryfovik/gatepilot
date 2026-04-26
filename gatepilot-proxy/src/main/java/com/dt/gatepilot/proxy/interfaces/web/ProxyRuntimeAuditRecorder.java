@@ -10,6 +10,7 @@ import java.net.URI;
 import org.springframework.http.HttpHeaders;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.server.ServerRequest;
+import org.springframework.web.server.ServerWebExchange;
 
 /**
  * proxy 运行审计记录器。
@@ -75,6 +76,61 @@ public class ProxyRuntimeAuditRecorder {
                 request.methodName(),
                 request.uri().getRawPath(),
                 host(request),
+                routeId,
+                upstreamName,
+                upstreamUri == null ? null : upstreamUri.toString(),
+                status,
+                latencyMillis,
+                trafficColor,
+                methodAllowed,
+                authenticationRequired,
+                fallback,
+                outcome,
+                reason,
+                error == null ? null : error.getClass().getName()
+        );
+        emitAudit(event);
+        recordMetrics(routeId, status, latencyMillis);
+    }
+
+    /**
+     * 记录一次运行审计和指标。
+     *
+     * @param exchange WebFlux 交换上下文
+     * @param route 已命中路由
+     * @param upstreamName 上游名称
+     * @param upstreamUri 上游地址
+     * @param status 响应状态码
+     * @param trafficColor 流量颜色
+     * @param methodAllowed 方法是否允许
+     * @param authenticationRequired 是否需要认证
+     * @param fallback 是否 fallback
+     * @param outcome 执行结果
+     * @param reason 结果原因
+     * @param error 异常
+     * @param startNanos 请求开始时间
+     */
+    public void record(ServerWebExchange exchange,
+                       CompiledRoute route,
+                       String upstreamName,
+                       URI upstreamUri,
+                       int status,
+                       String trafficColor,
+                       boolean methodAllowed,
+                       boolean authenticationRequired,
+                       boolean fallback,
+                       String outcome,
+                       String reason,
+                       Throwable error,
+                       long startNanos) {
+        long latencyMillis = latencyMillis(startNanos);
+        String routeId = route == null ? null : route.getRouteId();
+        RuntimeAuditSink.RuntimeAuditEvent event = new RuntimeAuditSink.RuntimeAuditEvent(
+                traceId(exchange),
+                remoteAddress(exchange),
+                exchange.getRequest().getMethod().name(),
+                exchange.getRequest().getURI().getRawPath(),
+                host(exchange),
                 routeId,
                 upstreamName,
                 upstreamUri == null ? null : upstreamUri.toString(),
@@ -164,6 +220,25 @@ public class ProxyRuntimeAuditRecorder {
     }
 
     /**
+     * 解析当前 TraceId。
+     *
+     * @param exchange WebFlux 交换上下文
+     * @return TraceId
+     */
+    private String traceId(ServerWebExchange exchange) {
+        // 优先复用 getboot 已经绑定的链路上下文
+        String traceId = TraceContextHolder.getTraceId();
+        if (StringUtils.hasText(traceId)) {
+            return traceId;
+        }
+        String headerTraceId = exchange.getRequest().getHeaders().getFirst(ProxyAuditConstants.DEFAULT_TRACE_HEADER_NAME);
+        if (StringUtils.hasText(headerTraceId)) {
+            return headerTraceId;
+        }
+        return exchange.getRequest().getId();
+    }
+
+    /**
      * 获取客户端地址。
      *
      * @param request WebFlux 请求
@@ -174,6 +249,21 @@ public class ProxyRuntimeAuditRecorder {
         return request.remoteAddress()
                 .map(this::remoteAddress)
                 .orElse(null);
+    }
+
+    /**
+     * 获取客户端地址。
+     *
+     * @param exchange WebFlux 交换上下文
+     * @return 客户端地址
+     */
+    private String remoteAddress(ServerWebExchange exchange) {
+        // 审计中的 IP 保留代理入口看到的远端地址
+        InetSocketAddress address = exchange.getRequest().getRemoteAddress();
+        if (address == null) {
+            return null;
+        }
+        return remoteAddress(address);
     }
 
     /**
@@ -196,5 +286,16 @@ public class ProxyRuntimeAuditRecorder {
     private String host(ServerRequest request) {
         // Host 用于把审计事件和路由命中关联起来
         return request.headers().firstHeader(HttpHeaders.HOST);
+    }
+
+    /**
+     * 获取请求域名。
+     *
+     * @param exchange WebFlux 交换上下文
+     * @return 请求域名
+     */
+    private String host(ServerWebExchange exchange) {
+        // Host 用于把审计事件和路由命中关联起来
+        return exchange.getRequest().getHeaders().getFirst(HttpHeaders.HOST);
     }
 }

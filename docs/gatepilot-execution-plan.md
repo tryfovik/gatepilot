@@ -1,6 +1,6 @@
 # GatePilot 执行计划
 
-更新时间：2026-04-25
+更新时间：2026-04-26
 
 本文档把本轮已经确认的 GatePilot 架构、Console 设计约束和后续开发计划集中到一个地方。后续我每完成一个阶段或任务，都必须同步更新这里的 checklist。
 
@@ -25,6 +25,7 @@
 - 禁止硬编码业务路径、Header、label、reason、配置 key 和默认值；常量按上下文收敛到明确命名的常量类，不能建全局垃圾常量包。
 - 对外 HTTP 入参、出参类统一命名为 `Request` / `Response`；`Command` 只用于明确的写入意图或领域命令，查询类不能误命名为 Command；新 Controller 出参不再使用泛化 `Result` 命名。
 - 后端服务间 RPC 统一优先走 getboot-rpc / Dubbo，禁止 GatePilot 新增 OpenFeign；console REST、agent 配置同步、proxy HTTP 转发要按各自通道归类，不能混成普通跨服务 RPC。
+- proxy HTTP 业务转发统一复用 Spring Cloud Gateway，不再维护手写 WebClient 业务转发器；GatePilot filter 只做运行态决策、请求改写、治理和审计。
 
 目标模块：
 
@@ -224,9 +225,9 @@ console
 - [x] 参考旧 `GatewayAuthenticationFilter` 改造路由级认证策略判断能力。
 - [x] 接入 getboot-auth 执行路由级认证。
 - [x] 参考旧 `GatewayMethodAccessFilter` 改造 HTTP 方法白名单判断能力。
-- [x] 接入 proxy WebFlux 过滤链执行 HTTP 方法白名单。
-- [x] 接入 proxy WebFlux 过滤链执行路由转发。
-- [x] 接入 proxy WebFlux 过滤链执行染色解析、请求头透传和响应头回写。
+- [x] 接入 SCG 治理过滤器执行 HTTP 方法白名单。
+- [x] 接入 Spring Cloud Gateway 执行业务 HTTP 路由转发，移除手写 WebClient 业务转发入口。
+- [x] 接入 SCG 治理过滤器执行染色解析、请求头透传和响应头回写。
 - [x] 接入 ReleasePolicy `trafficSplits`，按灰度 / 蓝绿命中的颜色切换实际上游。
 - [x] 接入上游多端点轮询和加权轮询选择，避免所有流量固定打第一个 endpoint。
 - [x] 改造 Query / IP 染色规则。
