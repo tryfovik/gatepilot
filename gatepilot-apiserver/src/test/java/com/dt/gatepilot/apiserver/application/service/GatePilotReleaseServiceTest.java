@@ -26,6 +26,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class GatePilotReleaseServiceTest {
 
+    private static final String RELEASE_VERSION_PATTERN = "game-release-[0-9a-f]{32}";
+
+    private static final String ROLLBACK_VERSION_PATTERN = "game-rollback-[0-9a-f]{32}";
+
+    private static final String DRY_RUN_VERSION_PATTERN = "missing-dry-run-[0-9a-f]{32}";
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final GatePilotResourceService resourceService = new GatePilotResourceService(
@@ -53,6 +59,8 @@ class GatePilotReleaseServiceTest {
         assertThat(response.getMessages())
                 .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
                 .contains("ProjectNotFound");
+        assertThat(response.getVersion()).matches(DRY_RUN_VERSION_PATTERN);
+        assertThat(response.getVersion()).doesNotContain(String.valueOf(response.getCheckedAt().toEpochMilli()));
         assertThat(events.getItems()).isEmpty();
     }
 
@@ -68,6 +76,9 @@ class GatePilotReleaseServiceTest {
         ReleaseResult second = releaseService.createRelease(request);
 
         assertThat(first.getVersion()).isNotEqualTo(second.getVersion());
+        assertThat(first.getVersion()).matches(RELEASE_VERSION_PATTERN);
+        assertThat(second.getVersion()).matches(RELEASE_VERSION_PATTERN);
+        assertThat(first.getVersion()).doesNotContain(String.valueOf(first.getCreatedAt().toEpochMilli()));
     }
 
     @Test
@@ -130,6 +141,8 @@ class GatePilotReleaseServiceTest {
         CursorPage<Object> events = resourceService.list("events", "default", null, 50);
 
         assertThat(response.getReleaseId()).startsWith("rb-");
+        assertThat(response.getVersion()).matches(ROLLBACK_VERSION_PATTERN);
+        assertThat(response.getVersion()).doesNotContain(String.valueOf(response.getCreatedAt().toEpochMilli()));
         assertThat(response.getPhase()).isEqualTo("PENDING");
         assertThat(updatedSnapshot.getMetadata().getUid()).isEqualTo(snapshot.getMetadata().getUid());
         assertThat(updatedSnapshot.getStatus().getLastRollbackReleaseId()).isEqualTo(response.getReleaseId());

@@ -28,7 +28,7 @@ public final class GatePilotReleaseConstants {
     /**
      * 版本唯一后缀长度。
      */
-    public static final int VERSION_ID_SUFFIX_LENGTH = 8;
+    public static final int VERSION_ID_SUFFIX_LENGTH = 32;
 
     /**
      * dry-run 单页扫描大小。
@@ -49,6 +49,11 @@ public final class GatePilotReleaseConstants {
      * dry-run 版本片段。
      */
     public static final String DRY_RUN_VERSION_PART = "dry-run";
+
+    /**
+     * 发布版本片段。
+     */
+    public static final String RELEASE_VERSION_PART = "release";
 
     /**
      * 回滚版本片段。

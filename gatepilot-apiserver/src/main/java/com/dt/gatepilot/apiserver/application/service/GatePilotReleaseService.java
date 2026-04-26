@@ -29,7 +29,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -45,6 +44,8 @@ public class GatePilotReleaseService {
 
     private final GatePilotConfigSnapshotService snapshotService;
 
+    private final GatePilotReleaseIdentityGenerator identityGenerator;
+
     /**
      * 创建发布请求服务。
      *
@@ -55,6 +56,7 @@ public class GatePilotReleaseService {
                                    GatePilotConfigSnapshotService snapshotService) {
         this.resourceService = resourceService;
         this.snapshotService = snapshotService;
+        this.identityGenerator = new GatePilotReleaseIdentityGenerator();
     }
 
     /**
@@ -65,8 +67,8 @@ public class GatePilotReleaseService {
      */
     public ReleaseResult createRelease(CreateReleaseCommand request) {
         Instant now = Instant.now();
-        String releaseId = GatePilotReleaseConstants.RELEASE_ID_PREFIX + UUID.randomUUID();
-        String version = releaseVersion(request.getProjectName(), releaseId, now);
+        String releaseId = identityGenerator.nextReleaseId();
+        String version = identityGenerator.releaseVersion(request.getProjectName(), releaseId);
         GatewayEvent event = buildReleaseEvent(request, releaseId, version, now);
         GatePilotResourceType eventType = resourceService.requireResourceType(ResourceKind.GATEWAY_EVENT);
         // 发布入口只保存事件，具体推进由 controller-manager 异步处理
@@ -92,11 +94,7 @@ public class GatePilotReleaseService {
         ReleaseDryRunResult response = new ReleaseDryRunResult();
         response.setNamespace(request.getNamespace());
         response.setProjectName(request.getProjectName());
-        response.setVersion(request.getProjectName()
-                + GatePilotReleaseConstants.VERSION_SEPARATOR
-                + GatePilotReleaseConstants.DRY_RUN_VERSION_PART
-                + GatePilotReleaseConstants.VERSION_SEPARATOR
-                + now.toEpochMilli());
+        response.setVersion(identityGenerator.dryRunVersion(request.getProjectName()));
         response.setConfigShard(request.getConfigShard());
         response.setCheckedAt(now);
         // dry-run 先确认项目存在，再统计项目相关资源规模
@@ -143,8 +141,8 @@ public class GatePilotReleaseService {
                         request.getConfigShard())
                 .orElseThrow(() -> BusinessException.of(CommonErrorCode.NOT_FOUND.code(),
                         GatePilotReleaseConstants.MESSAGE_TARGET_SNAPSHOT_NOT_FOUND));
-        String releaseId = GatePilotReleaseConstants.ROLLBACK_ID_PREFIX + UUID.randomUUID();
-        String version = rollbackVersion(request.getProjectName(), releaseId, now);
+        String releaseId = identityGenerator.nextRollbackId();
+        String version = identityGenerator.rollbackVersion(request.getProjectName(), releaseId);
         GatewayEvent event = buildRollbackEvent(request, snapshot, releaseId, version, now);
         GatePilotResourceType eventType = resourceService.requireResourceType(ResourceKind.GATEWAY_EVENT);
         // 回滚同样只生成发布意图，避免 apiserver 同步推整条链路
@@ -443,32 +441,4 @@ public class GatePilotReleaseService {
         response.getMessages().add(dryRunMessage);
     }
 
-    private String releaseVersion(String projectName, String releaseId, Instant now) {
-        // 版本号带 releaseId 短后缀，避免同毫秒并发发布撞版本
-        return projectName
-                + GatePilotReleaseConstants.VERSION_SEPARATOR
-                + now.toEpochMilli()
-                + GatePilotReleaseConstants.VERSION_SEPARATOR
-                + versionSuffix(releaseId);
-    }
-
-    private String rollbackVersion(String projectName, String releaseId, Instant now) {
-        // 回滚版本同样保证唯一，避免覆盖正常发布快照
-        return projectName
-                + GatePilotReleaseConstants.VERSION_SEPARATOR
-                + GatePilotReleaseConstants.ROLLBACK_VERSION_PART
-                + GatePilotReleaseConstants.VERSION_SEPARATOR
-                + now.toEpochMilli()
-                + GatePilotReleaseConstants.VERSION_SEPARATOR
-                + versionSuffix(releaseId);
-    }
-
-    private String versionSuffix(String releaseId) {
-        String normalized = releaseId.replace(GatePilotReleaseConstants.VERSION_SEPARATOR,
-                GatePilotReleaseConstants.EMPTY_VERSION_PART);
-        if (normalized.length() <= GatePilotReleaseConstants.VERSION_ID_SUFFIX_LENGTH) {
-            return normalized;
-        }
-        return normalized.substring(normalized.length() - GatePilotReleaseConstants.VERSION_ID_SUFFIX_LENGTH);
-    }
 }

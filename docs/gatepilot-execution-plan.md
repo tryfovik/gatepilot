@@ -97,6 +97,7 @@ infrastructure  出站实现：数据库、HTTP 客户端、Spring 配置、调�
 | Trace / Header 透传 | getboot-observability + getboot-http-client | 已接入 | 缺能力时先补 getboot，不在 agent 里手写 Header |
 | 数据库存储 | getboot-datasource + MyBatis-Plus | 已接入 | 普通 CRUD 走 Mapper / Service，复杂 SQL 走 mapper.xml |
 | 发布调度互斥 | getboot-lock | 已接入 | 多副本 controller-manager 必须验证锁缺失不静默退化 |
+| 发布 ID / 版本 | GatePilot 发布域生成器 | 已收敛 | getboot 当前无统一 ID 模块，禁止继续用本机时间拼版本；未来若做通用 ID，先补 getboot |
 | 统一响应 | getboot ApiResponse | 已接入 | 禁止 GatePilot 自定义 ApiResult / Result |
 | 本机熔断状态机 | GatePilot 本地实现 | 待 CR | 优先评估 getboot-governance / Sentinel / Resilience4j |
 | 上游主动健康探测 | GatePilot 本地实现 | 待 CR | 优先评估 Spring Cloud LoadBalancer HealthCheck 或 getboot 统一健康能力 |
@@ -339,7 +340,7 @@ console
 - [x] CR controller-manager 分布式锁与发布事件 claim 的双保险语义，确认多副本下不会重复推进、不会长时间饿死发布队列，且锁实现缺失时不能静默退化成无锁生产运行。
 - [x] CR 回滚 PublishedConfig 复制策略，确认快照内容不会被后续发布污染，必要时改成 ObjectMapper 深拷贝或不可变快照。
 - [x] CR embedded / agent 资源读取的 500 条上限扫描，改成按 cursor 跨页读取，避免 1000 项目后 reconcile 或 agent pull 漏数据。
-- [ ] CR 发布版本号生成策略，评估是否接入 getboot 统一 ID 能力或单独版本序列，避免继续依赖本地时间。
+- [x] CR 发布版本号生成策略，评估是否接入 getboot 统一 ID 能力或单独版本序列，避免继续依赖本地时间。
 - [ ] CR MyBatis-Plus 资源表索引、乐观锁和发布事件 claim 原子性，避免多 controller-manager 抢占时只靠内存判断。
 - [x] CR agent last-good 存储当前仍是内存实现的问题，补文件或外部卷持久化，保证 proxy 控制面不可用时可恢复启动。
 - [ ] CR proxy 运行态策略解析中的 Map 兼容逻辑，确认大配置下没有反射/转换热点拖慢转发路径。

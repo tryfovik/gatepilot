@@ -163,6 +163,7 @@ private String version;
 | Trace / HTTP 客户端 | getboot-observability / getboot-http-client | 使用增强后的 Spring Bean | 手写 Trace Header 透传 |
 | 数据访问 | getboot-datasource / MyBatis-Plus | 写实体、Mapper、Service 和必要 mapper.xml | 手写 JDBC SQL 作为默认实现 |
 | 分布式互斥 | getboot-lock | 在调度入口声明锁语义 | 自己用数据库字段或内存锁冒充分布式锁 |
+| 发布 ID / 版本 | GatePilot 发布域生成器 | 用 releaseId 生成不依赖本机时间的发布版本 | 用本机时间戳拼版本；把 TraceId 当业务版本 |
 
 GatePilot 默认 Trace 约定：
 
