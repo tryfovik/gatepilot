@@ -6,6 +6,7 @@ import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
 import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.domain.port.LocalConfigStore;
+import com.dt.gatepilot.agent.domain.port.PublishedConfigSyncAdapter;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
 import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
@@ -22,6 +23,8 @@ public class AgentRuntimeCoordinator {
     private final AgentNodeProfile nodeProfile;
 
     private final AgentControlPlaneClient controlPlaneClient;
+
+    private final PublishedConfigSyncAdapter configSyncAdapter;
 
     private final LocalConfigStore localConfigStore;
 
@@ -58,8 +61,29 @@ public class AgentRuntimeCoordinator {
                                    LocalConfigStore localConfigStore,
                                    ProxyApplyClient proxyApplyClient,
                                    ProxyRuntimeStatusReader proxyRuntimeStatusReader) {
+        this(nodeProfile, controlPlaneClient, controlPlaneClient::pullConfig, localConfigStore, proxyApplyClient,
+                proxyRuntimeStatusReader);
+    }
+
+    /**
+     * 创建 agent 运行编排器。
+     *
+     * @param nodeProfile 节点身份
+     * @param controlPlaneClient 控制面客户端
+     * @param configSyncAdapter 配置同步适配器
+     * @param localConfigStore 本地配置存储
+     * @param proxyApplyClient proxy apply 客户端
+     * @param proxyRuntimeStatusReader proxy 运行状态读取器
+     */
+    public AgentRuntimeCoordinator(AgentNodeProfile nodeProfile,
+                                   AgentControlPlaneClient controlPlaneClient,
+                                   PublishedConfigSyncAdapter configSyncAdapter,
+                                   LocalConfigStore localConfigStore,
+                                   ProxyApplyClient proxyApplyClient,
+                                   ProxyRuntimeStatusReader proxyRuntimeStatusReader) {
         this.nodeProfile = nodeProfile;
         this.controlPlaneClient = controlPlaneClient;
+        this.configSyncAdapter = configSyncAdapter;
         this.localConfigStore = localConfigStore;
         this.proxyApplyClient = proxyApplyClient;
         this.proxyRuntimeStatusReader = proxyRuntimeStatusReader;
@@ -96,7 +120,7 @@ public class AgentRuntimeCoordinator {
      * @return 应用结果；没有新配置时为空
      */
     public Optional<AgentApplyResult> pullAndApply() {
-        Optional<PublishedConfig> latestConfig = controlPlaneClient.pullConfig(buildCursor());
+        Optional<PublishedConfig> latestConfig = configSyncAdapter.sync(buildCursor());
         if (latestConfig.isEmpty()) {
             return Optional.empty();
         }

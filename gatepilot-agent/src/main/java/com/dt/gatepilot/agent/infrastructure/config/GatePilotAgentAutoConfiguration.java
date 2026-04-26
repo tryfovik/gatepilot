@@ -5,8 +5,10 @@ import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditReporter;
 import com.dt.gatepilot.agent.application.service.AgentRuntimeCoordinator;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.domain.port.LocalConfigStore;
+import com.dt.gatepilot.agent.domain.port.PublishedConfigSyncAdapter;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
 import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
+import com.dt.gatepilot.agent.infrastructure.apiserver.HttpPullPublishedConfigSyncAdapter;
 import com.dt.gatepilot.agent.infrastructure.persistence.file.FileLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.scheduling.AgentLifecycleManager;
@@ -105,10 +107,25 @@ public class GatePilotAgentAutoConfiguration {
     }
 
     /**
+     * 创建已发布配置同步适配器。
+     *
+     * @param controlPlaneClient 控制面客户端
+     * @return 配置同步适配器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(AgentControlPlaneClient.class)
+    public PublishedConfigSyncAdapter publishedConfigSyncAdapter(AgentControlPlaneClient controlPlaneClient) {
+        // 默认只提供 HTTP pull，Nacos watch 后续通过替换这个 bean 接入
+        return new HttpPullPublishedConfigSyncAdapter(controlPlaneClient);
+    }
+
+    /**
      * 创建 agent 运行编排器。
      *
      * @param nodeProfile 节点身份
      * @param controlPlaneClient 控制面客户端
+     * @param configSyncAdapter 配置同步适配器
      * @param localConfigStore 本地配置存储
      * @param proxyApplyClient proxy apply 客户端
      * @param proxyRuntimeStatusReaderProvider proxy 运行状态读取器提供器
@@ -116,16 +133,18 @@ public class GatePilotAgentAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean({AgentControlPlaneClient.class, LocalConfigStore.class, ProxyApplyClient.class})
+    @ConditionalOnBean({AgentControlPlaneClient.class, PublishedConfigSyncAdapter.class,
+            LocalConfigStore.class, ProxyApplyClient.class})
     public AgentRuntimeCoordinator agentRuntimeCoordinator(AgentNodeProfile nodeProfile,
                                                            AgentControlPlaneClient controlPlaneClient,
+                                                           PublishedConfigSyncAdapter configSyncAdapter,
                                                            LocalConfigStore localConfigStore,
                                                            ProxyApplyClient proxyApplyClient,
                                                            ObjectProvider<ProxyRuntimeStatusReader>
                                                                    proxyRuntimeStatusReaderProvider) {
-        // 编排器只拼端口，不关心端口背后是 HTTP 还是进程内
-        return new AgentRuntimeCoordinator(nodeProfile, controlPlaneClient, localConfigStore, proxyApplyClient,
-                proxyRuntimeStatusReaderProvider.getIfAvailable());
+        // 编排器只拼端口，不关心同步背后是 HTTP pull 还是 watch
+        return new AgentRuntimeCoordinator(nodeProfile, controlPlaneClient, configSyncAdapter,
+                localConfigStore, proxyApplyClient, proxyRuntimeStatusReaderProvider.getIfAvailable());
     }
 
     /**

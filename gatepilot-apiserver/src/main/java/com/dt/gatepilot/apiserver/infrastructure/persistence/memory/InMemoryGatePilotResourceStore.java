@@ -95,7 +95,7 @@ public class InMemoryGatePilotResourceStore implements GatePilotResourceStore {
                 continue;
             }
             if (items.size() >= effectiveLimit) {
-                nextCursor = currentCursor;
+                nextCursor = cursorOfLastItem(items);
                 break;
             }
             items.add(resourceType.cast(entry.getValue()));
@@ -106,6 +106,11 @@ public class InMemoryGatePilotResourceStore implements GatePilotResourceStore {
         page.setTotal(matched.size());
         page.setNextCursor(nextCursor);
         return page;
+    }
+
+    private <T> String cursorOfLastItem(List<T> items) {
+        ResourceMetadata metadata = metadataSupport.metadataOf(items.get(items.size() - 1));
+        return metadata.getNamespace() + ResourceStoreConstants.CURSOR_SEPARATOR + metadata.getName();
     }
 
     @Override

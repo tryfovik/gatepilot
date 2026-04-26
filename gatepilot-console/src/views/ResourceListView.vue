@@ -5,9 +5,9 @@
         <h2>{{ title }}</h2>
         <p>{{ description }}</p>
       </div>
-      <button class="primary-button" type="button">
-        <Plus :size="16" />
-        新建
+      <button class="ghost-button" type="button" @click="load">
+        <RefreshCw :size="16" />
+        刷新
       </button>
     </div>
 
@@ -47,17 +47,26 @@
           <td>{{ item.spec?.version || item.status?.currentPublishedVersion || '-' }}</td>
           <td>{{ formatTime(item.metadata?.updatedAt) }}</td>
           <td>
-            <button class="table-action" type="button">查看</button>
+            <button class="table-action" type="button" @click="selectedItem = item">查看</button>
           </td>
         </tr>
       </tbody>
     </table>
+
+    <ResourceDetailDrawer
+      :open="Boolean(selectedItem)"
+      :title="selectedItem?.metadata?.name || '资源详情'"
+      :subtitle="selectedItem?.metadata?.namespace || '-'"
+      :payload="selectedItem"
+      @close="selectedItem = null"
+    />
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { Plus } from 'lucide-vue-next';
+import { RefreshCw } from 'lucide-vue-next';
+import ResourceDetailDrawer from '../components/ResourceDetailDrawer.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import { listResources } from '../api/client';
 
@@ -88,6 +97,7 @@ const keyword = ref('');
 const loading = ref(false);
 const error = ref('');
 const items = ref<ResourceItem[]>([]);
+const selectedItem = ref<ResourceItem | null>(null);
 
 const filteredItems = computed(() => {
   const value = keyword.value.trim().toLowerCase();

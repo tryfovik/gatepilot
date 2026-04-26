@@ -43,6 +43,25 @@ export interface ConfigDiffResponse {
   items: ConfigDiffItem[];
 }
 
+export interface ConfigSnapshotSummaryResponse {
+  namespace?: string;
+  projectName?: string;
+  version?: string;
+  configHash?: string;
+  configShard?: string;
+  sequence?: number;
+  releaseId?: string;
+  routeCount: number;
+  upstreamCount: number;
+  policyCount: number;
+  targetNodeCount: number;
+  capturedAt?: string;
+  capturedBy?: string;
+  description?: string;
+  rollbackAllowed?: boolean;
+  lastRollbackAt?: string;
+}
+
 export interface RouteCatalogResponse {
   namespace: string;
   projectName?: string;
@@ -217,6 +236,30 @@ export async function diffConfigSnapshots(
     throw new Error(`请求失败：${response.status}`);
   }
   const body = (await response.json()) as ApiResponse<ConfigDiffResponse>;
+  if (body.status !== 'success') {
+    throw new Error(body.message || '请求失败');
+  }
+  return body.data;
+}
+
+export async function listConfigSnapshotSummaries(params: {
+  namespace?: string;
+  projectName?: string;
+  configShard?: string;
+  cursor?: string;
+  limit?: number;
+}): Promise<CursorPageResponse<ConfigSnapshotSummaryResponse>> {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') {
+      search.set(key, String(value));
+    }
+  });
+  const response = await fetch(`${apiBase}/config-snapshots?${search.toString()}`);
+  if (!response.ok) {
+    throw new Error(`请求失败：${response.status}`);
+  }
+  const body = (await response.json()) as ApiResponse<CursorPageResponse<ConfigSnapshotSummaryResponse>>;
   if (body.status !== 'success') {
     throw new Error(body.message || '请求失败');
   }

@@ -57,6 +57,8 @@ class MybatisPlusGatePilotResourceStoreTest {
         store.save(ResourceKind.GATEWAY_PROJECT, namespace, "game", first, GatewayProject.class);
         CursorPage<GatewayProject> page =
                 store.list(ResourceKind.GATEWAY_PROJECT, namespace, null, 1, GatewayProject.class);
+        CursorPage<GatewayProject> nextPage =
+                store.list(ResourceKind.GATEWAY_PROJECT, namespace, page.getNextCursor(), 1, GatewayProject.class);
         GatewayProject found = store.find(ResourceKind.GATEWAY_PROJECT, namespace, "game", GatewayProject.class)
                 .orElseThrow();
 
@@ -65,7 +67,10 @@ class MybatisPlusGatePilotResourceStoreTest {
         assertThat(found.getMetadata().getGeneration()).isEqualTo(2L);
         assertThat(page.getItems()).hasSize(1);
         assertThat(page.getTotal()).isEqualTo(2);
-        assertThat(page.getNextCursor()).isEqualTo(namespace + "/order");
+        assertThat(page.getNextCursor()).isEqualTo(namespace + "/game");
+        assertThat(nextPage.getItems()).hasSize(1);
+        assertThat(nextPage.getItems().get(0).getMetadata().getName()).isEqualTo("order");
+        assertThat(nextPage.getNextCursor()).isNull();
     }
 
     /**

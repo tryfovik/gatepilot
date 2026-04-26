@@ -1,7 +1,9 @@
 package com.dt.gatepilot.apiserver.interfaces.rest;
 
 import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResult;
+import com.dt.gatepilot.apiserver.application.dto.ConfigSnapshotSummaryResponse;
 import com.dt.gatepilot.apiserver.application.service.GatePilotConfigSnapshotService;
+import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.getboot.web.api.response.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +27,28 @@ public class GatePilotConfigSnapshotController {
      */
     public GatePilotConfigSnapshotController(GatePilotConfigSnapshotService snapshotService) {
         this.snapshotService = snapshotService;
+    }
+
+    /**
+     * 查询配置版本快照摘要列表。
+     *
+     * @param namespace 命名空间
+     * @param projectName 项目名称
+     * @param configShard 配置分片
+     * @param cursor 游标
+     * @param limit 返回条数
+     * @return 快照摘要列表
+     */
+    @GetMapping
+    public Mono<ApiResponse<CursorPage<ConfigSnapshotSummaryResponse>>> list(
+            @RequestParam(required = false) String namespace,
+            @RequestParam(required = false) String projectName,
+            @RequestParam(required = false) String configShard,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer limit) {
+        // 摘要列表不给控制台返回完整 PublishedConfig，避免页面加载过重
+        return Mono.just(ApiResponse.success(snapshotService.listSummaries(
+                namespace, projectName, configShard, cursor, limit)));
     }
 
     /**

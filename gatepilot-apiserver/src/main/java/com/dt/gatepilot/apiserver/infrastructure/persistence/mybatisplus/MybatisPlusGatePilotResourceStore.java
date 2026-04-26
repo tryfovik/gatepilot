@@ -264,7 +264,7 @@ public class MybatisPlusGatePilotResourceStore implements GatePilotResourceStore
         if (items.size() <= limit) {
             return null;
         }
-        ResourceMetadata metadata = metadataSupport.metadataOf(items.get(limit));
+        ResourceMetadata metadata = metadataSupport.metadataOf(items.get(limit - 1));
         return metadata.getNamespace() + ResourceStoreConstants.CURSOR_SEPARATOR + metadata.getName();
     }
 

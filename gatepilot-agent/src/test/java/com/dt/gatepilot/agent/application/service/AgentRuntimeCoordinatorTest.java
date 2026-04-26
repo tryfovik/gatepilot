@@ -6,6 +6,7 @@ import com.dt.gatepilot.agent.application.dto.AgentHeartbeatSnapshot;
 import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
 import com.dt.gatepilot.agent.application.dto.AgentRuntimeAuditBatch;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
+import com.dt.gatepilot.agent.domain.port.PublishedConfigSyncAdapter;
 import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
@@ -83,6 +84,37 @@ class AgentRuntimeCoordinatorTest {
         assertThat(controlPlaneClient.reportedResult.getState()).isEqualTo(ConfigApplyState.APPLIED);
     }
 
+    @Test
+    void shouldPullConfigThroughSyncAdapter() {
+        AgentNodeProfile profile = new AgentNodeProfile();
+        profile.setNamespace("default");
+        profile.setNodeId("node-1");
+        InMemoryLocalConfigStore localConfigStore = new InMemoryLocalConfigStore();
+        StubControlPlaneClient controlPlaneClient = new StubControlPlaneClient(null);
+        PublishedConfigSyncAdapter syncAdapter = cursor -> Optional.of(config("v3", "hash-v3"));
+        AgentRuntimeCoordinator coordinator = new AgentRuntimeCoordinator(
+                profile,
+                controlPlaneClient,
+                syncAdapter,
+                localConfigStore,
+                config -> {
+                    AgentApplyResult result = new AgentApplyResult();
+                    // 成功结果只模拟 proxy 已应用状态
+                    result.setState(ConfigApplyState.APPLIED);
+                    return result;
+                },
+                null
+        );
+
+        Optional<AgentApplyResult> result = coordinator.pullAndApply();
+
+        assertThat(result).hasValueSatisfying(applyResult ->
+                assertThat(applyResult.getVersion()).isEqualTo("v3"));
+        assertThat(controlPlaneClient.pullCount).isZero();
+        assertThat(controlPlaneClient.reportedResult).isNotNull();
+        assertThat(controlPlaneClient.reportedResult.getVersion()).isEqualTo("v3");
+    }
+
     private PublishedConfig config(String version, String configHash) {
         PublishedConfig config = new PublishedConfig();
         // 测试配置只填 agent 游标和 apply 必需字段
@@ -98,6 +130,8 @@ class AgentRuntimeCoordinatorTest {
 
         private AgentApplyResult reportedResult;
 
+        private int pullCount;
+
         StubControlPlaneClient(PublishedConfig config) {
             this.config = config;
         }
@@ -112,6 +146,7 @@ class AgentRuntimeCoordinatorTest {
 
         @Override
         public Optional<PublishedConfig> pullConfig(AgentConfigCursor cursor) {
+            pullCount++;
             return Optional.of(config);
         }
 

@@ -201,7 +201,7 @@ console
 - [x] 实现心跳上报。
 - [x] 实现 `PublishedConfig` pull。
 - [x] agent 访问 apiserver 使用 getboot-http-client 增强后的 WebClient，不手写 Trace Header。
-- [ ] 将 agent 配置同步通道抽象为可替换 adapter，保留 HTTP pull / long polling / Nacos watch 方向，不引入 OpenFeign。
+- [x] 将 agent 配置同步通道抽象为可替换 adapter，保留 HTTP pull / long polling / Nacos watch 方向，不引入 OpenFeign。
 - [x] 预留 watch / long polling / SSE 扩展点。
 - [x] 实现 staged config。
 - [x] 实现 last-good config。
@@ -246,7 +246,7 @@ console
 - [x] 按 Console 设计规范重整现有前端模块。
 - [x] Console 默认中文优先，集中管理导航、按钮、状态、错误提示和确认弹窗文案。
 - [x] Console 技术栈确定为 Vue 3 + Vite + TypeScript。
-- [ ] 建立统一导航、表格、详情页、状态 badge、diff、timeline、confirm dialog。
+- [x] 建立统一导航、表格、详情页、状态 badge、diff、timeline、confirm dialog。
 - [x] 建立统一导航、基础表格和状态 badge。
 - [x] 实现 Overview。
 - [x] 实现 Projects 基础列表页。
@@ -264,8 +264,8 @@ console
 ### Phase 7.5：旧管理能力改造
 
 - [x] 参考旧 `GatewayDiagnosticsService` 改造路由诊断能力到 apiserver 查询用例和 console 页面。
-- [ ] 参考旧 `GatewayManagementService` 改造 dry-run、diff、配置摘要能力到 apiserver / controller-manager。
-- [ ] 参考旧 `GatewayConfigSnapshotRepository` 改造快照概念到数据库持久化版本表。
+- [x] 参考旧 `GatewayManagementService` 改造 dry-run、diff、配置摘要能力到 apiserver / controller-manager。
+- [x] 参考旧 `GatewayConfigSnapshotRepository` 改造快照概念到数据库持久化版本表。
 - [x] 参考旧 `GatewayAccessAuditController` 改造审计查询能力到 apiserver 持久化查询 API。
 - [x] 参考旧 `GatewayRouteCatalogEndpoint` 改造路由目录展示到 console，不再依赖 Actuator 私有端点。
 - [ ] 所有旧能力完成新模型覆盖和测试后，物理删除历史模块源码。
@@ -321,6 +321,14 @@ console
 - [ ] CR MyBatis-Plus 资源表索引、乐观锁和发布事件 claim 原子性，避免多 controller-manager 抢占时只靠内存判断。
 - [x] CR agent last-good 存储当前仍是内存实现的问题，补文件或外部卷持久化，保证 proxy 控制面不可用时可恢复启动。
 - [ ] CR proxy 运行态策略解析中的 Map 兼容逻辑，确认大配置下没有反射/转换热点拖慢转发路径。
+
+### Phase 10：配置复杂度治理（后续，不纳入今天收尾范围）
+
+- [ ] 设计 Console 模板 / 向导页面，用中文表单降低项目接入、Kubernetes 部署和网关治理配置复杂度。
+- [ ] 设计 GatePilot values 模型，参考 Helm values 但输出必须是 GatePilot 声明式资源、发布请求或 Kubernetes 部署清单。
+- [ ] 在 apiserver 增加模板渲染、dry-run、diff 和预览 API，console 只调用 apiserver。
+- [ ] 模板默认值、字段说明和校验规则集中管理，禁止散落在前端页面和 runtime 代码里。
+- [ ] agent / proxy 不感知模板来源，继续只消费 `PublishedConfig`。
 
 ## 5. 打勾规则
 

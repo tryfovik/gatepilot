@@ -5,6 +5,8 @@ import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResult;
+import com.dt.gatepilot.apiserver.application.dto.ConfigSnapshotSummaryResponse;
+import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryGatePilotResourceStore;
@@ -53,6 +55,46 @@ class GatePilotConfigSnapshotServiceTest {
         assertThat(diff.getItems())
                 .extracting(ConfigDiffResult.ConfigDiffItem::getChangeType)
                 .contains("ADDED", "CHANGED", "REMOVED");
+    }
+
+    @Test
+    void shouldListSnapshotSummariesWithoutPublishedConfigPayload() {
+        PublishedConfig config = publishedConfig("default", "game", "v1", "shard-a");
+        config.getSpec().getRoutes().add(route("route-a", "/api/a", "upstream-a"));
+        config.getSpec().getUpstreams().add(upstream("upstream-a", "10.0.0.1"));
+        snapshotService.saveSnapshot(config, "rel-1", "tester", "base");
+
+        CursorPage<ConfigSnapshotSummaryResponse> summaries =
+                snapshotService.listSummaries("default", "game", "shard-a", null, 50);
+
+        assertThat(summaries.getItems()).hasSize(1);
+        assertThat(summaries.getItems().get(0).getVersion()).isEqualTo("v1");
+        assertThat(summaries.getItems().get(0).getRouteCount()).isEqualTo(1);
+        assertThat(summaries.getItems().get(0).getUpstreamCount()).isEqualTo(1);
+        assertThat(summaries.getItems().get(0).getReleaseId()).isEqualTo("rel-1");
+    }
+
+    @Test
+    void shouldPageSnapshotSummariesAfterProjectFilter() {
+        snapshotService.saveSnapshot(publishedConfig("default", "order", "v1", "shard-a"),
+                "rel-1", "tester", "order");
+        snapshotService.saveSnapshot(publishedConfig("default", "game", "v2", "shard-a"),
+                "rel-2", "tester", "game first");
+        snapshotService.saveSnapshot(publishedConfig("default", "game", "v3", "shard-a"),
+                "rel-3", "tester", "game second");
+
+        CursorPage<ConfigSnapshotSummaryResponse> firstPage =
+                snapshotService.listSummaries("default", "game", "shard-a", null, 1);
+        CursorPage<ConfigSnapshotSummaryResponse> secondPage =
+                snapshotService.listSummaries("default", "game", "shard-a", firstPage.getNextCursor(), 1);
+
+        assertThat(firstPage.getItems()).hasSize(1);
+        assertThat(firstPage.getItems().get(0).getVersion()).isEqualTo("v2");
+        assertThat(firstPage.getTotal()).isEqualTo(2);
+        assertThat(firstPage.getNextCursor()).isEqualTo("default/v2-shard-a");
+        assertThat(secondPage.getItems()).hasSize(1);
+        assertThat(secondPage.getItems().get(0).getVersion()).isEqualTo("v3");
+        assertThat(secondPage.getNextCursor()).isNull();
     }
 
     private PublishedConfig publishedConfig(String namespace, String projectName, String version, String configShard) {

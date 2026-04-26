@@ -2,6 +2,11 @@ package com.dt.gatepilot.apiserver.application.service;
 
 import com.dt.gatepilot.domain.enums.EventSeverity;
 import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
+import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
+import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
+import com.dt.gatepilot.domain.resource.route.GatewayRoute;
+import com.dt.gatepilot.domain.resource.upstream.Upstream;
 import com.dt.gatepilot.domain.resource.event.GatewayEventConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
@@ -18,6 +23,11 @@ import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.getboot.exception.api.code.CommonErrorCode;
 import com.getboot.exception.api.exception.BusinessException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -87,34 +97,30 @@ public class GatePilotReleaseService {
                 + now.toEpochMilli());
         response.setConfigShard(request.getConfigShard());
         response.setCheckedAt(now);
-        // dry-run 先确认项目存在，再统计相关资源规模
+        // dry-run 先确认项目存在，再统计项目相关资源规模
         if (!resourceExists(GatePilotResourcePaths.PROJECTS, request.getNamespace(), request.getProjectName())) {
             addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
-                    GatePilotReleaseConstants.REASON_PROJECT_NOT_FOUND, "项目资源不存在，不能发布");
+                    GatePilotReleaseConstants.REASON_PROJECT_NOT_FOUND, GatePilotReleaseConstants.MESSAGE_PROJECT_NOT_FOUND);
         }
-        CursorPage<Object> routes = resourceService.list(GatePilotResourcePaths.ROUTES, request.getNamespace(), null,
-                500);
-        CursorPage<Object> upstreams = resourceService.list(GatePilotResourcePaths.UPSTREAMS, request.getNamespace(),
-                null, 500);
-        CursorPage<Object> trafficPolicies =
-                resourceService.list(GatePilotResourcePaths.TRAFFIC_POLICIES, request.getNamespace(), null, 500);
-        CursorPage<Object> releasePolicies =
-                resourceService.list(GatePilotResourcePaths.RELEASE_POLICIES, request.getNamespace(), null, 500);
-        CursorPage<Object> authPolicies =
-                resourceService.list(GatePilotResourcePaths.AUTH_POLICIES, request.getNamespace(), null, 500);
-        response.setRouteCount(routes.getItems().size());
-        response.setUpstreamCount(upstreams.getItems().size());
-        response.setPolicyCount(trafficPolicies.getItems().size()
-                + releasePolicies.getItems().size()
-                + authPolicies.getItems().size());
+        List<GatewayRoute> routes = projectRoutes(request);
+        List<Upstream> upstreams = projectUpstreams(request);
+        List<TrafficPolicy> trafficPolicies = projectTrafficPolicies(request);
+        List<ReleasePolicy> releasePolicies = projectReleasePolicies(request);
+        List<AuthPolicy> authPolicies = projectAuthPolicies(request);
+        response.setRouteCount(routes.size());
+        response.setUpstreamCount(upstreams.size());
+        response.setPolicyCount(trafficPolicies.size() + releasePolicies.size() + authPolicies.size());
         if (response.getRouteCount() == 0) {
             addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_WARN,
-                    GatePilotReleaseConstants.REASON_NO_ROUTE, "当前命名空间没有路由资源，本次发布不会产生业务入口");
+                    GatePilotReleaseConstants.REASON_NO_ROUTE, GatePilotReleaseConstants.MESSAGE_NO_ROUTE);
         }
         if (response.getUpstreamCount() == 0) {
             addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_WARN,
-                    GatePilotReleaseConstants.REASON_NO_UPSTREAM, "当前命名空间没有上游资源，路由可能无法转发");
+                    GatePilotReleaseConstants.REASON_NO_UPSTREAM, GatePilotReleaseConstants.MESSAGE_NO_UPSTREAM);
         }
+        validateRoutes(response, routes, upstreams, trafficPolicies, releasePolicies, authPolicies);
+        validateUpstreams(response, upstreams);
+        validateReleasePolicies(response, releasePolicies, upstreams);
         response.setPassed(response.getMessages().stream().noneMatch(message ->
                 GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR.equals(message.getLevel())));
         return response;
@@ -133,7 +139,8 @@ public class GatePilotReleaseService {
                         request.getProjectName(),
                         request.getTargetVersion(),
                         request.getConfigShard())
-                .orElseThrow(() -> BusinessException.of(CommonErrorCode.NOT_FOUND.code(), "目标快照不存在"));
+                .orElseThrow(() -> BusinessException.of(CommonErrorCode.NOT_FOUND.code(),
+                        GatePilotReleaseConstants.MESSAGE_TARGET_SNAPSHOT_NOT_FOUND));
         String releaseId = GatePilotReleaseConstants.ROLLBACK_ID_PREFIX + UUID.randomUUID();
         String version = rollbackVersion(request.getProjectName(), releaseId, now);
         GatewayEvent event = buildRollbackEvent(request, snapshot, releaseId, version, now);
@@ -172,7 +179,7 @@ public class GatePilotReleaseService {
         spec.setSeverity(EventSeverity.INFO);
         spec.setSource(GatewayEventConstants.SOURCE_APISERVER);
         spec.setReason(GatewayEventConstants.REASON_CREATE_RELEASE_COMMANDED);
-        spec.setMessage("发布请求已创建，等待 controller-manager 推进");
+        spec.setMessage(GatePilotReleaseConstants.MESSAGE_RELEASE_REQUEST_CREATED);
         spec.setFirstObservedAt(now);
         spec.setLastObservedAt(now);
         spec.setCount(1);
@@ -212,7 +219,7 @@ public class GatePilotReleaseService {
         spec.setSeverity(EventSeverity.WARNING);
         spec.setSource(GatewayEventConstants.SOURCE_APISERVER);
         spec.setReason(GatewayEventConstants.REASON_CREATE_ROLLBACK_COMMANDED);
-        spec.setMessage("回滚请求已创建，等待 controller-manager 推进");
+        spec.setMessage(GatePilotReleaseConstants.MESSAGE_ROLLBACK_REQUEST_CREATED);
         spec.setFirstObservedAt(now);
         spec.setLastObservedAt(now);
         spec.setCount(1);
@@ -240,6 +247,189 @@ public class GatePilotReleaseService {
         } catch (ResponseStatusException exception) {
             return false;
         }
+    }
+
+    private List<GatewayRoute> projectRoutes(CreateReleaseCommand request) {
+        return listAll(GatePilotResourcePaths.ROUTES, request.getNamespace(), GatewayRoute.class).stream()
+                .filter(route -> projectMatches(route.getSpec().getProjectRef(),
+                        route.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
+                        request))
+                .toList();
+    }
+
+    private List<Upstream> projectUpstreams(CreateReleaseCommand request) {
+        return listAll(GatePilotResourcePaths.UPSTREAMS, request.getNamespace(), Upstream.class).stream()
+                .filter(upstream -> projectMatches(upstream.getSpec().getProjectRef(),
+                        upstream.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
+                        request))
+                .toList();
+    }
+
+    private List<TrafficPolicy> projectTrafficPolicies(CreateReleaseCommand request) {
+        return listAll(GatePilotResourcePaths.TRAFFIC_POLICIES, request.getNamespace(), TrafficPolicy.class).stream()
+                .filter(policy -> projectMatches(policy.getSpec().getProjectRef(),
+                        policy.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
+                        request))
+                .toList();
+    }
+
+    private List<ReleasePolicy> projectReleasePolicies(CreateReleaseCommand request) {
+        return listAll(GatePilotResourcePaths.RELEASE_POLICIES, request.getNamespace(), ReleasePolicy.class).stream()
+                .filter(policy -> projectMatches(policy.getSpec().getProjectRef(),
+                        policy.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
+                        request))
+                .toList();
+    }
+
+    private List<AuthPolicy> projectAuthPolicies(CreateReleaseCommand request) {
+        return listAll(GatePilotResourcePaths.AUTH_POLICIES, request.getNamespace(), AuthPolicy.class).stream()
+                .filter(policy -> projectMatches(policy.getSpec().getProjectRef(),
+                        policy.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
+                        request))
+                .toList();
+    }
+
+    private boolean projectMatches(ResourceReference projectRef, String projectLabel, CreateReleaseCommand request) {
+        if (projectRef != null && StringUtils.hasText(projectRef.getName())) {
+            // projectRef 是主判断依据，label 只做兼容
+            return Objects.equals(projectRef.getName(), request.getProjectName())
+                    && (!StringUtils.hasText(projectRef.getNamespace())
+                    || Objects.equals(projectRef.getNamespace(), request.getNamespace()));
+        }
+        return Objects.equals(projectLabel, request.getProjectName());
+    }
+
+    private void validateRoutes(ReleaseDryRunResult response,
+                                List<GatewayRoute> routes,
+                                List<Upstream> upstreams,
+                                List<TrafficPolicy> trafficPolicies,
+                                List<ReleasePolicy> releasePolicies,
+                                List<AuthPolicy> authPolicies) {
+        Set<String> upstreamNames = names(upstreams);
+        Set<String> policyNames = policyNames(trafficPolicies, releasePolicies, authPolicies);
+        for (GatewayRoute route : routes) {
+            validateRoutePath(response, route);
+            validateRouteHosts(response, route);
+            validateRouteUpstream(response, route, upstreamNames);
+            validateRoutePolicies(response, route, policyNames);
+        }
+    }
+
+    private void validateRoutePath(ReleaseDryRunResult response, GatewayRoute route) {
+        String path = route.getSpec().getPath() == null ? null : route.getSpec().getPath().getValue();
+        if (!StringUtils.hasText(path)) {
+            addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
+                    GatePilotReleaseConstants.REASON_ROUTE_PATH_MISSING,
+                    GatePilotReleaseConstants.MESSAGE_ROUTE_PATH_MISSING_PREFIX + route.getMetadata().getName());
+        }
+    }
+
+    private void validateRouteHosts(ReleaseDryRunResult response, GatewayRoute route) {
+        if (route.getSpec().getHosts().isEmpty()) {
+            addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_WARN,
+                    GatePilotReleaseConstants.REASON_ROUTE_HOST_MISSING,
+                    GatePilotReleaseConstants.MESSAGE_ROUTE_HOST_MISSING_PREFIX + route.getMetadata().getName());
+        }
+    }
+
+    private void validateRouteUpstream(ReleaseDryRunResult response, GatewayRoute route, Set<String> upstreamNames) {
+        ResourceReference upstreamRef = route.getSpec().getUpstreamRef();
+        String upstreamName = upstreamRef == null ? null : upstreamRef.getName();
+        if (!StringUtils.hasText(upstreamName) || !upstreamNames.contains(upstreamName)) {
+            addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
+                    GatePilotReleaseConstants.REASON_ROUTE_UPSTREAM_MISSING,
+                    GatePilotReleaseConstants.MESSAGE_ROUTE_UPSTREAM_MISSING_PREFIX
+                            + route.getMetadata().getName()
+                            + GatePilotReleaseConstants.REFERENCE_SEPARATOR
+                            + Objects.toString(upstreamName, GatePilotReleaseConstants.EMPTY_REFERENCE_VALUE));
+        }
+    }
+
+    private void validateRoutePolicies(ReleaseDryRunResult response, GatewayRoute route, Set<String> policyNames) {
+        for (ResourceReference policyRef : route.getSpec().getPolicyRefs()) {
+            if (policyRef != null && StringUtils.hasText(policyRef.getName())
+                    && !policyNames.contains(policyRef.getName())) {
+                addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
+                        GatePilotReleaseConstants.REASON_ROUTE_POLICY_MISSING,
+                        GatePilotReleaseConstants.MESSAGE_ROUTE_POLICY_MISSING_PREFIX
+                                + route.getMetadata().getName()
+                                + GatePilotReleaseConstants.REFERENCE_SEPARATOR
+                                + policyRef.getName());
+            }
+        }
+    }
+
+    private void validateUpstreams(ReleaseDryRunResult response, List<Upstream> upstreams) {
+        for (Upstream upstream : upstreams) {
+            if (upstream.getSpec().getEndpoints().isEmpty()) {
+                addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
+                        GatePilotReleaseConstants.REASON_UPSTREAM_ENDPOINT_MISSING,
+                        GatePilotReleaseConstants.MESSAGE_UPSTREAM_ENDPOINT_MISSING_PREFIX
+                                + upstream.getMetadata().getName());
+            }
+        }
+    }
+
+    private void validateReleasePolicies(ReleaseDryRunResult response,
+                                         List<ReleasePolicy> releasePolicies,
+                                         List<Upstream> upstreams) {
+        Set<String> upstreamNames = names(upstreams);
+        for (ReleasePolicy policy : releasePolicies) {
+            validateReleaseUpstreamRef(response, policy, upstreamNames, policy.getSpec().getStableUpstreamRef());
+            validateReleaseUpstreamRef(response, policy, upstreamNames, policy.getSpec().getCandidateUpstreamRef());
+            for (ReleasePolicy.TrafficSplit split : policy.getSpec().getTrafficSplits()) {
+                validateReleaseUpstreamRef(response, policy, upstreamNames, split.getUpstreamRef());
+            }
+        }
+    }
+
+    private void validateReleaseUpstreamRef(ReleaseDryRunResult response,
+                                            ReleasePolicy policy,
+                                            Set<String> upstreamNames,
+                                            ResourceReference upstreamRef) {
+        if (upstreamRef != null && StringUtils.hasText(upstreamRef.getName())
+                && !upstreamNames.contains(upstreamRef.getName())) {
+            addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
+                    GatePilotReleaseConstants.REASON_RELEASE_UPSTREAM_MISSING,
+                    GatePilotReleaseConstants.MESSAGE_RELEASE_UPSTREAM_MISSING_PREFIX
+                            + policy.getMetadata().getName()
+                            + GatePilotReleaseConstants.REFERENCE_SEPARATOR
+                            + upstreamRef.getName());
+        }
+    }
+
+    private <T> List<T> listAll(String resourcePath, String namespace, Class<T> resourceType) {
+        List<T> resources = new ArrayList<>();
+        String cursor = null;
+        do {
+            CursorPage<Object> page = resourceService.list(resourcePath, namespace, cursor,
+                    GatePilotReleaseConstants.DRY_RUN_LOOKUP_LIMIT);
+            resources.addAll(page.getItems()
+                    .stream()
+                    .map(resourceType::cast)
+                    .toList());
+            cursor = page.getNextCursor();
+        } while (StringUtils.hasText(cursor));
+        return resources;
+    }
+
+    private Set<String> names(List<Upstream> upstreams) {
+        Set<String> names = new HashSet<>();
+        for (Upstream upstream : upstreams) {
+            // 上游名称来自 metadata，是发布产物里的稳定 key
+            names.add(upstream.getMetadata().getName());
+        }
+        return names;
+    }
+
+    private Set<String> policyNames(List<TrafficPolicy> trafficPolicies,
+                                    List<ReleasePolicy> releasePolicies,
+                                    List<AuthPolicy> authPolicies) {
+        Set<String> names = new HashSet<>();
+        trafficPolicies.forEach(policy -> names.add(policy.getMetadata().getName()));
+        releasePolicies.forEach(policy -> names.add(policy.getMetadata().getName()));
+        authPolicies.forEach(policy -> names.add(policy.getMetadata().getName()));
+        return names;
     }
 
     private void addDryRunMessage(ReleaseDryRunResult response, String level, String reason, String message) {
@@ -272,7 +462,8 @@ public class GatePilotReleaseService {
     }
 
     private String versionSuffix(String releaseId) {
-        String normalized = releaseId.replace(GatePilotReleaseConstants.VERSION_SEPARATOR, "");
+        String normalized = releaseId.replace(GatePilotReleaseConstants.VERSION_SEPARATOR,
+                GatePilotReleaseConstants.EMPTY_VERSION_PART);
         if (normalized.length() <= GatePilotReleaseConstants.VERSION_ID_SUFFIX_LENGTH) {
             return normalized;
         }

@@ -3,6 +3,8 @@ package com.dt.gatepilot.apiserver.application.service;
 import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
+import com.dt.gatepilot.domain.resource.route.GatewayRoute;
+import com.dt.gatepilot.domain.resource.upstream.Upstream;
 import com.dt.gatepilot.domain.resource.project.GatewayProject;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
@@ -69,6 +71,48 @@ class GatePilotReleaseServiceTest {
     }
 
     @Test
+    void shouldValidateProjectScopedRoutesAndReferencesOnDryRun() {
+        saveProject("default", "game");
+        saveRouteWithMissingRefs();
+        saveEmptyUpstream();
+        CreateReleaseCommand request = new CreateReleaseCommand();
+        request.setNamespace("default");
+        request.setProjectName("game");
+
+        ReleaseDryRunResult response = releaseService.dryRun(request);
+
+        assertThat(response.isPassed()).isFalse();
+        assertThat(response.getRouteCount()).isEqualTo(1);
+        assertThat(response.getUpstreamCount()).isEqualTo(1);
+        assertThat(response.getMessages())
+                .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
+                .contains(
+                        GatePilotReleaseConstants.REASON_ROUTE_HOST_MISSING,
+                        GatePilotReleaseConstants.REASON_ROUTE_UPSTREAM_MISSING,
+                        GatePilotReleaseConstants.REASON_ROUTE_POLICY_MISSING,
+                        GatePilotReleaseConstants.REASON_UPSTREAM_ENDPOINT_MISSING
+                );
+    }
+
+    @Test
+    void shouldDryRunAllPagesWhenProjectHasLargeRouteSet() {
+        saveProject("default", "game");
+        saveAvailableUpstream();
+        for (int index = 0; index <= GatePilotReleaseConstants.DRY_RUN_LOOKUP_LIMIT; index++) {
+            saveValidRoute(index);
+        }
+        CreateReleaseCommand request = new CreateReleaseCommand();
+        request.setNamespace("default");
+        request.setProjectName("game");
+
+        ReleaseDryRunResult response = releaseService.dryRun(request);
+
+        assertThat(response.isPassed()).isTrue();
+        assertThat(response.getRouteCount()).isEqualTo(GatePilotReleaseConstants.DRY_RUN_LOOKUP_LIMIT + 1);
+        assertThat(response.getUpstreamCount()).isEqualTo(1);
+    }
+
+    @Test
     void shouldCreateRollbackEventAndMarkSnapshot() {
         saveProject("default", "game");
         PublishedConfig config = publishedConfig("default", "game", "v1", "shard-a");
@@ -96,6 +140,56 @@ class GatePilotReleaseServiceTest {
         GatewayProject project = new GatewayProject();
         GatePilotResourceType projectType = resourceService.requireResourceType(ResourceKind.GATEWAY_PROJECT);
         resourceService.save(projectType, namespace, name, project);
+    }
+
+    private void saveRouteWithMissingRefs() {
+        GatewayRoute route = new GatewayRoute();
+        route.getSpec().setProjectRef(projectRef("default", "game"));
+        route.getSpec().getPath().setValue("/api/game");
+        route.getSpec().setUpstreamRef(resourceRef(ResourceKind.UPSTREAM, "default", "missing-upstream"));
+        route.getSpec().getPolicyRefs().add(resourceRef(ResourceKind.TRAFFIC_POLICY, "default", "missing-policy"));
+        GatePilotResourceType routeType = resourceService.requireResourceType(ResourceKind.GATEWAY_ROUTE);
+        resourceService.save(routeType, "default", "game-route", route);
+    }
+
+    private void saveEmptyUpstream() {
+        Upstream upstream = new Upstream();
+        upstream.getSpec().setProjectRef(projectRef("default", "game"));
+        GatePilotResourceType upstreamType = resourceService.requireResourceType(ResourceKind.UPSTREAM);
+        resourceService.save(upstreamType, "default", "empty-upstream", upstream);
+    }
+
+    private void saveAvailableUpstream() {
+        Upstream upstream = new Upstream();
+        upstream.getSpec().setProjectRef(projectRef("default", "game"));
+        Upstream.UpstreamEndpoint endpoint = new Upstream.UpstreamEndpoint();
+        endpoint.setHost("127.0.0.1");
+        endpoint.setPort(8080);
+        upstream.getSpec().getEndpoints().add(endpoint);
+        GatePilotResourceType upstreamType = resourceService.requireResourceType(ResourceKind.UPSTREAM);
+        resourceService.save(upstreamType, "default", "main-upstream", upstream);
+    }
+
+    private void saveValidRoute(int index) {
+        GatewayRoute route = new GatewayRoute();
+        route.getSpec().setProjectRef(projectRef("default", "game"));
+        route.getSpec().getHosts().add("game.example.com");
+        route.getSpec().getPath().setValue("/api/game/" + index);
+        route.getSpec().setUpstreamRef(resourceRef(ResourceKind.UPSTREAM, "default", "main-upstream"));
+        GatePilotResourceType routeType = resourceService.requireResourceType(ResourceKind.GATEWAY_ROUTE);
+        resourceService.save(routeType, "default", "game-route-" + index, route);
+    }
+
+    private ResourceReference projectRef(String namespace, String name) {
+        return resourceRef(ResourceKind.GATEWAY_PROJECT, namespace, name);
+    }
+
+    private ResourceReference resourceRef(ResourceKind kind, String namespace, String name) {
+        ResourceReference reference = new ResourceReference();
+        reference.setKind(kind);
+        reference.setNamespace(namespace);
+        reference.setName(name);
+        return reference;
     }
 
     private PublishedConfig publishedConfig(String namespace, String projectName, String version, String configShard) {

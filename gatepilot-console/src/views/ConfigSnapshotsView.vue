@@ -12,14 +12,24 @@
         </button>
       </div>
 
-      <form class="filterbar diff-form" @submit.prevent="compare">
+      <form class="filterbar diff-form" @submit.prevent="load">
         <select v-model="namespace" class="select-input">
           <option value="default">default</option>
           <option value="">全部命名空间</option>
         </select>
+        <input v-model="projectName" class="search-input" placeholder="项目名称" />
+        <input v-model="configShard" class="search-input" placeholder="配置分片" />
+        <button class="ghost-button" type="submit">
+          <Search :size="16" />
+          查询
+        </button>
+      </form>
+
+      <MetricStrip :items="snapshotMetrics" />
+
+      <form class="filterbar diff-form diff-query-form" @submit.prevent="compare">
         <input v-model="baseVersion" class="search-input" placeholder="基线版本" />
         <input v-model="targetVersion" class="search-input" placeholder="目标版本" />
-        <input v-model="configShard" class="search-input" placeholder="配置分片" />
         <button class="primary-button" type="submit">
           <GitCompare :size="16" />
           对比
@@ -37,24 +47,38 @@
             <th>分片</th>
             <th>序号</th>
             <th>哈希</th>
+            <th>规模</th>
             <th>采集时间</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item.metadata?.uid || item.metadata?.name">
+          <tr v-for="item in items" :key="`${item.namespace}-${item.version}-${item.configShard || 'default'}`">
             <td>
-              <div class="resource-name">{{ item.spec?.version || item.metadata?.name || '-' }}</div>
-              <div class="resource-subtitle">{{ item.spec?.releaseId || '未关联发布请求' }}</div>
+              <div class="resource-name">{{ item.version || '-' }}</div>
+              <div class="resource-subtitle">{{ item.releaseId || '未关联发布请求' }}</div>
             </td>
-            <td>{{ item.metadata?.namespace || '-' }}</td>
-            <td>{{ item.spec?.projectRef?.name || '-' }}</td>
-            <td>{{ item.spec?.configShard || '-' }}</td>
-            <td>{{ item.spec?.sequence ?? '-' }}</td>
-            <td class="mono-cell">{{ shortHash(item.spec?.configHash) }}</td>
-            <td>{{ formatTime(item.spec?.capturedAt) }}</td>
+            <td>{{ item.namespace || '-' }}</td>
+            <td>{{ item.projectName || '-' }}</td>
+            <td>{{ item.configShard || '-' }}</td>
+            <td>{{ item.sequence ?? '-' }}</td>
+            <td class="mono-cell">{{ shortHash(item.configHash) }}</td>
+            <td>{{ item.routeCount }} 路由 / {{ item.upstreamCount }} 上游 / {{ item.policyCount }} 策略</td>
+            <td>{{ formatTime(item.capturedAt) }}</td>
+            <td>
+              <div class="table-actions">
+                <button class="table-action" type="button" @click="setBase(item)">设基线</button>
+                <button class="table-action" type="button" @click="setTarget(item)">设目标</button>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
+
+      <div v-if="timelineItems.length" class="snapshot-timeline">
+        <h3>最近快照轨迹</h3>
+        <TimelineList :items="timelineItems" />
+      </div>
     </section>
 
     <section class="content-panel">
@@ -63,7 +87,13 @@
           <h2>版本 Diff</h2>
           <p>对比结果按资源类型和变更类型聚合，便于发布前后排查差异。</p>
         </div>
-        <StatusBadge :label="diffStatusLabel" :tone="diffStatusTone" />
+        <div class="panel-actions">
+          <StatusBadge :label="diffStatusLabel" :tone="diffStatusTone" />
+          <button v-if="diff" class="ghost-button" type="button" @click="confirmClear = true">
+            <Trash2 :size="16" />
+            清空
+          </button>
+        </div>
       </div>
 
       <div v-if="diffLoading" class="state-box">正在对比...</div>
@@ -112,35 +142,34 @@
         </table>
       </div>
     </section>
+
+    <ConfirmDialog
+      :open="confirmClear"
+      title="清空对比结果"
+      message="只清空当前页面上的版本 Diff，不会修改已发布快照。"
+      confirm-text="清空"
+      @close="confirmClear = false"
+      @confirm="clearDiff"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { GitCompare, RefreshCw } from 'lucide-vue-next';
+import { GitCompare, RefreshCw, Search, Trash2 } from 'lucide-vue-next';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
+import MetricStrip from '../components/MetricStrip.vue';
 import StatusBadge from '../components/StatusBadge.vue';
-import { ConfigDiffResponse, diffConfigSnapshots, listResources } from '../api/client';
-
-interface ConfigSnapshot {
-  metadata?: {
-    uid?: string;
-    name?: string;
-    namespace?: string;
-  };
-  spec?: {
-    projectRef?: {
-      name?: string;
-    };
-    releaseId?: string;
-    version?: string;
-    configHash?: string;
-    configShard?: string;
-    sequence?: number;
-    capturedAt?: string;
-  };
-}
+import TimelineList from '../components/TimelineList.vue';
+import {
+  ConfigDiffResponse,
+  ConfigSnapshotSummaryResponse,
+  diffConfigSnapshots,
+  listConfigSnapshotSummaries
+} from '../api/client';
 
 const namespace = ref('default');
+const projectName = ref('');
 const baseVersion = ref('');
 const targetVersion = ref('');
 const configShard = ref('');
@@ -148,8 +177,31 @@ const loading = ref(false);
 const error = ref('');
 const diffLoading = ref(false);
 const diffError = ref('');
-const items = ref<ConfigSnapshot[]>([]);
+const confirmClear = ref(false);
+const items = ref<ConfigSnapshotSummaryResponse[]>([]);
 const diff = ref<ConfigDiffResponse | null>(null);
+
+const snapshotMetrics = computed(() => {
+  const latest = items.value[0];
+  const routeCount = items.value.reduce((total, item) => total + item.routeCount, 0);
+  const upstreamCount = items.value.reduce((total, item) => total + item.upstreamCount, 0);
+  return [
+    { label: '快照数', value: String(items.value.length), note: '当前筛选结果' },
+    { label: '最新版本', value: latest?.version || '-', note: latest?.configShard || '默认分片' },
+    { label: '路由规模', value: String(routeCount), note: '当前页累计' },
+    { label: '上游规模', value: String(upstreamCount), note: '当前页累计' }
+  ];
+});
+
+const timelineItems = computed(() =>
+  items.value.slice(0, 6).map((item) => ({
+    key: `${item.namespace}-${item.version}-${item.configShard || 'default'}`,
+    title: `${item.version || '-'} / ${item.projectName || '未关联项目'}`,
+    meta: `${formatTime(item.capturedAt)} · ${item.configShard || '默认分片'}`,
+    message: `${item.routeCount} 路由，${item.upstreamCount} 上游，${item.policyCount} 策略`,
+    tone: item.rollbackAllowed === false ? ('neutral' as const) : ('info' as const)
+  }))
+);
 
 const diffStatusLabel = computed(() => {
   if (!diff.value) {
@@ -169,7 +221,12 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const page = await listResources<ConfigSnapshot>('config-snapshots', namespace.value);
+    const page = await listConfigSnapshotSummaries({
+      namespace: namespace.value || undefined,
+      projectName: projectName.value || undefined,
+      configShard: configShard.value || undefined,
+      limit: 50
+    });
     items.value = page.items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : '加载失败';
@@ -198,6 +255,20 @@ async function compare() {
   } finally {
     diffLoading.value = false;
   }
+}
+
+function setBase(item: ConfigSnapshotSummaryResponse) {
+  baseVersion.value = item.version || '';
+}
+
+function setTarget(item: ConfigSnapshotSummaryResponse) {
+  targetVersion.value = item.version || '';
+}
+
+function clearDiff() {
+  diff.value = null;
+  diffError.value = '';
+  confirmClear.value = false;
 }
 
 function shortHash(value?: string) {

@@ -5,8 +5,10 @@ import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
+import com.dt.gatepilot.apiserver.application.dto.ConfigSnapshotSummaryResponse;
 import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResult;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.domain.repository.ResourceStoreConstants;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -17,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +50,52 @@ public class GatePilotConfigSnapshotService {
     public GatePilotConfigSnapshotService(GatePilotResourceService resourceService, ObjectMapper objectMapper) {
         this.resourceService = resourceService;
         this.objectMapper = objectMapper;
+    }
+
+    /**
+     * 查询配置快照摘要列表。
+     *
+     * @param namespace 命名空间
+     * @param projectName 项目名称
+     * @param configShard 配置分片
+     * @param cursor 游标
+     * @param limit 返回条数
+     * @return 快照摘要分页
+     */
+    public CursorPage<ConfigSnapshotSummaryResponse> listSummaries(String namespace,
+                                                                   String projectName,
+                                                                   String configShard,
+                                                                   String cursor,
+                                                                   Integer limit) {
+        int effectiveLimit = normalizeSummaryLimit(limit);
+        List<GatewayConfigSnapshot> snapshots = listAllSnapshots(namespace)
+                .stream()
+                .filter(snapshot -> projectMatches(snapshot, projectName))
+                .filter(snapshot -> !StringUtils.hasText(configShard)
+                        || Objects.equals(snapshot.getSpec().getConfigShard(), configShard))
+                .toList();
+        List<GatewayConfigSnapshot> pageItems = new ArrayList<>();
+        boolean hasMore = false;
+        for (GatewayConfigSnapshot snapshot : snapshots) {
+            if (StringUtils.hasText(cursor) && snapshotCursor(snapshot).compareTo(cursor) <= 0) {
+                // 游标之前的快照不进入当前页
+                continue;
+            }
+            if (pageItems.size() >= effectiveLimit) {
+                hasMore = true;
+                break;
+            }
+            pageItems.add(snapshot);
+        }
+        CursorPage<ConfigSnapshotSummaryResponse> response = new CursorPage<>();
+        response.setLimit(effectiveLimit);
+        response.setNextCursor(hasMore && !pageItems.isEmpty() ? snapshotCursor(pageItems.get(pageItems.size() - 1))
+                : null);
+        response.setItems(pageItems.stream()
+                .map(this::summary)
+                .toList());
+        response.setTotal(snapshots.size());
+        return response;
     }
 
     /**
@@ -288,10 +337,63 @@ public class GatePilotConfigSnapshotService {
                 .replaceAll(ConfigDiffConstants.SAFE_NAME_REGEX, ConfigDiffConstants.SNAPSHOT_NAME_SEPARATOR);
     }
 
+    private List<GatewayConfigSnapshot> listAllSnapshots(String namespace) {
+        List<GatewayConfigSnapshot> snapshots = new ArrayList<>();
+        String cursor = null;
+        do {
+            CursorPage<Object> page = resourceService.list(GatePilotResourcePaths.CONFIG_SNAPSHOTS, namespace, cursor,
+                    ConfigSnapshotConstants.SNAPSHOT_SCAN_LIMIT);
+            snapshots.addAll(page.getItems()
+                    .stream()
+                    .map(GatewayConfigSnapshot.class::cast)
+                    .toList());
+            cursor = page.getNextCursor();
+        } while (StringUtils.hasText(cursor));
+        return snapshots;
+    }
+
+    private int normalizeSummaryLimit(Integer limit) {
+        int value = Optional.ofNullable(limit).orElse(ConfigSnapshotConstants.DEFAULT_SUMMARY_LIMIT);
+        // 控制台摘要查询不允许绕过最大页大小
+        return Math.max(1, Math.min(value, ConfigSnapshotConstants.MAX_SUMMARY_LIMIT));
+    }
+
+    private String snapshotCursor(GatewayConfigSnapshot snapshot) {
+        return snapshot.getMetadata().getNamespace()
+                + ResourceStoreConstants.CURSOR_SEPARATOR
+                + snapshot.getMetadata().getName();
+    }
+
     private boolean projectMatches(GatewayConfigSnapshot snapshot, String projectName) {
         ResourceReference projectRef = snapshot.getSpec().getProjectRef();
         // 老快照没有 projectRef 时先兼容通过
-        return projectRef == null || Objects.equals(projectRef.getName(), projectName);
+        return !StringUtils.hasText(projectName)
+                || projectRef == null
+                || Objects.equals(projectRef.getName(), projectName);
+    }
+
+    private ConfigSnapshotSummaryResponse summary(GatewayConfigSnapshot snapshot) {
+        ConfigSnapshotSummaryResponse response = new ConfigSnapshotSummaryResponse();
+        PublishedConfig publishedConfig = snapshot.getSpec().getPublishedConfig();
+        ResourceReference projectRef = snapshot.getSpec().getProjectRef();
+        // 摘要面向控制台展示，不返回完整 PublishedConfig 大对象
+        response.setNamespace(snapshot.getMetadata().getNamespace());
+        response.setProjectName(projectRef == null ? null : projectRef.getName());
+        response.setVersion(snapshot.getSpec().getVersion());
+        response.setConfigHash(snapshot.getSpec().getConfigHash());
+        response.setConfigShard(snapshot.getSpec().getConfigShard());
+        response.setSequence(snapshot.getSpec().getSequence());
+        response.setReleaseId(snapshot.getSpec().getReleaseId());
+        response.setRouteCount(publishedConfig == null ? 0 : publishedConfig.getSpec().getRoutes().size());
+        response.setUpstreamCount(publishedConfig == null ? 0 : publishedConfig.getSpec().getUpstreams().size());
+        response.setPolicyCount(publishedConfig == null ? 0 : publishedConfig.getSpec().getPolicies().size());
+        response.setTargetNodeCount(publishedConfig == null ? 0 : publishedConfig.getSpec().getTargetNodeRefs().size());
+        response.setCapturedAt(snapshot.getSpec().getCapturedAt());
+        response.setCapturedBy(snapshot.getSpec().getCapturedBy());
+        response.setDescription(snapshot.getSpec().getDescription());
+        response.setRollbackAllowed(snapshot.getStatus().getRollbackAllowed());
+        response.setLastRollbackAt(snapshot.getStatus().getLastRollbackAt());
+        return response;
     }
 
     private BusinessException notFound(String message) {
