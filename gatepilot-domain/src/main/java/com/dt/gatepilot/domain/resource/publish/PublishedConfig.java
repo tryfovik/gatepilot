@@ -7,6 +7,7 @@ import com.dt.gatepilot.domain.resource.meta.LabelSelector;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.meta.ResourceStatus;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -220,6 +221,11 @@ public class PublishedConfig {
          * 端点列表。
          */
         private List<PublishedEndpoint> endpoints = new ArrayList<>();
+
+        /**
+         * 主动健康检查配置。
+         */
+        private PublishedHealthCheck healthCheck = new PublishedHealthCheck();
     }
 
     /**
@@ -242,6 +248,43 @@ public class PublishedConfig {
          * 端点权重。
          */
         private Integer weight;
+    }
+
+    /**
+     * 发布后的主动健康检查配置。
+     */
+    @Data
+    public static class PublishedHealthCheck {
+
+        /**
+         * 是否启用健康检查。
+         */
+        private Boolean enabled;
+
+        /**
+         * 健康检查路径。
+         */
+        private String path;
+
+        /**
+         * 健康检查间隔。
+         */
+        private Duration interval;
+
+        /**
+         * 请求超时时间。
+         */
+        private Duration timeout;
+
+        /**
+         * 连续成功阈值。
+         */
+        private Integer healthyThreshold;
+
+        /**
+         * 连续失败阈值。
+         */
+        private Integer unhealthyThreshold;
     }
 
     /**

@@ -21,6 +21,27 @@ public class UpstreamEndpointSelector {
     private final ConcurrentMap<String, AtomicInteger> cursors = new ConcurrentHashMap<>();
 
     /**
+     * 端点健康状态表。
+     */
+    private final UpstreamEndpointHealthRegistry healthRegistry;
+
+    /**
+     * 创建上游端点选择器。
+     */
+    public UpstreamEndpointSelector() {
+        this(new UpstreamEndpointHealthRegistry());
+    }
+
+    /**
+     * 创建上游端点选择器。
+     *
+     * @param healthRegistry 端点健康状态表
+     */
+    public UpstreamEndpointSelector(UpstreamEndpointHealthRegistry healthRegistry) {
+        this.healthRegistry = healthRegistry;
+    }
+
+    /**
      * 选择一个上游端点。
      *
      * @param upstream 已编译上游
@@ -31,7 +52,7 @@ public class UpstreamEndpointSelector {
         if (upstream == null || upstream.getEndpoints().isEmpty()) {
             return null;
         }
-        List<CompiledUpstream.CompiledEndpoint> endpoints = upstream.getEndpoints();
+        List<CompiledUpstream.CompiledEndpoint> endpoints = selectableEndpoints(upstream);
         if (endpoints.size() == 1) {
             return endpoints.get(0);
         }
@@ -90,5 +111,13 @@ public class UpstreamEndpointSelector {
             return ProxyLoadBalanceConstants.DEFAULT_STRATEGY;
         }
         return strategy.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+    }
+
+    private List<CompiledUpstream.CompiledEndpoint> selectableEndpoints(CompiledUpstream upstream) {
+        List<CompiledUpstream.CompiledEndpoint> endpoints = upstream.getEndpoints().stream()
+                .filter(endpoint -> healthRegistry.selectable(upstream.getName(), endpoint))
+                .toList();
+        // 全部不健康时保持失败开放，让真实请求继续兜底探测
+        return endpoints.isEmpty() ? upstream.getEndpoints() : endpoints;
     }
 }

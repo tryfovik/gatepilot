@@ -2,9 +2,12 @@ package com.dt.gatepilot.embedded.infrastructure.assembly;
 
 import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditReporter;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
+import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
 import com.dt.gatepilot.embedded.infrastructure.config.GatePilotDeploymentModeConstants;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
+import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
+import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -32,6 +35,22 @@ public class GatePilotEmbeddedAssemblyConfiguration {
     public ProxyApplyClient proxyApplyClient(ProxyConfigApplier proxyConfigApplier) {
         // embedded 只做端口桥接，不承载发布或转发业务逻辑
         return new InProcessProxyApplyClient(proxyConfigApplier);
+    }
+
+    /**
+     * 创建进程内 proxy 运行状态读取器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param healthRegistry 上游端点健康状态表
+     * @return proxy 运行状态读取器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean({ProxyRuntimeState.class, UpstreamEndpointHealthRegistry.class})
+    public ProxyRuntimeStatusReader proxyRuntimeStatusReader(ProxyRuntimeState runtimeState,
+                                                             UpstreamEndpointHealthRegistry healthRegistry) {
+        // embedded 只把 proxy 本机状态补进 agent 心跳
+        return new InProcessProxyRuntimeStatusReader(runtimeState, healthRegistry);
     }
 
     /**

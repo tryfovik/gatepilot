@@ -178,6 +178,7 @@ public class PublishedConfigAssembler {
         snapshot.setProtocol(upstream.getSpec().getProtocol());
         snapshot.setLoadBalance(Optional.ofNullable(upstream.getSpec().getLoadBalance()).map(Enum::name).orElse(null));
         snapshot.setEndpoints(upstream.getSpec().getEndpoints().stream().map(this::endpointSnapshot).toList());
+        snapshot.setHealthCheck(healthCheckSnapshot(upstream.getSpec().getHealthCheck()));
         return snapshot;
     }
 
@@ -187,6 +188,21 @@ public class PublishedConfigAssembler {
         snapshot.setHost(endpoint.getHost());
         snapshot.setPort(endpoint.getPort());
         snapshot.setWeight(endpoint.getWeight());
+        return snapshot;
+    }
+
+    private PublishedConfig.PublishedHealthCheck healthCheckSnapshot(Upstream.HealthCheckSpec source) {
+        PublishedConfig.PublishedHealthCheck snapshot = new PublishedConfig.PublishedHealthCheck();
+        if (source == null) {
+            return snapshot;
+        }
+        // 健康检查配置进入发布产物，proxy 本地执行探测
+        snapshot.setEnabled(source.getEnabled());
+        snapshot.setPath(source.getPath());
+        snapshot.setInterval(source.getInterval());
+        snapshot.setTimeout(source.getTimeout());
+        snapshot.setHealthyThreshold(source.getHealthyThreshold());
+        snapshot.setUnhealthyThreshold(source.getUnhealthyThreshold());
         return snapshot;
     }
 
@@ -302,6 +318,7 @@ public class PublishedConfigAssembler {
         copy.setProtocol(upstream.getProtocol());
         copy.setLoadBalance(upstream.getLoadBalance());
         copy.setEndpoints(upstream.getEndpoints().stream().map(this::copyEndpoint).toList());
+        copy.setHealthCheck(copyHealthCheck(upstream.getHealthCheck()));
         return copy;
     }
 
@@ -310,6 +327,21 @@ public class PublishedConfigAssembler {
         copy.setHost(endpoint.getHost());
         copy.setPort(endpoint.getPort());
         copy.setWeight(endpoint.getWeight());
+        return copy;
+    }
+
+    private PublishedConfig.PublishedHealthCheck copyHealthCheck(PublishedConfig.PublishedHealthCheck healthCheck) {
+        PublishedConfig.PublishedHealthCheck copy = new PublishedConfig.PublishedHealthCheck();
+        if (healthCheck == null) {
+            return copy;
+        }
+        // 回滚快照复制时不能共享可变对象
+        copy.setEnabled(healthCheck.getEnabled());
+        copy.setPath(healthCheck.getPath());
+        copy.setInterval(healthCheck.getInterval());
+        copy.setTimeout(healthCheck.getTimeout());
+        copy.setHealthyThreshold(healthCheck.getHealthyThreshold());
+        copy.setUnhealthyThreshold(healthCheck.getUnhealthyThreshold());
         return copy;
     }
 

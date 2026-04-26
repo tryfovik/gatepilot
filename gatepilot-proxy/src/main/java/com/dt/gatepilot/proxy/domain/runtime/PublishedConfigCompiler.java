@@ -58,6 +58,7 @@ public class PublishedConfigCompiler {
             upstream.setProtocol(source.getProtocol());
             upstream.setLoadBalance(source.getLoadBalance());
             upstream.setEndpoints(source.getEndpoints().stream().map(this::compileEndpoint).toList());
+            upstream.setHealthCheck(compileHealthCheck(source.getHealthCheck()));
             upstreams.put(upstream.getName(), upstream);
         }
         return upstreams;
@@ -70,6 +71,21 @@ public class PublishedConfigCompiler {
         endpoint.setPort(source.getPort());
         endpoint.setWeight(source.getWeight());
         return endpoint;
+    }
+
+    private CompiledUpstream.CompiledHealthCheck compileHealthCheck(
+            PublishedConfig.PublishedHealthCheck source) {
+        CompiledUpstream.CompiledHealthCheck healthCheck = new CompiledUpstream.CompiledHealthCheck();
+        if (source == null) {
+            return healthCheck;
+        }
+        // 健康检查只影响本地端点选择，不影响控制面发布状态
+        healthCheck.setEnabled(source.getEnabled());
+        healthCheck.setPath(source.getPath());
+        healthCheck.setTimeout(source.getTimeout());
+        healthCheck.setHealthyThreshold(source.getHealthyThreshold());
+        healthCheck.setUnhealthyThreshold(source.getUnhealthyThreshold());
+        return healthCheck;
     }
 
     private Map<String, CompiledPolicy> compilePolicies(PublishedConfig config) {

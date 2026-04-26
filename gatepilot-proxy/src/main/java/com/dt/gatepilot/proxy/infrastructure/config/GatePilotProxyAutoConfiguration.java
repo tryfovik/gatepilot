@@ -7,6 +7,7 @@ import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
+import com.dt.gatepilot.proxy.domain.runtime.ProxyUpstreamHealthConstants;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
 import com.dt.gatepilot.proxy.domain.runtime.RateLimitPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.ReleaseUpstreamResolver;
@@ -14,8 +15,11 @@ import com.dt.gatepilot.proxy.domain.runtime.RetryPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
+import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointSelector;
 import com.dt.gatepilot.proxy.infrastructure.auth.GetbootRuntimeAuthChecker;
+import com.dt.gatepilot.proxy.infrastructure.health.UpstreamHealthProbe;
+import com.dt.gatepilot.proxy.infrastructure.health.UpstreamHealthProbeScheduler;
 import com.dt.gatepilot.proxy.infrastructure.limiter.GetbootRuntimeRateLimiter;
 import com.dt.gatepilot.proxy.interfaces.web.GatePilotProxyHandler;
 import com.dt.gatepilot.proxy.interfaces.web.ProxyHttpConstants;
@@ -26,7 +30,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.server.RequestPredicate;
 import org.springframework.web.reactive.function.server.RequestPredicates;
@@ -39,6 +45,7 @@ import org.springframework.web.reactive.function.server.ServerResponse;
  */
 @AutoConfiguration
 @ConditionalOnClass(WebClient.class)
+@EnableScheduling
 public class GatePilotProxyAutoConfiguration {
 
     /**
@@ -164,15 +171,62 @@ public class GatePilotProxyAutoConfiguration {
     }
 
     /**
+     * 创建上游端点健康状态表。
+     *
+     * @return 上游端点健康状态表
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public UpstreamEndpointHealthRegistry upstreamEndpointHealthRegistry() {
+        // 健康状态只在本 proxy 进程内生效
+        return new UpstreamEndpointHealthRegistry();
+    }
+
+    /**
      * 创建上游端点选择器。
      *
+     * @param healthRegistry 端点健康状态表
      * @return 上游端点选择器
      */
     @Bean
     @ConditionalOnMissingBean
-    public UpstreamEndpointSelector upstreamEndpointSelector() {
+    public UpstreamEndpointSelector upstreamEndpointSelector(UpstreamEndpointHealthRegistry healthRegistry) {
         // 端点选择器只维护本机轻量游标
-        return new UpstreamEndpointSelector();
+        return new UpstreamEndpointSelector(healthRegistry);
+    }
+
+    /**
+     * 创建上游健康探测器。
+     *
+     * @param runtimeState proxy 运行态
+     * @param healthRegistry 端点健康状态表
+     * @param webClientBuilder WebClient 构造器
+     * @return 上游健康探测器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public UpstreamHealthProbe upstreamHealthProbe(ProxyRuntimeState runtimeState,
+                                                   UpstreamEndpointHealthRegistry healthRegistry,
+                                                   WebClient.Builder webClientBuilder) {
+        // 健康探测使用独立 WebClient 实例，不影响业务转发客户端
+        return new UpstreamHealthProbe(runtimeState, healthRegistry, webClientBuilder.build());
+    }
+
+    /**
+     * 创建上游健康探测调度器。
+     *
+     * @param probe 上游健康探测器
+     * @return 上游健康探测调度器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = ProxyUpstreamHealthConstants.CONFIG_PREFIX,
+            name = ProxyUpstreamHealthConstants.ENABLED_PROPERTY,
+            havingValue = ProxyUpstreamHealthConstants.ENABLED_VALUE,
+            matchIfMissing = true)
+    public UpstreamHealthProbeScheduler upstreamHealthProbeScheduler(UpstreamHealthProbe probe) {
+        // 调度器只触发本地探测，不访问控制面
+        return new UpstreamHealthProbeScheduler(probe);
     }
 
     /**

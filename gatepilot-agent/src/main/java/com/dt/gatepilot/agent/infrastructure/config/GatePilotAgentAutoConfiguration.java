@@ -6,6 +6,7 @@ import com.dt.gatepilot.agent.application.service.AgentRuntimeCoordinator;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.domain.port.LocalConfigStore;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
+import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
 import com.dt.gatepilot.agent.infrastructure.persistence.file.FileLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.scheduling.AgentLifecycleManager;
@@ -110,6 +111,7 @@ public class GatePilotAgentAutoConfiguration {
      * @param controlPlaneClient 控制面客户端
      * @param localConfigStore 本地配置存储
      * @param proxyApplyClient proxy apply 客户端
+     * @param proxyRuntimeStatusReaderProvider proxy 运行状态读取器提供器
      * @return agent 运行编排器
      */
     @Bean
@@ -118,9 +120,12 @@ public class GatePilotAgentAutoConfiguration {
     public AgentRuntimeCoordinator agentRuntimeCoordinator(AgentNodeProfile nodeProfile,
                                                            AgentControlPlaneClient controlPlaneClient,
                                                            LocalConfigStore localConfigStore,
-                                                           ProxyApplyClient proxyApplyClient) {
+                                                           ProxyApplyClient proxyApplyClient,
+                                                           ObjectProvider<ProxyRuntimeStatusReader>
+                                                                   proxyRuntimeStatusReaderProvider) {
         // 编排器只拼端口，不关心端口背后是 HTTP 还是进程内
-        return new AgentRuntimeCoordinator(nodeProfile, controlPlaneClient, localConfigStore, proxyApplyClient);
+        return new AgentRuntimeCoordinator(nodeProfile, controlPlaneClient, localConfigStore, proxyApplyClient,
+                proxyRuntimeStatusReaderProvider.getIfAvailable());
     }
 
     /**

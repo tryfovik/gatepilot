@@ -7,6 +7,7 @@ import com.dt.gatepilot.agent.application.dto.AgentNodeProfile;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.domain.port.LocalConfigStore;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
+import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import java.time.Instant;
@@ -26,6 +27,8 @@ public class AgentRuntimeCoordinator {
 
     private final ProxyApplyClient proxyApplyClient;
 
+    private final ProxyRuntimeStatusReader proxyRuntimeStatusReader;
+
     /**
      * 创建 agent 运行编排器。
      *
@@ -38,10 +41,28 @@ public class AgentRuntimeCoordinator {
                                    AgentControlPlaneClient controlPlaneClient,
                                    LocalConfigStore localConfigStore,
                                    ProxyApplyClient proxyApplyClient) {
+        this(nodeProfile, controlPlaneClient, localConfigStore, proxyApplyClient, null);
+    }
+
+    /**
+     * 创建 agent 运行编排器。
+     *
+     * @param nodeProfile 节点身份
+     * @param controlPlaneClient 控制面客户端
+     * @param localConfigStore 本地配置存储
+     * @param proxyApplyClient proxy apply 客户端
+     * @param proxyRuntimeStatusReader proxy 运行状态读取器
+     */
+    public AgentRuntimeCoordinator(AgentNodeProfile nodeProfile,
+                                   AgentControlPlaneClient controlPlaneClient,
+                                   LocalConfigStore localConfigStore,
+                                   ProxyApplyClient proxyApplyClient,
+                                   ProxyRuntimeStatusReader proxyRuntimeStatusReader) {
         this.nodeProfile = nodeProfile;
         this.controlPlaneClient = controlPlaneClient;
         this.localConfigStore = localConfigStore;
         this.proxyApplyClient = proxyApplyClient;
+        this.proxyRuntimeStatusReader = proxyRuntimeStatusReader;
     }
 
     /**
@@ -62,6 +83,10 @@ public class AgentRuntimeCoordinator {
         localConfigStore.loadLastGood()
                 .map(config -> config.getSpec().getVersion())
                 .ifPresent(snapshot::setLastGoodConfigVersion);
+        if (proxyRuntimeStatusReader != null) {
+            // 心跳补齐本机 proxy 状态，agent 仍不参与发布决策
+            proxyRuntimeStatusReader.fill(snapshot);
+        }
         controlPlaneClient.heartbeat(snapshot);
     }
 
