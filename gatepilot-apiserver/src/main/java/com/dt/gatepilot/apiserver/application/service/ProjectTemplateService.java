@@ -2,6 +2,7 @@ package com.dt.gatepilot.apiserver.application.service;
 
 import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateApplyResponse;
+import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDefaultsResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDryRunResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplatePreviewResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateRenderRequest;
@@ -50,6 +51,33 @@ public class ProjectTemplateService {
      */
     public ProjectTemplateService(GatePilotResourceService resourceService) {
         this.resourceService = resourceService;
+    }
+
+    /**
+     * 查询项目接入模板默认值
+     *
+     * @return 默认配置响应
+     */
+    public ProjectTemplateDefaultsResponse defaults() {
+        ProjectTemplateDefaultsResponse response = new ProjectTemplateDefaultsResponse();
+        response.setValues(defaultValues());
+        response.setEnvironments(ProjectTemplateConstants.ENVIRONMENT_OPTIONS.stream()
+                .map(value -> option(value, value, true))
+                .toList());
+        response.setProtocols(ProjectTemplateConstants.PROTOCOL_OPTIONS.stream()
+                .map(value -> option(value.name(), ProjectTemplateConstants.PROTOCOL_LABELS.get(value), true))
+                .toList());
+        response.setLoadBalances(ProjectTemplateConstants.LOAD_BALANCE_OPTIONS.stream()
+                .map(value -> option(value.name(), ProjectTemplateConstants.LOAD_BALANCE_LABELS.get(value),
+                        value.isSupported()))
+                .toList());
+        response.setReleaseStrategies(ProjectTemplateConstants.RELEASE_STRATEGY_OPTIONS.stream()
+                .map(value -> option(value.name(), ProjectTemplateConstants.RELEASE_STRATEGY_LABELS.get(value), true))
+                .toList());
+        response.setAuthTypes(ProjectTemplateConstants.AUTH_TYPE_OPTIONS.stream()
+                .map(value -> option(value.name(), ProjectTemplateConstants.AUTH_TYPE_LABELS.get(value), true))
+                .toList());
+        return response;
     }
 
     /**
@@ -132,6 +160,48 @@ public class ProjectTemplateService {
         dryRunMessage.setReason(reason);
         dryRunMessage.setMessage(message);
         response.getMessages().add(dryRunMessage);
+    }
+
+    private ProjectTemplateRenderRequest defaultValues() {
+        ProjectTemplateRenderRequest request = new ProjectTemplateRenderRequest();
+        request.setNamespace(ResourceMetadataConstants.DEFAULT_NAMESPACE);
+        request.setProjectName(ProjectTemplateConstants.DEFAULT_PROJECT_NAME);
+        request.setDisplayName(ProjectTemplateConstants.DEFAULT_PROJECT_NAME);
+        request.setEnvironment(ProjectTemplateConstants.DEFAULT_ENVIRONMENT);
+        request.setTrafficTier(ProjectTemplateConstants.DEFAULT_TRAFFIC_TIER);
+        request.setConfigShard(ProjectTemplateConstants.DEFAULT_CONFIG_SHARD);
+        request.getRoute().setHost(ProjectTemplateConstants.DEFAULT_HOST);
+        request.getRoute().setPath(ProjectTemplateConstants.DEFAULT_PATH);
+        request.getRoute().setStripPrefix(true);
+        request.getRoute().setMethods(List.of(HttpMethod.ANY));
+        request.getUpstream().setHost(ProjectTemplateConstants.DEFAULT_UPSTREAM_HOST);
+        request.getUpstream().setPort(ProjectTemplateConstants.DEFAULT_HTTP_PORT);
+        request.getUpstream().setProtocol(Protocol.HTTP);
+        request.getUpstream().setLoadBalance(LoadBalanceStrategy.ROUND_ROBIN);
+        request.getUpstream().setHealthCheckEnabled(true);
+        request.getUpstream().setHealthPath(ProjectTemplateConstants.DEFAULT_HEALTH_PATH);
+        request.getCandidate().setHost(ProjectTemplateConstants.DEFAULT_UPSTREAM_HOST);
+        request.getCandidate().setPort(ProjectTemplateConstants.DEFAULT_HTTP_PORT);
+        request.getGovernance().setRateLimitEnabled(true);
+        request.getGovernance().setRequestsPerSecond(ProjectTemplateConstants.DEFAULT_REQUESTS_PER_SECOND);
+        request.getGovernance().setBurstCapacity(ProjectTemplateConstants.DEFAULT_BURST_CAPACITY);
+        request.getGovernance().setRetryEnabled(true);
+        request.getGovernance().setMaxAttempts(ProjectTemplateConstants.DEFAULT_MAX_ATTEMPTS);
+        request.getRelease().setStrategy(ReleaseStrategy.TRAFFIC_SPLIT);
+        request.getRelease().setCandidateWeight(ProjectTemplateConstants.DEFAULT_CANDIDATE_WEIGHT);
+        request.getRelease().setColorHeader(ProjectTemplateConstants.DEFAULT_COLOR_HEADER);
+        request.getRelease().setCandidateColor(ProjectTemplateConstants.DEFAULT_CANDIDATE_COLOR);
+        request.getAuth().setType(AuthType.NONE);
+        request.getAuth().setAnonymousAllowed(true);
+        return request;
+    }
+
+    private ProjectTemplateDefaultsResponse.OptionItem option(String value, String label, boolean enabled) {
+        ProjectTemplateDefaultsResponse.OptionItem item = new ProjectTemplateDefaultsResponse.OptionItem();
+        item.setValue(value);
+        item.setLabel(label);
+        item.setEnabled(enabled);
+        return item;
     }
 
     private ProjectTemplatePreviewResponse.RenderedResource renderedResource(ResourceEnvelope envelope) {
@@ -442,7 +512,7 @@ public class ProjectTemplateService {
                 text(request.getOwnerTeam(), null),
                 text(request.getEnvironment(), ProjectTemplateConstants.DEFAULT_ENVIRONMENT),
                 text(request.getTrafficTier(), ProjectTemplateConstants.DEFAULT_TRAFFIC_TIER),
-                text(request.getConfigShard(), null),
+                text(request.getConfigShard(), ProjectTemplateConstants.DEFAULT_CONFIG_SHARD),
                 text(request.getIsolationGroup(), null),
                 text(route.getHost(), ProjectTemplateConstants.DEFAULT_HOST),
                 normalizePath(text(route.getPath(), ProjectTemplateConstants.DEFAULT_PATH)),

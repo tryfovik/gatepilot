@@ -49,7 +49,9 @@
             <label>
               <span>环境</span>
               <select v-model="form.environment" class="select-input">
-                <option v-for="item in environmentOptions" :key="item" :value="item">{{ item }}</option>
+                <option v-for="item in environmentOptions" :key="item.value" :value="item.value" :disabled="!item.enabled">
+                  {{ item.label }}
+                </option>
               </select>
             </label>
             <label>
@@ -81,14 +83,15 @@
             <label>
               <span>协议</span>
               <select v-model="form.upstream.protocol" class="select-input">
-                <option value="HTTP">HTTP</option>
-                <option value="HTTPS">HTTPS</option>
+                <option v-for="item in protocolOptions" :key="item.value" :value="item.value" :disabled="!item.enabled">
+                  {{ item.label }}
+                </option>
               </select>
             </label>
             <label>
               <span>负载均衡</span>
               <select v-model="form.upstream.loadBalance" class="select-input">
-                <option v-for="item in loadBalanceOptions" :key="item.value" :value="item.value">
+                <option v-for="item in loadBalanceOptions" :key="item.value" :value="item.value" :disabled="!item.enabled">
                   {{ item.label }}
                 </option>
               </select>
@@ -146,7 +149,17 @@
             <label>
               <span>认证类型</span>
               <select v-model="form.auth.type" class="select-input">
-                <option v-for="item in authOptions" :key="item" :value="item">{{ item }}</option>
+                <option v-for="item in authOptions" :key="item.value" :value="item.value" :disabled="!item.enabled">
+                  {{ item.label }}
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>发布策略</span>
+              <select v-model="form.release.strategy" class="select-input">
+                <option v-for="item in releaseStrategyOptions" :key="item.value" :value="item.value" :disabled="!item.enabled">
+                  {{ item.label }}
+                </option>
               </select>
             </label>
             <label class="check-row">
@@ -281,7 +294,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { AlertTriangle, CheckCircle2, Eye, Rocket, Save } from 'lucide-vue-next';
 import MetricStrip from '../components/MetricStrip.vue';
 import ResourceDetailDrawer from '../components/ResourceDetailDrawer.vue';
@@ -289,6 +302,7 @@ import StatusBadge from '../components/StatusBadge.vue';
 import {
   CreateReleaseRequest,
   ProjectTemplateApplyResponse,
+  ProjectTemplateDefaultsResponse,
   ProjectTemplateDryRunResponse,
   ProjectTemplatePreviewResponse,
   ProjectTemplateRenderedResource,
@@ -297,6 +311,7 @@ import {
   applyProjectTemplate,
   createRelease,
   dryRunProjectTemplate,
+  getProjectTemplateDefaults,
   previewProjectTemplate
 } from '../api/client';
 
@@ -311,63 +326,12 @@ type TemplateForm = ProjectTemplateRenderRequest & {
   auth: NonNullable<ProjectTemplateRenderRequest['auth']>;
 };
 
-const environmentOptions = ['prod', 'pre', 'test', 'dev'];
-const authOptions = ['NONE', 'API_KEY', 'JWT', 'OAUTH2', 'BASIC', 'MTLS'];
-const loadBalanceOptions = [
-  { label: '轮询', value: 'ROUND_ROBIN' },
-  { label: '随机', value: 'RANDOM' }
-];
-
-const form = reactive<TemplateForm>({
-  namespace: 'default',
-  projectName: 'orders',
-  displayName: '订单服务',
-  ownerTeam: '交易团队',
-  environment: 'prod',
-  trafficTier: 'standard',
-  configShard: 'default',
-  route: {
-    host: 'api.example.com',
-    path: '/api/orders',
-    stripPrefix: true,
-    methods: ['ANY']
-  },
-  upstream: {
-    host: 'orders.default.svc.cluster.local',
-    port: 8080,
-    protocol: 'HTTP',
-    loadBalance: 'ROUND_ROBIN',
-    healthCheckEnabled: true,
-    healthPath: '/actuator/health'
-  },
-  candidate: {
-    enabled: true,
-    host: 'orders-canary.default.svc.cluster.local',
-    port: 8080
-  },
-  governance: {
-    rateLimitEnabled: true,
-    requestsPerSecond: 1000,
-    burstCapacity: 2000,
-    retryEnabled: true,
-    maxAttempts: 2
-  },
-  release: {
-    enabled: true,
-    strategy: 'TRAFFIC_SPLIT',
-    candidateWeight: 10,
-    colorHeader: 'X-GatePilot-Color',
-    candidateColor: 'canary'
-  },
-  auth: {
-    type: 'NONE',
-    anonymousAllowed: true
-  }
-});
+const form = reactive<TemplateForm>(emptyForm());
 
 const loadingAction = ref('');
 const error = ref('');
 const notice = ref('');
+const defaults = ref<ProjectTemplateDefaultsResponse | null>(null);
 const preview = ref<ProjectTemplatePreviewResponse | null>(null);
 const dryRun = ref<ProjectTemplateDryRunResponse | null>(null);
 const applyResult = ref<ProjectTemplateApplyResponse | null>(null);
@@ -375,6 +339,12 @@ const releaseResult = ref<ReleaseResult | null>(null);
 const selectedResource = ref<ProjectTemplateRenderedResource | null>(null);
 
 const busy = computed(() => Boolean(loadingAction.value));
+
+const environmentOptions = computed(() => defaults.value?.environments ?? []);
+const protocolOptions = computed(() => defaults.value?.protocols ?? []);
+const loadBalanceOptions = computed(() => defaults.value?.loadBalances ?? []);
+const releaseStrategyOptions = computed(() => defaults.value?.releaseStrategies ?? []);
+const authOptions = computed(() => defaults.value?.authTypes ?? []);
 
 const diffMetrics = computed(() => {
   const diff = preview.value?.diff;
@@ -387,6 +357,15 @@ const diffMetrics = computed(() => {
 });
 
 const releaseRequestJson = computed(() => JSON.stringify(preview.value?.releaseRequest ?? {}, null, 2));
+
+onMounted(loadDefaults);
+
+async function loadDefaults() {
+  await runAction('defaults', async () => {
+    defaults.value = await getProjectTemplateDefaults();
+    replaceForm(defaults.value.values);
+  });
+}
 
 async function runPreview() {
   await runAction('preview', async () => {
@@ -446,6 +425,68 @@ async function runAction(action: string, task: () => Promise<void>) {
 
 function currentRequest(): ProjectTemplateRenderRequest {
   return JSON.parse(JSON.stringify(form)) as ProjectTemplateRenderRequest;
+}
+
+function replaceForm(values: ProjectTemplateRenderRequest) {
+  Object.assign(form, normalizeForm(values));
+}
+
+function normalizeForm(values: ProjectTemplateRenderRequest = {}): TemplateForm {
+  const empty = emptyForm();
+  return {
+    ...empty,
+    ...values,
+    route: { ...empty.route, ...values.route },
+    upstream: { ...empty.upstream, ...values.upstream },
+    candidate: { ...empty.candidate, ...values.candidate },
+    governance: { ...empty.governance, ...values.governance },
+    release: { ...empty.release, ...values.release },
+    auth: { ...empty.auth, ...values.auth }
+  };
+}
+
+function emptyForm(): TemplateForm {
+  return {
+    namespace: '',
+    projectName: '',
+    displayName: '',
+    ownerTeam: '',
+    environment: '',
+    trafficTier: '',
+    configShard: '',
+    isolationGroup: '',
+    route: {
+      host: '',
+      path: '',
+      stripPrefix: false,
+      methods: []
+    },
+    upstream: {
+      host: '',
+      protocol: '',
+      loadBalance: '',
+      healthCheckEnabled: false,
+      healthPath: ''
+    },
+    candidate: {
+      enabled: false,
+      host: ''
+    },
+    governance: {
+      rateLimitEnabled: false,
+      retryEnabled: false
+    },
+    release: {
+      enabled: false,
+      strategy: '',
+      colorHeader: '',
+      candidateColor: ''
+    },
+    auth: {
+      type: '',
+      anonymousAllowed: false
+    }
+  };
 }
 
 function releaseRequest(): CreateReleaseRequest {

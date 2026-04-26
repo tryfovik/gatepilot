@@ -1,6 +1,7 @@
 package com.dt.gatepilot.apiserver.interfaces.rest;
 
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateApplyResponse;
+import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDefaultsResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDryRunResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplatePreviewResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateRenderRequest;
@@ -9,6 +10,7 @@ import com.dt.gatepilot.apiserver.application.service.ProjectTemplateService;
 import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.getboot.web.api.response.ApiResponse;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,6 +34,18 @@ public class GatePilotTemplateController {
      */
     public GatePilotTemplateController(ProjectTemplateService templateService) {
         this.templateService = templateService;
+    }
+
+    /**
+     * 查询项目模板默认配置
+     *
+     * @return 默认配置响应
+     */
+    @GetMapping(GatePilotApiPaths.TEMPLATE_PROJECT_DEFAULTS)
+    public Mono<ApiResponse<ProjectTemplateDefaultsResponse>> projectDefaults() {
+        // 默认值和选项集中由 apiserver 提供，避免前端散落配置规则
+        return Mono.just(ApiResponse.success(templateService.defaults(),
+                ProjectTemplateConstants.MESSAGE_TEMPLATE_DEFAULTS_DONE));
     }
 
     /**

@@ -2,6 +2,7 @@ package com.dt.gatepilot.apiserver.application.service;
 
 import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateApplyResponse;
+import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDefaultsResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDryRunResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplatePreviewResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateRenderRequest;
@@ -71,6 +72,18 @@ class ProjectTemplateServiceTest {
         assertThat(dryRun.getMessages())
                 .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
                 .contains(ProjectTemplateConstants.REASON_TEMPLATE_INVALID);
+    }
+
+    @Test
+    void shouldReturnCentralizedTemplateDefaults() {
+        var defaults = templateService.defaults();
+
+        assertThat(defaults.getValues().getProjectName()).isEqualTo(ProjectTemplateConstants.DEFAULT_PROJECT_NAME);
+        assertThat(defaults.getValues().getConfigShard()).isEqualTo(ProjectTemplateConstants.DEFAULT_CONFIG_SHARD);
+        assertThat(defaults.getLoadBalances())
+                .filteredOn(item -> item.getValue().equals(LoadBalanceStrategy.CONSISTENT_HASH.name()))
+                .extracting(ProjectTemplateDefaultsResponse.OptionItem::isEnabled)
+                .containsExactly(false);
     }
 
     private ProjectTemplateRenderRequest request() {

@@ -253,6 +253,21 @@ export interface ProjectTemplateRenderedResource {
   resource: unknown;
 }
 
+export interface ProjectTemplateOptionItem {
+  value: string;
+  label: string;
+  enabled: boolean;
+}
+
+export interface ProjectTemplateDefaultsResponse {
+  values: ProjectTemplateRenderRequest;
+  environments: ProjectTemplateOptionItem[];
+  protocols: ProjectTemplateOptionItem[];
+  loadBalances: ProjectTemplateOptionItem[];
+  releaseStrategies: ProjectTemplateOptionItem[];
+  authTypes: ProjectTemplateOptionItem[];
+}
+
 export interface ProjectTemplatePreviewResponse {
   namespace: string;
   projectName: string;
@@ -420,6 +435,18 @@ export async function getRouteCatalog(params: {
 
 export async function diagnoseRoute(request: RouteDiagnosticsRequest): Promise<RouteDiagnosticsResponse> {
   return postJson<RouteDiagnosticsResponse>('/diagnostics/route', request);
+}
+
+export async function getProjectTemplateDefaults(): Promise<ProjectTemplateDefaultsResponse> {
+  const response = await fetch(`${apiBase}/templates/projects/defaults`);
+  if (!response.ok) {
+    throw new Error(`请求失败：${response.status}`);
+  }
+  const body = (await response.json()) as ApiResponse<ProjectTemplateDefaultsResponse>;
+  if (body.status !== 'success') {
+    throw new Error(body.message || '请求失败');
+  }
+  return body.data;
 }
 
 export async function previewProjectTemplate(
