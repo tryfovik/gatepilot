@@ -49,15 +49,31 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
+import java.time.Duration;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
 
 /**
  * controller-manager 资源适配器测试。
  */
 class GatePilotControllerResourceAdapterTest {
+
+    private static final int SCALE_PROJECT_COUNT = 1000;
+
+    private static final int SCALE_PAGE_LIMIT = 200;
+
+    private static final Duration SCALE_TIMEOUT = Duration.ofSeconds(15);
+
+    private static final String DEFAULT_NAMESPACE = "default";
+
+    private static final String DEFAULT_CONFIG_SHARD = "shard-a";
+
+    private static final String DEFAULT_NODE_ID = "node-1";
+
+    private static final String TEST_OPERATOR = "operator";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -260,6 +276,46 @@ class GatePilotControllerResourceAdapterTest {
     }
 
     @Test
+    void shouldLoadThousandProjectsGenerateConfigAndPageResources() {
+        assertTimeout(SCALE_TIMEOUT, () -> {
+            for (int index = 0; index < SCALE_PROJECT_COUNT; index++) {
+                String projectName = scaleProjectName(index);
+                String upstreamName = scaleUpstreamName(index);
+                ResourceReference projectReference = projectRef(projectName);
+                // 先装载足够多的声明式资源
+                saveProjectResource(projectName, DEFAULT_CONFIG_SHARD, null, "team-" + index);
+                saveUpstream(upstreamName, projectReference);
+                saveRoute(scaleRouteName(index), scaleRoutePath(index), projectReference, upstreamRef(upstreamName));
+            }
+            saveNode();
+            String targetProjectName = scaleProjectName(SCALE_PROJECT_COUNT - 1);
+
+            // 发布最后一个项目，逼着 adapter 跨页读取路由和上游
+            ReleaseResult release = releaseService.createRelease(releaseCommand(targetProjectName,
+                    TEST_OPERATOR, "千项目发布压测"));
+            int processed = reconcileController.reconcileBatch(10);
+            AgentConfigPullResult pullResponse = pullConfig(DEFAULT_NODE_ID, DEFAULT_CONFIG_SHARD, null, null, null);
+            PublishedConfig publishedConfig = pullResponse.getPublishedConfig();
+
+            assertThat(processed).isEqualTo(1);
+            assertThat(pullResponse.isChanged()).isTrue();
+            assertThat(publishedConfig.getSpec().getVersion()).isEqualTo(release.getVersion());
+            assertThat(publishedConfig.getSpec().getProjectRef().getName()).isEqualTo(targetProjectName);
+            assertThat(publishedConfig.getSpec().getRoutes())
+                    .extracting(PublishedConfig.PublishedRoute::getPath)
+                    .containsExactly(scaleRoutePath(SCALE_PROJECT_COUNT - 1));
+            assertThat(publishedConfig.getSpec().getUpstreams())
+                    .extracting(PublishedConfig.PublishedUpstream::getName)
+                    .containsExactly(scaleUpstreamName(SCALE_PROJECT_COUNT - 1));
+
+            // 页面列表也要按 cursor 走完整分页
+            assertThat(countResourcesByPage(GatePilotResourcePaths.PROJECTS)).isEqualTo(SCALE_PROJECT_COUNT);
+            assertThat(countResourcesByPage(GatePilotResourcePaths.ROUTES)).isEqualTo(SCALE_PROJECT_COUNT);
+            assertThat(countResourcesByPage(GatePilotResourcePaths.UPSTREAMS)).isEqualTo(SCALE_PROJECT_COUNT);
+        });
+    }
+
+    @Test
     void shouldReadDesiredStateBeyondFirstResourcePage() {
         saveProject();
         for (int index = 0; index < 600; index++) {
@@ -292,17 +348,27 @@ class GatePilotControllerResourceAdapterTest {
         return request;
     }
 
+    private CreateReleaseCommand releaseCommand(String projectName, String createdBy, String description) {
+        CreateReleaseCommand request = releaseCommand(createdBy, description);
+        request.setProjectName(projectName);
+        return request;
+    }
+
     private void saveProject() {
         saveProject(null);
     }
 
     private void saveProject(String isolationGroup) {
+        saveProjectResource("game", DEFAULT_CONFIG_SHARD, isolationGroup, "game");
+    }
+
+    private void saveProjectResource(String name, String configShard, String isolationGroup, String team) {
         GatewayProject project = new GatewayProject();
-        project.getMetadata().getLabels().put("team", "game");
-        project.getSpec().setConfigShard("shard-a");
+        project.getMetadata().getLabels().put("team", team);
+        project.getSpec().setConfigShard(configShard);
         project.getSpec().setIsolationGroup(isolationGroup);
         GatePilotResourceType resourceType = resourceService.requireResourceType(ResourceKind.GATEWAY_PROJECT);
-        resourceService.save(resourceType, "default", "game", project);
+        resourceService.save(resourceType, "default", name, project);
     }
 
     private void saveRoute(String path) {
@@ -407,7 +473,7 @@ class GatePilotControllerResourceAdapterTest {
     private ResourceReference projectRef(String name) {
         ResourceReference reference = new ResourceReference();
         reference.setKind(ResourceKind.GATEWAY_PROJECT);
-        reference.setNamespace("default");
+        reference.setNamespace(DEFAULT_NAMESPACE);
         reference.setName(name);
         return reference;
     }
@@ -419,7 +485,7 @@ class GatePilotControllerResourceAdapterTest {
     private ResourceReference upstreamRef(String name) {
         ResourceReference reference = new ResourceReference();
         reference.setKind(ResourceKind.UPSTREAM);
-        reference.setNamespace("default");
+        reference.setNamespace(DEFAULT_NAMESPACE);
         reference.setName(name);
         return reference;
     }
@@ -430,6 +496,33 @@ class GatePilotControllerResourceAdapterTest {
         intent.setProjectName("game");
         intent.setConfigShard("shard-a");
         return intent;
+    }
+
+    private long countResourcesByPage(String resourcePath) {
+        long count = 0;
+        String cursor = null;
+        do {
+            CursorPage<Object> page = resourceService.list(resourcePath, DEFAULT_NAMESPACE, cursor, SCALE_PAGE_LIMIT);
+            count += page.getItems().size();
+            cursor = page.getNextCursor();
+        } while (cursor != null);
+        return count;
+    }
+
+    private String scaleProjectName(int index) {
+        return "project-" + String.format("%04d", index);
+    }
+
+    private String scaleRouteName(int index) {
+        return "route-" + String.format("%04d", index);
+    }
+
+    private String scaleRoutePath(int index) {
+        return "/scale/project-" + String.format("%04d", index);
+    }
+
+    private String scaleUpstreamName(int index) {
+        return "upstream-" + String.format("%04d", index);
     }
 
     private class EmbeddedAgentControlPlaneClient implements AgentControlPlaneClient {
