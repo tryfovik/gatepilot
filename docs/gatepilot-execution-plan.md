@@ -341,7 +341,7 @@ console
 - [x] CR 回滚 PublishedConfig 复制策略，确认快照内容不会被后续发布污染，必要时改成 ObjectMapper 深拷贝或不可变快照。
 - [x] CR embedded / agent 资源读取的 500 条上限扫描，改成按 cursor 跨页读取，避免 1000 项目后 reconcile 或 agent pull 漏数据。
 - [x] CR 发布版本号生成策略，评估是否接入 getboot 统一 ID 能力或单独版本序列，避免继续依赖本地时间。
-- [ ] CR MyBatis-Plus 资源表索引、乐观锁和发布事件 claim 原子性，避免多 controller-manager 抢占时只靠内存判断。
+- [x] CR MyBatis-Plus 资源表索引、乐观锁和发布事件 claim 原子性，避免多 controller-manager 抢占时只靠内存判断。
 - [x] CR agent last-good 存储当前仍是内存实现的问题，补文件或外部卷持久化，保证 proxy 控制面不可用时可恢复启动。
 - [ ] CR proxy 运行态策略解析中的 Map 兼容逻辑，确认大配置下没有反射/转换热点拖慢转发路径。
 - [ ] CR proxy 本机熔断状态机是否继续保留，优先评估接入 getboot-governance / Sentinel 或 Resilience4j，避免长期维护自研熔断算法。

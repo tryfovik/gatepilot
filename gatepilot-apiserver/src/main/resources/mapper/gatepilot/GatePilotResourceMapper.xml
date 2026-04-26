@@ -44,7 +44,12 @@
         <if test="namespace != null and namespace != ''">
           and namespace = #{namespace}
         </if>
-          and concat(namespace, '/', name) &gt; #{cursor}
+        <if test="cursorNamespace != null">
+          and (
+              namespace &gt; #{cursorNamespace}
+              or (namespace = #{cursorNamespace} and name &gt; #{cursorName})
+          )
+        </if>
         order by namespace asc, name asc
         limit #{limit}
     </select>

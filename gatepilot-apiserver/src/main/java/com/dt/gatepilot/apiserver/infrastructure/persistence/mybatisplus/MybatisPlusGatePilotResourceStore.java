@@ -115,7 +115,11 @@ public class MybatisPlusGatePilotResourceStore implements GatePilotResourceStore
                                   Class<T> resourceType) {
         int effectiveLimit = Math.max(1, Math.min(limit, MybatisPlusResourceStoreConstants.MAX_LIMIT));
         List<T> items = resourceMapper.selectPageByCursor(
-                        kind.name(), normalizeNamespace(namespace), cursorValue(cursor), effectiveLimit + 1)
+                        kind.name(),
+                        normalizeNamespace(namespace),
+                        cursorNamespace(cursor),
+                        cursorName(cursor),
+                        effectiveLimit + 1)
                 .stream()
                 .map(record -> readResource(record.getResourceJson(), resourceType))
                 .toList();
@@ -313,13 +317,38 @@ public class MybatisPlusGatePilotResourceStore implements GatePilotResourceStore
     }
 
     /**
-     * 规范化游标。
+     * 解析游标命名空间。
      *
      * @param cursor 游标
-     * @return 规范化游标
+     * @return 游标命名空间
      */
-    private String cursorValue(String cursor) {
-        return StringUtils.hasText(cursor) ? cursor : "";
+    private String cursorNamespace(String cursor) {
+        if (!StringUtils.hasText(cursor)) {
+            return null;
+        }
+        int separatorIndex = cursor.indexOf(ResourceStoreConstants.CURSOR_SEPARATOR);
+        if (separatorIndex < 0) {
+            return "";
+        }
+        // 游标按 namespace/name 拆开，避免 SQL 对列做 concat
+        return cursor.substring(0, separatorIndex);
+    }
+
+    /**
+     * 解析游标资源名称。
+     *
+     * @param cursor 游标
+     * @return 游标资源名称
+     */
+    private String cursorName(String cursor) {
+        if (!StringUtils.hasText(cursor)) {
+            return null;
+        }
+        int separatorIndex = cursor.indexOf(ResourceStoreConstants.CURSOR_SEPARATOR);
+        if (separatorIndex < 0) {
+            return cursor;
+        }
+        return cursor.substring(separatorIndex + ResourceStoreConstants.CURSOR_SEPARATOR.length());
     }
 
     /**

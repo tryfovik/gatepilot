@@ -30,6 +30,8 @@ import com.dt.gatepilot.controller.domain.port.RollbackConfigReader;
 import com.dt.gatepilot.controller.domain.model.GatewayDesiredState;
 import com.dt.gatepilot.controller.domain.model.ReleaseIntent;
 import com.dt.gatepilot.domain.deployment.GatePilotDeploymentModeConstants;
+import com.getboot.exception.api.code.CommonErrorCode;
+import com.getboot.exception.api.exception.BusinessException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -92,7 +94,9 @@ public class GatePilotControllerResourceAdapter
         event.getSpec().getAttributes().put(GatewayEventConstants.ATTRIBUTE_CLAIMED_AT, Instant.now().toString());
         event.getSpec().setLastObservedAt(Instant.now());
         intent.setSequence(nextSequence(intent.getNamespace(), intent.getConfigShard()));
-        saveEvent(event);
+        if (!trySaveClaimedEvent(event)) {
+            return false;
+        }
         return true;
     }
 
@@ -414,5 +418,33 @@ public class GatePilotControllerResourceAdapter
     private void saveEvent(GatewayEvent event) {
         GatePilotResourceType eventType = resourceService.requireResourceType(ResourceKind.GATEWAY_EVENT);
         resourceService.save(eventType, event.getMetadata().getNamespace(), event.getMetadata().getName(), event);
+    }
+
+    /**
+     * 尝试保存已抢占事件。
+     *
+     * @param event 发布事件
+     * @return 是否保存成功
+     */
+    private boolean trySaveClaimedEvent(GatewayEvent event) {
+        try {
+            saveEvent(event);
+            return true;
+        } catch (BusinessException exception) {
+            if (isWriteConflict(exception)) {
+                return false;
+            }
+            throw exception;
+        }
+    }
+
+    /**
+     * 判断是否为资源写入冲突。
+     *
+     * @param exception 业务异常
+     * @return 是否为写入冲突
+     */
+    private boolean isWriteConflict(BusinessException exception) {
+        return Objects.equals(exception.getErrorCodeValue(), CommonErrorCode.REQUEST_PROCESSING.code());
     }
 }

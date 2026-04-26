@@ -28,13 +28,15 @@ public interface GatePilotResourceMapper extends BaseMapper<GatePilotResourceRec
      *
      * @param kind 资源类型
      * @param namespace 命名空间
-     * @param cursor 游标
+     * @param cursorNamespace 游标命名空间
+     * @param cursorName 游标资源名称
      * @param limit 返回条数
      * @return 资源记录列表
      */
     List<GatePilotResourceRecord> selectPageByCursor(@Param("kind") String kind,
                                                      @Param("namespace") String namespace,
-                                                     @Param("cursor") String cursor,
+                                                     @Param("cursorNamespace") String cursorNamespace,
+                                                     @Param("cursorName") String cursorName,
                                                      @Param("limit") int limit);
 
     /**
