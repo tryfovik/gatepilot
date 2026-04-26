@@ -25,6 +25,7 @@ import com.dt.gatepilot.proxy.infrastructure.governance.SentinelGatewayRulePubli
 import com.dt.gatepilot.proxy.infrastructure.limiter.GetbootRuntimeRateLimiter;
 import com.dt.gatepilot.proxy.infrastructure.loadbalancer.GatePilotLoadBalancerClientConfiguration;
 import com.dt.gatepilot.proxy.infrastructure.loadbalancer.GatePilotLoadBalancerConstants;
+import com.dt.gatepilot.proxy.infrastructure.metrics.MicrometerRuntimeMetricsSink;
 import com.dt.gatepilot.proxy.interfaces.control.ProxyRuntimeControlController;
 import com.dt.gatepilot.proxy.interfaces.gateway.GatePilotGatewayFilter;
 import com.dt.gatepilot.proxy.interfaces.gateway.GatePilotRouteLocator;
@@ -32,8 +33,10 @@ import com.dt.gatepilot.proxy.interfaces.web.ProxyRuntimeAuditRecorder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.getboot.auth.spi.SaTokenWebFluxAuthChecker;
 import com.getboot.limiter.api.registry.RateLimiterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -316,6 +319,20 @@ public class GatePilotProxyAutoConfiguration {
     }
 
     /**
+     * 创建 Micrometer 运行指标采集器。
+     *
+     * @param meterRegistry Micrometer 注册表
+     * @return 运行指标采集器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(MeterRegistry.class)
+    public RuntimeMetricsSink micrometerRuntimeMetricsSink(MeterRegistry meterRegistry) {
+        // 指标出口交给 getboot-observability 配置和暴露
+        return new MicrometerRuntimeMetricsSink(meterRegistry);
+    }
+
+    /**
      * 创建默认运行指标采集器。
      *
      * @return 运行指标采集器
@@ -323,7 +340,7 @@ public class GatePilotProxyAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public RuntimeMetricsSink runtimeMetricsSink() {
-        // 默认不落地，后续接 Micrometer 或 agent 上报实现
+        // 没有 MeterRegistry 时保持空实现，避免影响 proxy 启动
         return (routeId, status, latencyMillis) -> {
         };
     }

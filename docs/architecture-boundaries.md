@@ -165,6 +165,7 @@ private String version;
 | 分布式互斥 | getboot-lock | 在调度入口声明锁语义 | 自己用数据库字段或内存锁冒充分布式锁 |
 | 发布 ID / 版本 | GatePilot 发布域生成器 | 用 releaseId 生成不依赖本机时间的发布版本 | 用本机时间戳拼版本；把 TraceId 当业务版本 |
 | 上游健康探测 | 待补 getboot 统一健康检查能力 | 在 proxy 本机按已发布配置探测并上报摘要 | 扩展成通用健康检查框架；用 Spring Cloud LoadBalancer HealthCheck 直接替换动态配置语义 |
+| 运行指标 | getboot-observability / Micrometer | 把 proxy 运行事件适配成 MeterRegistry 指标 | 自己实现指标注册、采集或 Prometheus 暴露框架 |
 
 GatePilot 默认 Trace 约定：
 

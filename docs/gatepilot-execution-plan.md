@@ -101,7 +101,7 @@ infrastructure  出站实现：数据库、HTTP 客户端、Spring 配置、调�
 | 统一响应 | getboot ApiResponse | 已接入 | 禁止 GatePilot 自定义 ApiResult / Result |
 | 本机熔断状态机 | GatePilot 本地实现 | 已评估，暂保留 | getboot-governance 当前只提供 Sentinel 配置桥接 / Gateway 限流接入，未提供 HTTP 状态码熔断 SPI；后续替换前先补 getboot-governance 统一熔断能力 |
 | 上游主动健康探测 | GatePilot 本地实现 | 已评估，暂保留 | Spring Cloud LoadBalancer HealthCheck 不能等价承接动态 PublishedConfig、单 upstream 阈值、状态上报和失败开放；后续替换前先补 getboot 统一健康检查能力 |
-| 运行指标采集 | GatePilot 端口占位 | 待 CR | 优先评估 Micrometer / getboot metrics 能力 |
+| 运行指标采集 | getboot-observability + Micrometer | 已接入 | GatePilot 只把 proxy 运行事件适配成 MeterRegistry 指标，公共标签和 Prometheus 暴露交给 getboot |
 
 ## 3. 发布链路
 
@@ -347,7 +347,7 @@ console
 - [x] CR proxy 本机熔断状态机是否继续保留，优先评估接入 getboot-governance / Sentinel 或 Resilience4j，避免长期维护自研熔断算法。结论：当前 getboot-governance 只覆盖 Sentinel 配置桥接、Gateway 过滤器和限流规则，不能等价承接按 HTTP 状态码、慢调用和自定义 fallback 组合的路由熔断；GatePilot 暂保留本机实现，但禁止继续扩展算法，后续要先在 getboot-governance 补统一熔断 SPI，再替换本地实现。
 - [x] CR proxy 上游健康探测是否可收敛到 Spring Cloud LoadBalancer HealthCheck 或 getboot 统一健康检查能力，避免长期维护重复探测逻辑。结论：Spring Cloud LoadBalancer `HealthCheckServiceInstanceListSupplier` 可以做实例探活过滤，但默认按 serviceId 全局属性运行，`refetchInstances` 默认关闭，不能直接覆盖 GatePilot 动态 `PublishedConfig` 实例重取、单 upstream path / timeout / healthyThreshold / unhealthyThreshold、agent 上报健康摘要和全部摘除时失败开放；getboot 当前也没有统一上游健康检查模块。GatePilot 暂保留本机主动探测，但禁止扩展成通用健康检查框架，后续应先在 getboot 补统一健康检查能力，再替换本地探测器。
 - [x] CR `LoadBalanceStrategy` 中一致性哈希、最少连接等策略的控制面校验和组件选型；没有成熟组件前禁止在 proxy 热路径继续补手写算法。结论：当前只支持 `ROUND_ROBIN`、`WEIGHTED_ROUND_ROBIN`、`RANDOM`，由 Spring Cloud LoadBalancer 承接；`LEAST_CONNECTIONS` 和 `CONSISTENT_HASH` 保留模型枚举但发布 dry-run、controller-manager 组装和 proxy apply 都会拒绝，避免静默降级成轮询。
-- [ ] CR proxy 运行指标采集接入 Micrometer 或 getboot metrics 能力，避免 RuntimeMetricsSink 长期停留在空实现。
+- [x] CR proxy 运行指标采集接入 Micrometer 或 getboot metrics 能力，避免 RuntimeMetricsSink 长期停留在空实现。结论：proxy 接入 getboot-observability 提供的 Micrometer / Prometheus 能力，新增 `RuntimeMetricsSink` 的 Micrometer 适配，只记录路由请求总量和延迟；公共标签、Actuator 和 Prometheus 暴露仍统一走 getboot 配置。
 
 ### Phase 10：配置复杂度治理（后续，不纳入今天收尾范围）
 
