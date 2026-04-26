@@ -21,6 +21,11 @@ public class GatePilotControllerManagerProperties {
     private String controllerId = ControllerManagerConstants.DEFAULT_CONTROLLER_ID;
 
     /**
+     * 是否要求启动时存在 getboot-lock 运行实现。
+     */
+    private boolean distributedLockRequired = true;
+
+    /**
      * 单次 reconcile 最大处理数量。
      */
     private int batchSize = 20;

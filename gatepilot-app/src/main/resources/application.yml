@@ -51,6 +51,8 @@ gatepilot:
       type: memory
       database:
         initialize-schema: false
+  controller-manager:
+    distributed-lock-required: false
   agent:
     enabled: true
     apiserver-base-url: http://127.0.0.1:18080

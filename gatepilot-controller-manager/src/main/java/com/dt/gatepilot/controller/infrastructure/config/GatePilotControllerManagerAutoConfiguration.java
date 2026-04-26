@@ -11,10 +11,12 @@ import com.dt.gatepilot.controller.domain.port.ReconcileResultSink;
 import com.dt.gatepilot.controller.domain.port.ReleaseIntentSource;
 import com.dt.gatepilot.controller.domain.port.RollbackConfigReader;
 import com.dt.gatepilot.controller.infrastructure.leader.LocalControllerLeaderElector;
+import com.dt.gatepilot.controller.infrastructure.scheduling.ControllerManagerDistributedLockGuard;
 import com.dt.gatepilot.controller.infrastructure.scheduling.PublishedConfigStatusRefreshExecutor;
 import com.dt.gatepilot.controller.infrastructure.scheduling.PublishedConfigStatusRefreshScheduler;
 import com.dt.gatepilot.controller.infrastructure.scheduling.ReleaseReconcileExecutor;
 import com.dt.gatepilot.controller.infrastructure.scheduling.ReleaseReconcileScheduler;
+import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -115,6 +117,21 @@ public class GatePilotControllerManagerAutoConfiguration {
                                                                ReleaseReconcileExecutor reconcileExecutor) {
         // 调度器只触发 reconcile，不承载发布逻辑
         return new ReleaseReconcileScheduler(properties, reconcileExecutor);
+    }
+
+    /**
+     * 创建分布式锁启动守卫
+     *
+     * @param properties controller-manager 配置
+     * @param beanFactory Bean 工厂
+     * @return 分布式锁启动守卫
+     */
+    @Bean
+    public ControllerManagerDistributedLockGuard controllerManagerDistributedLockGuard(
+            GatePilotControllerManagerProperties properties,
+            ListableBeanFactory beanFactory) {
+        // 防止生产环境只留下锁注解却没有真正的锁实现
+        return new ControllerManagerDistributedLockGuard(properties, beanFactory);
     }
 
     /**

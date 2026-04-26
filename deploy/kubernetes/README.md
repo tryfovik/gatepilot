@@ -14,6 +14,7 @@ Client -> VIP(HAProxy + Keepalived) -> Nginx 集群 -> Service/gatepilot-proxy -
 - 项目路由、染色、灰度、蓝绿、限流、熔断和审计由 GatePilot proxy 执行
 - apiserver 使用数据库作为配置事实来源
 - 基础清单把 apiserver 和 controller-manager 放在控制面进程内装配，数据面 proxy 独立扩容
+- controller-manager 默认开启 getboot-lock database 锁，控制面多副本不会静默退化成无锁调度
 - proxy Deployment 可以直接扩副本，agent 使用 Pod 名注册为节点
 - HPA 只扩 `gatepilot-proxy`，不改变 Java 转发代码
 

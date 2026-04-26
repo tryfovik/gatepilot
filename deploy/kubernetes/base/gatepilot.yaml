@@ -33,6 +33,10 @@ data:
     getboot:
       lock:
         enabled: true
+        type: database
+        database:
+          enabled: true
+          initialize-schema: true
       observability:
         trace:
           enabled: true
@@ -57,6 +61,7 @@ data:
             initialize-schema: false
       controller-manager:
         enabled: true
+        distributed-lock-required: true
       agent:
         enabled: false
       proxy:

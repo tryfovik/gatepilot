@@ -229,7 +229,8 @@ controller-manager 与 apiserver 的关系：
 - 单体合包部署时，controller-manager 可以使用进程内适配器读写同一份资源存储。
 - 无论哪种部署方式，controller-manager 应用层只能依赖自身 `domain.port`，不反向依赖 apiserver 的 Controller 或 Web 层。
 - 多副本 controller-manager 必须在调度批次入口接入 getboot-lock 分布式锁；发布事件 claim 是第二道防线，不能替代批次锁。
-- GatePilot 模块只默认依赖 getboot-lock 契约，不默认强制带入 getboot-coordination 运行实现；Redis / ZooKeeper 锁实现由具体部署包显式引入并配置。
+- GatePilot 模块只默认依赖 getboot-lock 契约，不默认强制带入 getboot-coordination 运行实现；Redis / database / ZooKeeper 锁实现由具体部署包显式引入并配置。
+- controller-manager 生产默认要求存在 getboot-lock 运行切面，缺失时必须启动失败；本地单体试用才允许显式关闭 `gatepilot.controller-manager.distributed-lock-required`。
 - 回滚推进只能读取已保存的 `GatewayConfigSnapshot` 中的 `PublishedConfig`，不能重新读取当前草稿资源拼出“伪回滚”。
 - apiserver 不能通过一个同步 Service 调用把整条发布链路跑完，否则发布推进职责会回流到 apiserver。
 

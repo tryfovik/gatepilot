@@ -336,7 +336,7 @@ console
 
 ### Phase 9.5：架构债与 CR 待办
 
-- [ ] CR controller-manager 分布式锁与发布事件 claim 的双保险语义，确认多副本下不会重复推进、不会长时间饿死发布队列，且锁实现缺失时不能静默退化成无锁生产运行。
+- [x] CR controller-manager 分布式锁与发布事件 claim 的双保险语义，确认多副本下不会重复推进、不会长时间饿死发布队列，且锁实现缺失时不能静默退化成无锁生产运行。
 - [ ] CR 回滚 PublishedConfig 复制策略，确认快照内容不会被后续发布污染，必要时改成 ObjectMapper 深拷贝或不可变快照。
 - [x] CR embedded / agent 资源读取的 500 条上限扫描，改成按 cursor 跨页读取，避免 1000 项目后 reconcile 或 agent pull 漏数据。
 - [ ] CR 发布版本号生成策略，评估是否接入 getboot 统一 ID 能力或单独版本序列，避免继续依赖本地时间。

@@ -29,9 +29,13 @@ class GatePilotKubernetesManifestTest {
 
     private static final String KIND_PDB = "PodDisruptionBudget";
 
+    private static final String KIND_CONFIG_MAP = "ConfigMap";
+
     private static final String NAME_PROXY = "gatepilot-proxy";
 
     private static final String NAME_APISERVER = "gatepilot-apiserver";
+
+    private static final String NAME_APISERVER_CONFIG = "gatepilot-apiserver-config";
 
     private static final String KEY_KIND = "kind";
 
@@ -49,11 +53,37 @@ class GatePilotKubernetesManifestTest {
 
     private static final String KEY_REPLICAS = "replicas";
 
+    private static final String KEY_DATA = "data";
+
+    private static final String KEY_APPLICATION_YAML = "application.yaml";
+
+    private static final String KEY_GETBOOT = "getboot";
+
+    private static final String KEY_LOCK = "lock";
+
+    private static final String KEY_TYPE = "type";
+
+    private static final String KEY_DATABASE = "database";
+
+    private static final String KEY_ENABLED = "enabled";
+
+    private static final String KEY_INITIALIZE_SCHEMA = "initialize-schema";
+
+    private static final String KEY_GATEPILOT = "gatepilot";
+
+    private static final String KEY_CONTROLLER_MANAGER = "controller-manager";
+
+    private static final String KEY_DISTRIBUTED_LOCK_REQUIRED = "distributed-lock-required";
+
+    private static final String LOCK_TYPE_DATABASE = "database";
+
     private static final int MIN_PROXY_REPLICAS = 3;
 
     @Test
     void shouldKeepKubernetesBoundaryAndProxyScaleOutResources() throws IOException {
         List<Map<String, Object>> resources = loadResources();
+        Map<String, Object> apiserverConfig = applicationConfig(
+                requireResource(resources, KIND_CONFIG_MAP, NAME_APISERVER_CONFIG));
         Map<String, Object> proxyDeployment = requireResource(resources, KIND_DEPLOYMENT, NAME_PROXY);
         Map<String, Object> proxyService = requireResource(resources, KIND_SERVICE, NAME_PROXY);
         Map<String, Object> proxyHpa = requireResource(resources, KIND_HPA, NAME_PROXY);
@@ -72,6 +102,11 @@ class GatePilotKubernetesManifestTest {
         assertThat(stringAt(proxyHpa, KEY_SPEC, KEY_SCALE_TARGET_REF, KEY_NAME)).isEqualTo(NAME_PROXY);
         assertThat(mapAt(proxyPdb, KEY_SPEC, KEY_SELECTOR, KEY_MATCH_LABELS))
                 .containsAllEntriesOf(mapAt(proxyDeployment, KEY_SPEC, KEY_SELECTOR, KEY_MATCH_LABELS));
+        assertThat(stringAt(apiserverConfig, KEY_GETBOOT, KEY_LOCK, KEY_TYPE)).isEqualTo(LOCK_TYPE_DATABASE);
+        assertThat(booleanAt(apiserverConfig, KEY_GETBOOT, KEY_LOCK, KEY_DATABASE, KEY_ENABLED)).isTrue();
+        assertThat(booleanAt(apiserverConfig, KEY_GETBOOT, KEY_LOCK, KEY_DATABASE, KEY_INITIALIZE_SCHEMA)).isTrue();
+        assertThat(booleanAt(apiserverConfig, KEY_GATEPILOT, KEY_CONTROLLER_MANAGER,
+                KEY_DISTRIBUTED_LOCK_REQUIRED)).isTrue();
     }
 
     private List<Map<String, Object>> loadResources() throws IOException {
@@ -113,8 +148,18 @@ class GatePilotKubernetesManifestTest {
                 .toList();
     }
 
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> applicationConfig(Map<String, Object> configMap) {
+        String content = stringAt(configMap, KEY_DATA, KEY_APPLICATION_YAML);
+        return (Map<String, Object>) new Yaml().load(content);
+    }
+
     private Number numberAt(Map<String, Object> source, String... keys) {
         return (Number) valueAt(source, keys);
+    }
+
+    private Boolean booleanAt(Map<String, Object> source, String... keys) {
+        return (Boolean) valueAt(source, keys);
     }
 
     private String stringAt(Map<String, Object> source, String... keys) {

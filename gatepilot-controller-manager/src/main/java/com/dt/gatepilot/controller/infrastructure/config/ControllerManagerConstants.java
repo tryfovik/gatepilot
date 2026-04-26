@@ -16,6 +16,11 @@ public final class ControllerManagerConstants {
     public static final String ENABLED_PROPERTY = "enabled";
 
     /**
+     * 分布式锁强校验配置名
+     */
+    public static final String DISTRIBUTED_LOCK_REQUIRED_PROPERTY = "distributed-lock-required";
+
+    /**
      * 默认 controller 标识。
      */
     public static final String DEFAULT_CONTROLLER_ID = "local-controller";
@@ -62,6 +67,39 @@ public final class ControllerManagerConstants {
      */
     public static final String MESSAGE_STATUS_REFRESH_LOCK_BUSY =
             "其他 controller-manager 正在刷新发布状态，跳过本轮";
+
+    /**
+     * 缺失 getboot-lock 运行实现提示
+     */
+    public static final String MESSAGE_LOCK_IMPLEMENTATION_MISSING =
+            "controller-manager 已启用但未发现 getboot-lock 分布式锁运行实现，请配置 Redis、database 或 ZooKeeper 锁";
+
+    /**
+     * getboot Redis 锁切面类型
+     */
+    public static final String GETBOOT_REDIS_LOCK_ASPECT_CLASS =
+            "com.getboot.lock.infrastructure.redis.redisson.aspect.DistributedLockAspect";
+
+    /**
+     * getboot database 锁切面类型
+     */
+    public static final String GETBOOT_DATABASE_LOCK_ASPECT_CLASS =
+            "com.getboot.lock.infrastructure.database.jdbc.aspect.JdbcDistributedLockAspect";
+
+    /**
+     * getboot ZooKeeper 锁切面类型
+     */
+    public static final String GETBOOT_ZOOKEEPER_LOCK_ASPECT_CLASS =
+            "com.getboot.lock.infrastructure.zookeeper.curator.aspect.ZookeeperDistributedLockAspect";
+
+    /**
+     * getboot 已知锁切面类型集合
+     */
+    public static final String[] GETBOOT_LOCK_ASPECT_CLASSES = {
+            GETBOOT_REDIS_LOCK_ASPECT_CLASS,
+            GETBOOT_DATABASE_LOCK_ASPECT_CLASS,
+            GETBOOT_ZOOKEEPER_LOCK_ASPECT_CLASS
+    };
 
     private ControllerManagerConstants() {
         // controller-manager 配置常量不允许实例化
