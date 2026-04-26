@@ -352,7 +352,6 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
     private ServerWebExchange prepareForwardExchange(ServerWebExchange exchange, ForwardContext context) {
         URI targetUri = targetUri(context);
         context.setUpstreamUri(targetUri);
-        exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR, targetUri);
         ServerHttpRequest request = exchange.getRequest()
                 .mutate()
                 .uri(targetUri)
@@ -361,7 +360,9 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
         if (StringUtils.hasText(context.trafficColor())) {
             exchange.getResponse().getHeaders().set(TrafficColorConstants.DEFAULT_HEADER_NAME, context.trafficColor());
         }
-        return exchange.mutate().request(request).build();
+        ServerWebExchange forwardExchange = exchange.mutate().request(request).build();
+        forwardExchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR, targetUri);
+        return forwardExchange;
     }
 
     private RetryGatewayFilterFactory.RetryConfig retryConfig(ForwardContext context) {

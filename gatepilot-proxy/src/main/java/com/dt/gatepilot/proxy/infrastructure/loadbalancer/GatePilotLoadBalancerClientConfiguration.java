@@ -9,13 +9,11 @@ import org.springframework.cloud.loadbalancer.core.ReactorServiceInstanceLoadBal
 import org.springframework.cloud.loadbalancer.core.ServiceInstanceListSupplier;
 import org.springframework.cloud.loadbalancer.support.LoadBalancerClientFactory;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 /**
  * GatePilot Spring Cloud LoadBalancer 客户端配置
  */
-@Configuration(proxyBeanMethods = false)
 @ConditionalOnGatePilotProxyEnabled
 public class GatePilotLoadBalancerClientConfiguration {
 

@@ -8,27 +8,21 @@ import com.dt.gatepilot.agent.application.dto.AgentRuntimeAuditBatch;
 import com.dt.gatepilot.agent.domain.port.AgentControlPlaneClient;
 import com.dt.gatepilot.agent.infrastructure.config.AgentRuntimeConstants;
 import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
+import com.dt.gatepilot.agent.infrastructure.http.AgentWebClients;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.getboot.exception.api.exception.BusinessException;
 import com.getboot.web.api.response.ApiResponse;
 import java.util.Optional;
 import lombok.Data;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * 基于 WebClient 的 apiserver 客户端。
  *
- * <p>Trace Header 透传由 getboot-http-client 自动挂载到 WebClient.Builder，不在这里手写。</p>
+ * <p>复用普通 HTTP filter，但不走 Spring Cloud LoadBalancer。</p>
  */
-@Component
-@ConditionalOnProperty(prefix = AgentRuntimeConstants.CONFIG_PREFIX,
-        name = AgentRuntimeConstants.ENABLED_PROPERTY,
-        havingValue = "true",
-        matchIfMissing = true)
 public class WebClientAgentControlPlaneClient implements AgentControlPlaneClient {
 
     private final WebClient webClient;
@@ -40,7 +34,7 @@ public class WebClientAgentControlPlaneClient implements AgentControlPlaneClient
      * @param properties agent 配置
      */
     public WebClientAgentControlPlaneClient(WebClient.Builder builder, GatePilotAgentProperties properties) {
-        this.webClient = builder.baseUrl(properties.getApiserverBaseUrl()).build();
+        this.webClient = AgentWebClients.httpClient(builder, properties.getApiserverBaseUrl());
     }
 
     @Override
@@ -86,7 +80,7 @@ public class WebClientAgentControlPlaneClient implements AgentControlPlaneClient
     }
 
     private <T> ApiResponse<T> post(String path, Object body, ParameterizedTypeReference<ApiResponse<T>> type) {
-        // 统一走 Spring 管理的 WebClient，Trace 透传交给 getboot-http-client
+        // 控制面调用是普通 HTTP 地址，不能被 LoadBalancer filter 接管
         ApiResponse<T> response = webClient.post()
                 .uri(AgentControlPlaneApiPaths.API_PREFIX + path)
                 .bodyValue(body)

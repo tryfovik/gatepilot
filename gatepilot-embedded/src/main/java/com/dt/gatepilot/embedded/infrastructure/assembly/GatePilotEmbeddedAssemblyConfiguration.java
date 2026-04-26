@@ -3,12 +3,14 @@ package com.dt.gatepilot.embedded.infrastructure.assembly;
 import com.dt.gatepilot.agent.application.service.AgentRuntimeAuditReporter;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
 import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
+import com.dt.gatepilot.agent.infrastructure.config.AgentRuntimeConstants;
 import com.dt.gatepilot.domain.deployment.GatePilotDeploymentModeConstants;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import com.dt.gatepilot.proxy.infrastructure.config.ConditionalOnGatePilotProxyEnabled;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -31,7 +33,7 @@ public class GatePilotEmbeddedAssemblyConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(ProxyConfigApplier.class)
+    @ConditionalOnGatePilotProxyEnabled
     public ProxyApplyClient proxyApplyClient(ProxyConfigApplier proxyConfigApplier) {
         // embedded 只做端口桥接，不承载发布或转发业务逻辑
         return new InProcessProxyApplyClient(proxyConfigApplier);
@@ -46,10 +48,17 @@ public class GatePilotEmbeddedAssemblyConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean({ProxyRuntimeState.class, UpstreamEndpointHealthRegistry.class})
-    public ProxyRuntimeStatusReader proxyRuntimeStatusReader(ProxyRuntimeState runtimeState,
-                                                             UpstreamEndpointHealthRegistry healthRegistry) {
+    @ConditionalOnGatePilotProxyEnabled
+    public ProxyRuntimeStatusReader proxyRuntimeStatusReader(ObjectProvider<ProxyRuntimeState> runtimeStateProvider,
+                                                             ObjectProvider<UpstreamEndpointHealthRegistry>
+                                                                     healthRegistryProvider) {
         // embedded 只把 proxy 本机状态补进 agent 心跳
+        ProxyRuntimeState runtimeState = runtimeStateProvider.getIfAvailable();
+        UpstreamEndpointHealthRegistry healthRegistry = healthRegistryProvider.getIfAvailable();
+        if (runtimeState == null || healthRegistry == null) {
+            return snapshot -> {
+            };
+        }
         return new InProcessProxyRuntimeStatusReader(runtimeState, healthRegistry);
     }
 
@@ -61,9 +70,18 @@ public class GatePilotEmbeddedAssemblyConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(AgentRuntimeAuditReporter.class)
-    public RuntimeAuditSink runtimeAuditSink(AgentRuntimeAuditReporter runtimeAuditReporter) {
+    @ConditionalOnGatePilotProxyEnabled
+    @ConditionalOnProperty(prefix = AgentRuntimeConstants.CONFIG_PREFIX,
+            name = AgentRuntimeConstants.ENABLED_PROPERTY,
+            havingValue = "true",
+            matchIfMissing = true)
+    public RuntimeAuditSink runtimeAuditSink(ObjectProvider<AgentRuntimeAuditReporter> runtimeAuditReporterProvider) {
         // 单体部署下 proxy 审计事件直接进入 agent 缓冲区
+        AgentRuntimeAuditReporter runtimeAuditReporter = runtimeAuditReporterProvider.getIfAvailable();
+        if (runtimeAuditReporter == null) {
+            return event -> {
+            };
+        }
         return new InProcessRuntimeAuditSink(runtimeAuditReporter);
     }
 }

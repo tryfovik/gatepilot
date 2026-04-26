@@ -9,6 +9,7 @@ import com.dt.gatepilot.agent.domain.port.PublishedConfigSyncAdapter;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
 import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
 import com.dt.gatepilot.agent.infrastructure.apiserver.HttpPullPublishedConfigSyncAdapter;
+import com.dt.gatepilot.agent.infrastructure.apiserver.WebClientAgentControlPlaneClient;
 import com.dt.gatepilot.agent.infrastructure.persistence.file.FileLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.persistence.memory.InMemoryLocalConfigStore;
 import com.dt.gatepilot.agent.infrastructure.proxy.HttpProxyApplyClient;
@@ -110,6 +111,22 @@ public class GatePilotAgentAutoConfiguration {
     }
 
     /**
+     * 创建控制面客户端
+     *
+     * @param builder WebClient 构建器
+     * @param properties agent 配置
+     * @return 控制面客户端
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public AgentControlPlaneClient agentControlPlaneClient(ObjectProvider<WebClient.Builder> builderProvider,
+                                                           GatePilotAgentProperties properties) {
+        // 控制面客户端在 agent 配置内声明，避免组件扫描顺序影响后续端口装配
+        WebClient.Builder builder = builderProvider.getIfAvailable(WebClient::builder);
+        return new WebClientAgentControlPlaneClient(builder, properties);
+    }
+
+    /**
      * 创建已发布配置同步适配器。
      *
      * @param controlPlaneClient 控制面客户端
@@ -117,7 +134,6 @@ public class GatePilotAgentAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(AgentControlPlaneClient.class)
     public PublishedConfigSyncAdapter publishedConfigSyncAdapter(AgentControlPlaneClient controlPlaneClient) {
         // 默认只提供 HTTP pull，Nacos watch 后续通过替换这个 bean 接入
         return new HttpPullPublishedConfigSyncAdapter(controlPlaneClient);
@@ -153,16 +169,20 @@ public class GatePilotAgentAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean({AgentControlPlaneClient.class, PublishedConfigSyncAdapter.class,
-            LocalConfigStore.class, ProxyApplyClient.class})
+    @ConditionalOnProperty(prefix = GatePilotDeploymentModeConstants.CONFIG_PREFIX,
+            name = GatePilotDeploymentModeConstants.MODE_PROPERTY)
     public AgentRuntimeCoordinator agentRuntimeCoordinator(AgentNodeProfile nodeProfile,
                                                            AgentControlPlaneClient controlPlaneClient,
                                                            PublishedConfigSyncAdapter configSyncAdapter,
                                                            LocalConfigStore localConfigStore,
-                                                           ProxyApplyClient proxyApplyClient,
+                                                           ObjectProvider<ProxyApplyClient> proxyApplyClientProvider,
                                                            ObjectProvider<ProxyRuntimeStatusReader>
                                                                    proxyRuntimeStatusReaderProvider) {
         // 编排器只拼端口，不关心同步背后是 HTTP pull 还是 watch
+        ProxyApplyClient proxyApplyClient = proxyApplyClientProvider.getIfAvailable();
+        if (proxyApplyClient == null) {
+            throw new IllegalStateException(AgentRuntimeConstants.MESSAGE_MISSING_PROXY_APPLY_CLIENT);
+        }
         return new AgentRuntimeCoordinator(nodeProfile, controlPlaneClient, configSyncAdapter,
                 localConfigStore, proxyApplyClient, proxyRuntimeStatusReaderProvider.getIfAvailable());
     }

@@ -73,6 +73,11 @@ public final class AgentRuntimeConstants {
     public static final String MESSAGE_UNSUPPORTED_LOCAL_CONFIG_STORE_TYPE = "不支持的 agent 本地配置存储类型";
 
     /**
+     * 缺少 proxy apply 客户端提示
+     */
+    public static final String MESSAGE_MISSING_PROXY_APPLY_CLIENT = "缺少 proxy apply 客户端";
+
+    /**
      * 默认 apiserver 地址。
      */
     public static final String DEFAULT_APISERVER_BASE_URL = "http://127.0.0.1:18080";

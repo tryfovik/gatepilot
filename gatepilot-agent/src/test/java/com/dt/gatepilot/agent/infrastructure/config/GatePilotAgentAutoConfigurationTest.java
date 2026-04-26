@@ -54,12 +54,15 @@ class GatePilotAgentAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotUseHttpProxyApplyClientWhenModeIsStandalone() {
+    void shouldFailFastWhenStandaloneMissesProxyApplyClient() {
         contextRunner
-                .withBean(WebClient.Builder.class, WebClient::builder)
                 .withPropertyValues(GatePilotDeploymentModeConstants.CONFIG_PREFIX + "."
                         + GatePilotDeploymentModeConstants.MODE_PROPERTY + "="
                         + GatePilotDeploymentModeConstants.MODE_STANDALONE)
-                .run(context -> assertThat(context).doesNotHaveBean(ProxyApplyClient.class));
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasMessageContaining(AgentRuntimeConstants.MESSAGE_MISSING_PROXY_APPLY_CLIENT);
+                });
     }
 }

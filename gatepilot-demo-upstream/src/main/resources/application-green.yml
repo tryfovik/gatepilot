@@ -1,0 +1,11 @@
+server:
+  port: 19082
+
+gatepilot:
+  demo:
+    service-name: mock-shop
+    version: green-v2
+    color: green
+    instance-id: mock-shop-green-1
+    zone: server-b
+    message: GatePilot demo green upstream

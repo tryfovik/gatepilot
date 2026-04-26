@@ -1,0 +1,11 @@
+server:
+  port: 19081
+
+gatepilot:
+  demo:
+    service-name: mock-shop
+    version: stable-v1
+    color: stable
+    instance-id: mock-shop-stable-1
+    zone: server-a
+    message: GatePilot demo stable upstream

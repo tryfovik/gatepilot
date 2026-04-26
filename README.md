@@ -170,6 +170,24 @@ http://127.0.0.1:18080
 
 要体验完整闭环，请先启动 apiserver 或一体化应用，再打开 Console 的“接入”页面创建项目、保存资源并发布。
 
+### 示例上游
+
+项目内置 `gatepilot-demo-upstream` 示例服务，用来验证 GatePilot 到业务上游的真实转发链路。同一个 jar 可以用 profile 启动 stable 和 green 两个实例：
+
+```bash
+java -jar gatepilot-demo-upstream/target/gatepilot-demo-upstream.jar --spring.profiles.active=stable
+java -jar gatepilot-demo-upstream/target/gatepilot-demo-upstream.jar --spring.profiles.active=green
+```
+
+默认端口：
+
+| 实例 | 端口 | 说明 |
+| --- | --- | --- |
+| stable | `19081` | 稳定版本上游 |
+| green | `19082` | 绿色 / 候选版本上游 |
+
+示例服务会回显请求路径、查询串、版本、颜色和关键请求头，适合验证路由、路径剥离、Trace 透传、染色和蓝绿 / 灰度策略。
+
 ## 模块说明
 
 | 模块 | 职责 |
@@ -182,6 +200,7 @@ http://127.0.0.1:18080
 | `gatepilot-console` | Vue 管理控制台 |
 | `gatepilot-embedded` | 单体模式下的进程内适配 |
 | `gatepilot-app` | 一体化启动包，只负责装配 |
+| `gatepilot-demo-upstream` | 示例业务上游，用于演示和验收网关转发链路 |
 
 ## 工程约定
 

@@ -34,5 +34,6 @@
         <module>gatepilot-console</module>
         <module>gatepilot-embedded</module>
         <module>gatepilot-app</module>
+        <module>gatepilot-demo-upstream</module>
     </modules>
 </project>

@@ -3,6 +3,7 @@ package com.dt.gatepilot.agent.infrastructure.proxy;
 import com.dt.gatepilot.agent.application.dto.AgentApplyResult;
 import com.dt.gatepilot.agent.domain.port.ProxyApplyClient;
 import com.dt.gatepilot.agent.infrastructure.config.GatePilotAgentProperties;
+import com.dt.gatepilot.agent.infrastructure.http.AgentWebClients;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.getboot.exception.api.exception.BusinessException;
@@ -26,7 +27,7 @@ public class HttpProxyApplyClient implements ProxyApplyClient {
      * @param properties agent 配置
      */
     public HttpProxyApplyClient(WebClient.Builder builder, GatePilotAgentProperties properties) {
-        this.webClient = builder.baseUrl(properties.getProxyBaseUrl()).build();
+        this.webClient = AgentWebClients.httpClient(builder, properties.getProxyBaseUrl());
     }
 
     @Override

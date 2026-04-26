@@ -1,0 +1,25 @@
+server:
+  port: 19081
+
+spring:
+  application:
+    name: gatepilot-demo-upstream
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+gatepilot:
+  demo:
+    service-name: mock-shop
+    version: stable-v1
+    color: stable
+    instance-id: mock-shop-stable-1
+    zone: local-a
+    message: GatePilot demo stable upstream
