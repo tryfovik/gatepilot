@@ -167,6 +167,15 @@ getboot:
 
 agent 访问 apiserver 时必须使用 Spring 管理的 `WebClient.Builder` 或 getboot 已增强过的 HTTP 客户端。禁止在 agent 客户端里手工拼接 `X-Trace-Id`，避免和 getboot Trace 规则分叉。
 
+GatePilot 服务通信边界：
+
+- console 到 apiserver 是浏览器访问控制面，固定使用 HTTP / JSON REST API。
+- 后端服务之间的 RPC 优先使用 getboot-rpc / Dubbo，包括 apiserver 与 controller-manager 未来分服务部署时的内部接口。
+- GatePilot 后端模块禁止新增 OpenFeign 依赖，禁止用 OpenFeign 作为默认跨服务通信方式。
+- agent 拉取配置、上报心跳和 apply result 属于节点配置同步通道，不属于普通业务 RPC；当前可通过 apiserver HTTP pull 实现，后续可以演进为 Nacos / long polling / watch 适配，但不能改成 OpenFeign。
+- proxy 转发业务 HTTP 流量时使用数据面转发客户端，这不是 GatePilot 服务间 RPC，不能为了统一 RPC 把业务转发改成 Dubbo。
+- 如果新增跨服务调用能力，先查 getboot-rpc；getboot-rpc 缺能力时先补 getboot-rpc，再回 GatePilot 接入。
+
 禁止放：
 
 - 业务流量转发。

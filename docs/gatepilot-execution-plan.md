@@ -24,6 +24,7 @@
 - Java 注释统一使用展开式 Javadoc，不新增 `/** xxx */` 这种单行 Javadoc。
 - 禁止硬编码业务路径、Header、label、reason、配置 key 和默认值；常量按上下文收敛到明确命名的常量类，不能建全局垃圾常量包。
 - 对外 HTTP 入参、出参类统一命名为 `Request` / `Response`；`Command` 只用于明确的写入意图或领域命令，查询类不能误命名为 Command；新 Controller 出参不再使用泛化 `Result` 命名。
+- 后端服务间 RPC 统一优先走 getboot-rpc / Dubbo，禁止 GatePilot 新增 OpenFeign；console REST、agent 配置同步、proxy HTTP 转发要按各自通道归类，不能混成普通跨服务 RPC。
 
 目标模块：
 
@@ -77,6 +78,8 @@ infrastructure  出站实现：数据库、HTTP 客户端、Spring 配置、调�
 
 这条没有临时例外。统一响应、异常、Trace、Header 透传、缓存、锁、限流、幂等、HTTP 客户端、指标、数据库访问等公共基础设施，即使 getboot 当前缺失，也要先回 getboot 建能力或扩展能力，GatePilot 只消费这些公共能力。
 
+通信能力新增时也按同一条规则处理：后端服务间 RPC 先查 getboot-rpc / Dubbo；OpenFeign 不作为 GatePilot 的跨服务通信选项；agent 配置同步通道可以 HTTP pull / long polling / Nacos watch，但必须显式归入同步适配器，不允许伪装成业务 RPC。
+
 新增前端页面时，先写页面设计说明，明确参考 Kong Konnect、Kubernetes Dashboard、Argo CD 或 Grafana 的哪类页面结构。
 
 ## 3. 发布链路
@@ -126,6 +129,7 @@ console
 - [x] 写入方法内中文注释规则：注释要短、核心、像人写，末尾不加句号。
 - [x] 写入硬编码禁止规则：路径、Header、label、reason、配置 key、默认值必须进入上下文常量类。
 - [x] 写入 HTTP 入参出参命名规则：Request / Response，Command 只表示写入意图。
+- [x] 写入服务通信规则：后端服务间 RPC 优先 Dubbo / getboot-rpc，禁止 OpenFeign。
 - [x] 清理旧模块收敛过程中的半成品状态，保证工作区重新回到可编译、可测试状态。
 - [x] 将 GatePilot 模块包结构调整为 DDD 分层，移除内部 `api / spi / support` 包口径。
 - [x] 从父级 Maven reactor 摘掉历史模块，主构建只保留 GatePilot 新模块。
@@ -196,6 +200,7 @@ console
 - [x] 实现心跳上报。
 - [x] 实现 `PublishedConfig` pull。
 - [x] agent 访问 apiserver 使用 getboot-http-client 增强后的 WebClient，不手写 Trace Header。
+- [ ] 将 agent 配置同步通道抽象为可替换 adapter，保留 HTTP pull / long polling / Nacos watch 方向，不引入 OpenFeign。
 - [x] 预留 watch / long polling / SSE 扩展点。
 - [x] 实现 staged config。
 - [x] 实现 last-good config。
