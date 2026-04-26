@@ -41,7 +41,7 @@ public class GatePilotConfigSnapshotService {
 
     private final GatePilotResourceService resourceService;
 
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper snapshotObjectMapper;
 
     /**
      * 创建配置快照服务。
@@ -51,7 +51,7 @@ public class GatePilotConfigSnapshotService {
      */
     public GatePilotConfigSnapshotService(GatePilotResourceService resourceService, ObjectMapper objectMapper) {
         this.resourceService = resourceService;
-        this.objectMapper = objectMapper;
+        this.snapshotObjectMapper = objectMapper.copy().findAndRegisterModules();
     }
 
     /**
@@ -114,8 +114,9 @@ public class GatePilotConfigSnapshotService {
                                               String capturedBy,
                                               String description) {
         GatewayConfigSnapshot snapshot = new GatewayConfigSnapshot();
-        PublishedConfig.PublishedConfigSpec publishedSpec = publishedConfig.getSpec();
-        String namespace = publishedConfig.getMetadata().getNamespace();
+        PublishedConfig snapshotConfig = copyPublishedConfig(publishedConfig);
+        PublishedConfig.PublishedConfigSpec publishedSpec = snapshotConfig.getSpec();
+        String namespace = snapshotConfig.getMetadata().getNamespace();
         String name = snapshotName(publishedSpec.getVersion(), publishedSpec.getConfigShard());
         // 快照名由版本和分片决定，方便回滚按版本查找
         snapshot.getMetadata().setName(name);
@@ -130,8 +131,8 @@ public class GatePilotConfigSnapshotService {
                     publishedSpec.getProjectRef().getName());
         }
         GatewayConfigSnapshot.GatewayConfigSnapshotSpec spec = snapshot.getSpec();
-        spec.setProjectRef(publishedSpec.getProjectRef());
-        spec.setPublishedConfigRef(publishedConfigRef(publishedConfig));
+        spec.setProjectRef(copyReference(publishedSpec.getProjectRef()));
+        spec.setPublishedConfigRef(publishedConfigRef(snapshotConfig));
         spec.setReleaseId(releaseId);
         spec.setVersion(publishedSpec.getVersion());
         spec.setConfigHash(publishedSpec.getConfigHash());
@@ -140,7 +141,7 @@ public class GatePilotConfigSnapshotService {
         spec.setCapturedAt(Instant.now());
         spec.setCapturedBy(capturedBy);
         spec.setDescription(description);
-        spec.setPublishedConfig(publishedConfig);
+        spec.setPublishedConfig(snapshotConfig);
         GatePilotResourceType snapshotType = resourceService.requireResourceType(ResourceKind.CONFIG_SNAPSHOT);
         return (GatewayConfigSnapshot) resourceService.save(snapshotType, namespace, name, snapshot);
     }
@@ -313,10 +314,32 @@ public class GatePilotConfigSnapshotService {
         try {
             // 用规范 JSON 生成摘要，避免对象引用差异影响比较
             MessageDigest digest = MessageDigest.getInstance(ConfigDiffConstants.DIGEST_SHA_256);
-            String json = objectMapper.writeValueAsString(value);
+            String json = snapshotObjectMapper.writeValueAsString(value);
             return java.util.HexFormat.of().formatHex(digest.digest(json.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException | JsonProcessingException exception) {
             throw new BusinessException(CommonErrorCode.ERROR.code(), "配置 diff 生成失败", exception);
+        }
+    }
+
+    private PublishedConfig copyPublishedConfig(PublishedConfig publishedConfig) {
+        return copyValue(publishedConfig, PublishedConfig.class);
+    }
+
+    private ResourceReference copyReference(ResourceReference reference) {
+        if (reference == null) {
+            return null;
+        }
+        return copyValue(reference, ResourceReference.class);
+    }
+
+    private <T> T copyValue(T source, Class<T> targetType) {
+        try {
+            // 快照必须按值保存，不能共享后续发布流程里的可变对象
+            String json = snapshotObjectMapper.writeValueAsString(source);
+            return snapshotObjectMapper.readValue(json, targetType);
+        } catch (JsonProcessingException exception) {
+            throw new BusinessException(CommonErrorCode.ERROR.code(),
+                    ConfigSnapshotConstants.MESSAGE_SNAPSHOT_COPY_FAILED, exception);
         }
     }
 

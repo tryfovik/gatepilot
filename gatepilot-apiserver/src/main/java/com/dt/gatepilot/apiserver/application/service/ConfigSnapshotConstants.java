@@ -20,6 +20,11 @@ public final class ConfigSnapshotConstants {
      */
     public static final int SNAPSHOT_SCAN_LIMIT = 500;
 
+    /**
+     * 快照复制失败提示。
+     */
+    public static final String MESSAGE_SNAPSHOT_COPY_FAILED = "配置快照复制失败";
+
     private ConfigSnapshotConstants() {
         // 配置快照常量不允许实例化
     }

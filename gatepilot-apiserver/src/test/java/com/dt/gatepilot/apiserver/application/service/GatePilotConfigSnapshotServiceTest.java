@@ -75,6 +75,31 @@ class GatePilotConfigSnapshotServiceTest {
     }
 
     @Test
+    void shouldKeepSnapshotPayloadImmutableAfterSourceConfigChanged() {
+        PublishedConfig config = publishedConfig("default", "game", "v1", "shard-a");
+        config.getSpec().getRoutes().add(route("route-a", "/api/a", "upstream-a"));
+        config.getSpec().getUpstreams().add(upstream("upstream-a", "10.0.0.1"));
+
+        GatewayConfigSnapshot snapshot = snapshotService.saveSnapshot(config, "rel-1", "tester", "base");
+        config.getMetadata().setName("mutated");
+        config.getSpec().getProjectRef().setName("mutated-project");
+        config.getSpec().getRoutes().get(0).setPath("/api/mutated");
+        config.getSpec().getUpstreams().get(0).getEndpoints().get(0).setHost("10.0.0.9");
+
+        GatewayConfigSnapshot reloaded = snapshotService.findSnapshot("default", "game", "v1", "shard-a")
+                .orElseThrow();
+        PublishedConfig snapshotConfig = reloaded.getSpec().getPublishedConfig();
+
+        assertThat(snapshot.getSpec().getPublishedConfig()).isNotSameAs(config);
+        assertThat(reloaded.getSpec().getProjectRef().getName()).isEqualTo("game");
+        assertThat(snapshotConfig.getMetadata().getName()).isEqualTo("v1");
+        assertThat(snapshotConfig.getSpec().getProjectRef().getName()).isEqualTo("game");
+        assertThat(snapshotConfig.getSpec().getRoutes().get(0).getPath()).isEqualTo("/api/a");
+        assertThat(snapshotConfig.getSpec().getUpstreams().get(0).getEndpoints().get(0).getHost())
+                .isEqualTo("10.0.0.1");
+    }
+
+    @Test
     void shouldPageSnapshotSummariesAfterProjectFilter() {
         snapshotService.saveSnapshot(publishedConfig("default", "order", "v1", "shard-a"),
                 "rel-1", "tester", "order");
