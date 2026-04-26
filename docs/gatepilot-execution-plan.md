@@ -327,7 +327,7 @@ console
 - [x] 多 proxy 副本注册、拉取配置、应用发布和状态聚合验证通过。
 - [x] controller-manager 多副本 leader / standby 行为验证通过。
 - [ ] 1000 项目资源装载、配置生成和分页查询压测通过。
-- [ ] 大路由表预编译和 proxy 原子切换压测通过。
+- [x] 大路由表预编译和 proxy 原子切换压测通过。
 - [x] configShard / isolationGroup 分片发布验证通过。
 - [x] 高流量项目通过扩 proxy 副本承载，不修改转发代码。
 - [ ] Kubernetes 基础部署验证通过：VIP / Nginx 入口不承载 GatePilot 项目治理，proxy Deployment + Service + HPA 可扩副本。

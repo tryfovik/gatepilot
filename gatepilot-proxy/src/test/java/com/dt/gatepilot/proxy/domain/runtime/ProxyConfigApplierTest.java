@@ -5,9 +5,11 @@ import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyRequest;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyResult;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyConstants;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
 
 /**
  * proxy 配置应用器测试。
@@ -71,10 +73,46 @@ class ProxyConfigApplierTest {
         assertThat(applier.runtimeState().current()).isEmpty();
     }
 
+    @Test
+    void shouldCompileLargeRouteTableAndSwitchRuntimeAtomically() {
+        ProxyConfigApplier applier = new ProxyConfigApplier();
+        ProxyApplyRequest firstRequest = new ProxyApplyRequest();
+        firstRequest.setPublishedConfig(largeRouteConfig("v1", "hash-v1", "/api/service-", 3000));
+        ProxyApplyRequest secondRequest = new ProxyApplyRequest();
+        secondRequest.setPublishedConfig(largeRouteConfig("v2", "hash-v2", "/api/new-service-", 3000));
+
+        ProxyApplyResult firstResult = assertTimeout(Duration.ofSeconds(10), () -> applier.apply(firstRequest));
+        ProxyApplyResult secondResult = assertTimeout(Duration.ofSeconds(10), () -> applier.apply(secondRequest));
+
+        assertThat(firstResult.getState()).isEqualTo(ConfigApplyState.APPLIED);
+        assertThat(secondResult.getState()).isEqualTo(ConfigApplyState.APPLIED);
+        assertThat(applier.runtimeState().current()).hasValueSatisfying(runtime -> {
+            assertThat(runtime.getVersion()).isEqualTo("v2");
+            assertThat(runtime.getRoutes()).hasSize(3000);
+            assertThat(runtime.match("tenant-2999.example.com", "/api/new-service-2999/orders")
+                    .getRouteId()).isEqualTo("route-2999");
+            assertThat(runtime.match("tenant-1.example.com", "/api/service-1/orders")).isNull();
+        });
+    }
+
     private PublishedConfig config(String version, String configHash) {
         PublishedConfig config = new PublishedConfig();
         config.getSpec().setVersion(version);
         config.getSpec().setConfigHash(configHash);
+        return config;
+    }
+
+    private PublishedConfig largeRouteConfig(String version, String configHash, String pathPrefix, int routeCount) {
+        PublishedConfig config = config(version, configHash);
+        for (int index = 0; index < routeCount; index++) {
+            PublishedConfig.PublishedRoute route = new PublishedConfig.PublishedRoute();
+            // 大路由表测试只关心编译索引和原子切换
+            route.setRouteId("route-" + index);
+            route.getHosts().add("tenant-" + index + ".example.com");
+            route.setPath(pathPrefix + index);
+            route.setUpstreamName("service-" + index);
+            config.getSpec().getRoutes().add(route);
+        }
         return config;
     }
 }
