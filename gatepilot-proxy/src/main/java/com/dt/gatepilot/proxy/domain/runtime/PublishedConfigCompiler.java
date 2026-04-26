@@ -1,6 +1,7 @@
 package com.dt.gatepilot.proxy.domain.runtime;
 
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
+import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,7 +24,10 @@ public class PublishedConfigCompiler {
         // 每次发布编译成全新运行态，后面直接原子替换
         CompiledProxyRuntime runtime = new CompiledProxyRuntime();
         runtime.initMetadata(config);
-        runtime.setRoutes(config.getSpec().getRoutes().stream().map(this::compileRoute).toList());
+        String projectName = projectName(config);
+        runtime.setRoutes(config.getSpec().getRoutes().stream()
+                .map(route -> compileRoute(route, projectName))
+                .toList());
         runtime.setUpstreamsByName(compileUpstreams(config));
         runtime.setPoliciesByName(compilePolicies(config));
         compileRoutePolicies(runtime);
@@ -55,10 +59,11 @@ public class PublishedConfigCompiler {
         }
     }
 
-    private CompiledRoute compileRoute(PublishedConfig.PublishedRoute source) {
+    private CompiledRoute compileRoute(PublishedConfig.PublishedRoute source, String projectName) {
         // 发布产物允许字段缺省，编译期统一兜底
         CompiledRoute route = new CompiledRoute();
         route.setRouteId(source.getRouteId());
+        route.setProjectName(projectName);
         route.setProtocols(emptyIfNull(source.getProtocols()));
         route.setHosts(normalizeHosts(source.getHosts()));
         route.setPathPrefix(normalizePath(source.getPath()));
@@ -72,6 +77,11 @@ public class PublishedConfigCompiler {
         route.setUpstreamName(source.getUpstreamName());
         route.setPolicyNames(emptyIfNull(source.getPolicyNames()));
         return route;
+    }
+
+    private String projectName(PublishedConfig config) {
+        ResourceReference projectRef = config.getSpec().getProjectRef();
+        return projectRef == null ? null : projectRef.getName();
     }
 
     private Map<String, CompiledUpstream> compileUpstreams(PublishedConfig config) {

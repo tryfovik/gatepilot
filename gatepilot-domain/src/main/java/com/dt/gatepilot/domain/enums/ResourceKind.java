@@ -6,6 +6,46 @@ package com.dt.gatepilot.domain.enums;
 public enum ResourceKind {
 
     /**
+     * 网关命名空间。
+     */
+    GATEWAY_NAMESPACE,
+
+    /**
+     * 平台团队。
+     */
+    PLATFORM_TEAM,
+
+    /**
+     * 平台环境。
+     */
+    PLATFORM_ENVIRONMENT,
+
+    /**
+     * 配置分片。
+     */
+    CONFIG_SHARD,
+
+    /**
+     * 隔离组。
+     */
+    ISOLATION_GROUP,
+
+    /**
+     * 控制面动态参数。
+     */
+    CONTROL_PLANE_SETTING,
+
+    /**
+     * 流量等级。
+     */
+    TRAFFIC_TIER,
+
+    /**
+     * 入口域名。
+     */
+    INGRESS_DOMAIN,
+
+    /**
      * 网关项目。
      */
     GATEWAY_PROJECT,

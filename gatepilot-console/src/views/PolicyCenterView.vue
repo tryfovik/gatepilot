@@ -14,7 +14,7 @@
           class="tab-button"
           :class="{ 'tab-button--active': activeTab.resourceType === tab.resourceType }"
           type="button"
-          @click="activeTab = tab"
+          @click="switchTab(tab)"
         >
           {{ tab.label }}
         </button>
@@ -56,4 +56,8 @@ const tabs = [
 ];
 
 const activeTab = ref(tabs[0]);
+
+function switchTab(tab: typeof tabs[number]) {
+  activeTab.value = tab;
+}
 </script>

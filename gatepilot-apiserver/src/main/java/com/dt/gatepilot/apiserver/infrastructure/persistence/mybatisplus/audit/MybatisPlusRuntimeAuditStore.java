@@ -79,6 +79,7 @@ public class MybatisPlusRuntimeAuditStore implements RuntimeAuditStore {
         entity.setPath(record.getPath());
         entity.setHost(record.getHost());
         entity.setRouteId(record.getRouteId());
+        entity.setProjectName(record.getProjectName());
         entity.setUpstreamName(record.getUpstreamName());
         entity.setUpstreamUri(record.getUpstreamUri());
         entity.setStatus(record.getStatus());
@@ -111,6 +112,7 @@ public class MybatisPlusRuntimeAuditStore implements RuntimeAuditStore {
         record.setPath(entity.getPath());
         record.setHost(entity.getHost());
         record.setRouteId(entity.getRouteId());
+        record.setProjectName(entity.getProjectName());
         record.setUpstreamName(entity.getUpstreamName());
         record.setUpstreamUri(entity.getUpstreamUri());
         record.setStatus(entity.getStatus());

@@ -21,6 +21,7 @@ public interface RuntimeAuditSink {
      * @param path 请求路径
      * @param host 请求域名
      * @param routeId 路由标识
+     * @param projectName 项目名称
      * @param upstreamName 上游名称
      * @param upstreamUri 上游地址
      * @param status 响应状态码
@@ -39,6 +40,7 @@ public interface RuntimeAuditSink {
                              String path,
                              String host,
                              String routeId,
+                             String projectName,
                              String upstreamName,
                              String upstreamUri,
                              int status,

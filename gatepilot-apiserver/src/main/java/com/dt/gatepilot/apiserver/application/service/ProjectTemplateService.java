@@ -182,10 +182,10 @@ public class ProjectTemplateService {
         request.getUpstream().setHealthPath(ProjectTemplateConstants.DEFAULT_HEALTH_PATH);
         request.getCandidate().setHost(ProjectTemplateConstants.DEFAULT_UPSTREAM_HOST);
         request.getCandidate().setPort(ProjectTemplateConstants.DEFAULT_HTTP_PORT);
-        request.getGovernance().setRateLimitEnabled(true);
+        request.getGovernance().setRateLimitEnabled(false);
         request.getGovernance().setRequestsPerSecond(ProjectTemplateConstants.DEFAULT_REQUESTS_PER_SECOND);
         request.getGovernance().setBurstCapacity(ProjectTemplateConstants.DEFAULT_BURST_CAPACITY);
-        request.getGovernance().setRetryEnabled(true);
+        request.getGovernance().setRetryEnabled(false);
         request.getGovernance().setMaxAttempts(ProjectTemplateConstants.DEFAULT_MAX_ATTEMPTS);
         request.getRelease().setStrategy(ReleaseStrategy.TRAFFIC_SPLIT);
         request.getRelease().setCandidateWeight(ProjectTemplateConstants.DEFAULT_CANDIDATE_WEIGHT);
@@ -528,10 +528,10 @@ public class ProjectTemplateService {
                 releaseEnabled,
                 text(candidate.getHost(), text(upstream.getHost(), ProjectTemplateConstants.DEFAULT_UPSTREAM_HOST)),
                 value(candidate.getPort(), upstreamPort),
-                value(governance.getRateLimitEnabled(), true),
+                value(governance.getRateLimitEnabled(), false),
                 value(governance.getRequestsPerSecond(), ProjectTemplateConstants.DEFAULT_REQUESTS_PER_SECOND),
                 value(governance.getBurstCapacity(), ProjectTemplateConstants.DEFAULT_BURST_CAPACITY),
-                value(governance.getRetryEnabled(), true),
+                value(governance.getRetryEnabled(), false),
                 value(governance.getMaxAttempts(), ProjectTemplateConstants.DEFAULT_MAX_ATTEMPTS),
                 releaseStrategy,
                 candidateWeight(releaseStrategy, release.getCandidateWeight()),

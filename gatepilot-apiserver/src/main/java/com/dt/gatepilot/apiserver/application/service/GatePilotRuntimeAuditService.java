@@ -80,6 +80,7 @@ public class GatePilotRuntimeAuditService {
         record.setPath(item.getPath());
         record.setHost(item.getHost());
         record.setRouteId(item.getRouteId());
+        record.setProjectName(item.getProjectName());
         record.setUpstreamName(item.getUpstreamName());
         record.setUpstreamUri(item.getUpstreamUri());
         record.setStatus(item.getStatus());

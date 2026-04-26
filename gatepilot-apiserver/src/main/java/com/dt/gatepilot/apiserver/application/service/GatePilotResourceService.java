@@ -139,6 +139,14 @@ public class GatePilotResourceService {
      */
     public GatePilotResourceType requireResourceType(ResourceKind kind) {
         return switch (kind) {
+            case GATEWAY_NAMESPACE -> requireResourceType(GatePilotResourcePaths.NAMESPACES);
+            case PLATFORM_TEAM -> requireResourceType(GatePilotResourcePaths.TEAMS);
+            case PLATFORM_ENVIRONMENT -> requireResourceType(GatePilotResourcePaths.ENVIRONMENTS);
+            case CONFIG_SHARD -> requireResourceType(GatePilotResourcePaths.CONFIG_SHARDS);
+            case ISOLATION_GROUP -> requireResourceType(GatePilotResourcePaths.ISOLATION_GROUPS);
+            case CONTROL_PLANE_SETTING -> requireResourceType(GatePilotResourcePaths.CONTROL_PLANE_SETTINGS);
+            case TRAFFIC_TIER -> requireResourceType(GatePilotResourcePaths.TRAFFIC_TIERS);
+            case INGRESS_DOMAIN -> requireResourceType(GatePilotResourcePaths.INGRESS_DOMAINS);
             case GATEWAY_PROJECT -> requireResourceType(GatePilotResourcePaths.PROJECTS);
             case GATEWAY_ROUTE -> requireResourceType(GatePilotResourcePaths.ROUTES);
             case TRAFFIC_POLICY -> requireResourceType(GatePilotResourcePaths.TRAFFIC_POLICIES);

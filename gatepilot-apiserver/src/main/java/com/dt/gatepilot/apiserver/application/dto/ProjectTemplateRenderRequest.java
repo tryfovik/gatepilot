@@ -196,7 +196,7 @@ public class ProjectTemplateRenderRequest {
         /**
          * 是否启用限流
          */
-        private Boolean rateLimitEnabled = true;
+        private Boolean rateLimitEnabled = false;
 
         /**
          * 每秒请求数
@@ -213,7 +213,7 @@ public class ProjectTemplateRenderRequest {
         /**
          * 是否启用重试
          */
-        private Boolean retryEnabled = true;
+        private Boolean retryEnabled = false;
 
         /**
          * 最大重试次数

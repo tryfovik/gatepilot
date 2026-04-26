@@ -3,8 +3,8 @@
     <section class="content-panel">
       <div class="panel-header">
         <div>
-          <h2>配置快照</h2>
-          <p>查看已发布配置快照，按版本、分片对比路由、上游和策略变更。</p>
+          <h2>版本记录</h2>
+          <p>每次发布都会留下一个版本。先选一个版本做对比起点，再点另一个版本查看变化。</p>
         </div>
         <button class="ghost-button" type="button" @click="load">
           <RefreshCw :size="16" />
@@ -14,11 +14,12 @@
 
       <form class="filterbar diff-form" @submit.prevent="load">
         <select v-model="namespace" class="select-input">
-          <option value="default">default</option>
           <option value="">全部命名空间</option>
+          <option value="default">default</option>
+          <option v-for="item in namespaceOptions" :key="item" :value="item">{{ item }}</option>
         </select>
-        <input v-model="projectName" class="search-input" placeholder="项目名称" />
-        <input v-model="configShard" class="search-input" placeholder="配置分片" />
+        <input v-model="projectName" class="search-input" placeholder="项目名称（可选）" />
+        <input v-model="configShard" class="search-input" placeholder="配置分片（可选）" />
         <button class="ghost-button" type="submit">
           <Search :size="16" />
           查询
@@ -27,26 +28,43 @@
 
       <MetricStrip :items="snapshotMetrics" />
 
-      <form class="filterbar diff-form diff-query-form" @submit.prevent="compare">
-        <input v-model="baseVersion" class="search-input" placeholder="基线版本" />
-        <input v-model="targetVersion" class="search-input" placeholder="目标版本" />
-        <button class="primary-button" type="submit">
-          <GitCompare :size="16" />
-          对比
-        </button>
-      </form>
+      <div class="release-steps">
+        <div
+          v-for="step in snapshotSteps"
+          :key="step.title"
+          class="release-step-card"
+          :class="{ 'release-step-card--active': step.active, 'release-step-card--done': step.done }"
+        >
+          <span>{{ step.index }}</span>
+          <div>
+            <strong>{{ step.title }}</strong>
+            <small>{{ step.note }}</small>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="selectedBase" class="selected-baseline">
+        <div>
+          <span>对比起点</span>
+          <strong>{{ selectedBase.version }}</strong>
+          <small>{{ selectedBase.projectName || '-' }} / {{ selectedBase.configShard || '默认分片' }}</small>
+        </div>
+        <button class="ghost-button" type="button" @click="clearBase">重新选择</button>
+      </div>
 
       <div v-if="loading" class="state-box">正在加载...</div>
       <div v-else-if="error" class="state-box state-box--error">{{ error }}</div>
+      <div v-else-if="items.length === 0" class="empty-state">
+        <div class="empty-state-title">暂无配置快照</div>
+        <p>发布成功后，controller-manager 会生成快照，后续可用于对比和回滚。</p>
+      </div>
+
       <table v-else class="resource-table">
         <thead>
           <tr>
             <th>版本</th>
-            <th>命名空间</th>
             <th>项目</th>
             <th>分片</th>
-            <th>序号</th>
-            <th>哈希</th>
             <th>规模</th>
             <th>采集时间</th>
             <th>操作</th>
@@ -58,19 +76,20 @@
               <div class="resource-name">{{ item.version || '-' }}</div>
               <div class="resource-subtitle">{{ item.releaseId || '未关联发布请求' }}</div>
             </td>
-            <td>{{ item.namespace || '-' }}</td>
             <td>{{ item.projectName || '-' }}</td>
-            <td>{{ item.configShard || '-' }}</td>
-            <td>{{ item.sequence ?? '-' }}</td>
-            <td class="mono-cell">{{ shortHash(item.configHash) }}</td>
-            <td>{{ item.routeCount }} 路由 / {{ item.upstreamCount }} 上游 / {{ item.policyCount }} 策略</td>
+            <td>{{ item.configShard || '默认分片' }}</td>
+            <td>{{ item.routeCount }} 路由 / {{ item.upstreamCount }} 上游 / {{ item.policyCount }} 策略 / {{ item.targetNodeCount }} 节点</td>
             <td>{{ formatTime(item.capturedAt) }}</td>
             <td>
               <div class="table-actions">
-                <button class="table-action" type="button" @click="setBase(item)">设基线</button>
-                <button class="table-action" type="button" @click="setTarget(item)">设目标</button>
+                <button class="table-action" type="button" @click="setBase(item)">
+                  {{ isBase(item) ? '已选中' : '选作起点' }}
+                </button>
+                <button class="table-action" type="button" :disabled="!canCompare(item)" @click="compareWith(item)">
+                  和它对比
+                </button>
                 <button
-                  class="table-action"
+                  class="table-action table-action--danger"
                   type="button"
                   :disabled="item.rollbackAllowed === false"
                   @click="rollbackTo(item)"
@@ -84,7 +103,7 @@
       </table>
 
       <div v-if="timelineItems.length" class="snapshot-timeline">
-        <h3>最近快照轨迹</h3>
+      <h3>最近版本轨迹</h3>
         <TimelineList :items="timelineItems" />
       </div>
     </section>
@@ -92,8 +111,8 @@
     <section class="content-panel">
       <div class="panel-header">
         <div>
-          <h2>版本 Diff</h2>
-          <p>对比结果按资源类型和变更类型聚合，便于发布前后排查差异。</p>
+          <h2>对比结果</h2>
+          <p>{{ diffTitle }}</p>
         </div>
         <div class="panel-actions">
           <StatusBadge :label="diffStatusLabel" :tone="diffStatusTone" />
@@ -104,10 +123,10 @@
         </div>
       </div>
 
-      <div v-if="diffLoading" class="state-box">正在对比...</div>
+      <div v-if="diffLoading" class="state-box">正在处理...</div>
       <div v-else-if="diffError" class="state-box state-box--error">{{ diffError }}</div>
       <div v-else-if="rollbackNotice" class="state-box state-box--compact">{{ rollbackNotice }}</div>
-      <div v-else-if="!diff" class="state-box">暂无对比结果</div>
+      <div v-else-if="!diff" class="state-box">先选择一个版本作为起点，再点击另一个版本的“和它对比”</div>
       <div v-else class="page-stack">
         <div class="metric-strip diff-strip">
           <div class="metric">
@@ -155,7 +174,7 @@
     <ConfirmDialog
       :open="confirmClear"
       title="清空对比结果"
-      message="只清空当前页面上的版本 Diff，不会修改已发布快照。"
+      message="只清空当前页面上的版本差异，不会修改已发布快照。"
       confirm-text="清空"
       @close="confirmClear = false"
       @confirm="clearDiff"
@@ -164,8 +183,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
-import { GitCompare, RefreshCw, Search, Trash2 } from 'lucide-vue-next';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { RefreshCw, Search, Trash2 } from 'lucide-vue-next';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import MetricStrip from '../components/MetricStrip.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -175,13 +194,21 @@ import {
   ConfigSnapshotSummaryResponse,
   createRollback,
   diffConfigSnapshots,
-  listConfigSnapshotSummaries
+  listConfigSnapshotSummaries,
+  listResources
 } from '../api/client';
+import { formatTime, shortHash } from '../utils/format';
+import { notifyError, notifyInfo, notifySuccess, notifyWarning } from '../utils/feedback';
+import { getGlobalNamespace, onGlobalNamespaceChange, setGlobalNamespace } from '../utils/namespace';
 
-const namespace = ref('default');
+interface NamespaceResource {
+  metadata?: {
+    name?: string;
+  };
+}
+
+const namespace = ref(getGlobalNamespace('default'));
 const projectName = ref('');
-const baseVersion = ref('');
-const targetVersion = ref('');
 const configShard = ref('');
 const loading = ref(false);
 const error = ref('');
@@ -191,6 +218,10 @@ const rollbackNotice = ref('');
 const confirmClear = ref(false);
 const items = ref<ConfigSnapshotSummaryResponse[]>([]);
 const diff = ref<ConfigDiffResponse | null>(null);
+const selectedBase = ref<ConfigSnapshotSummaryResponse | null>(null);
+const selectedTarget = ref<ConfigSnapshotSummaryResponse | null>(null);
+const namespaceOptions = ref<string[]>([]);
+let unsubscribeNamespace: (() => void) | null = null;
 
 const snapshotMetrics = computed(() => {
   const latest = items.value[0];
@@ -204,6 +235,37 @@ const snapshotMetrics = computed(() => {
   ];
 });
 
+const snapshotSteps = computed(() => [
+  {
+    index: '1',
+    title: '找到项目',
+    note: projectName.value || '可按项目筛选，也可以直接看全部',
+    active: items.value.length === 0,
+    done: items.value.length > 0
+  },
+  {
+    index: '2',
+    title: '选择起点',
+    note: selectedBase.value?.version || '点“选作起点”',
+    active: items.value.length > 0 && !selectedBase.value,
+    done: Boolean(selectedBase.value)
+  },
+  {
+    index: '3',
+    title: '对比变化',
+    note: selectedTarget.value?.version || '再点另一个版本',
+    active: Boolean(selectedBase.value && !diff.value),
+    done: Boolean(diff.value)
+  },
+  {
+    index: '4',
+    title: '决定回滚',
+    note: '需要时直接点回滚',
+    active: false,
+    done: false
+  }
+]);
+
 const timelineItems = computed(() =>
   items.value.slice(0, 6).map((item) => ({
     key: `${item.namespace}-${item.version}-${item.configShard || 'default'}`,
@@ -213,6 +275,13 @@ const timelineItems = computed(() =>
     tone: item.rollbackAllowed === false ? ('neutral' as const) : ('info' as const)
   }))
 );
+
+const diffTitle = computed(() => {
+  if (!selectedBase.value || !selectedTarget.value) {
+    return '差异来自两个已发布快照，不需要手动填写版本号。';
+  }
+  return `${selectedBase.value.version} -> ${selectedTarget.value.version}`;
+});
 
 const diffStatusLabel = computed(() => {
   if (!diff.value) {
@@ -239,31 +308,43 @@ async function load() {
       limit: 50
     });
     items.value = page.items;
+    if (selectedBase.value && !items.value.some((item) => sameSnapshot(item, selectedBase.value))) {
+      selectedBase.value = null;
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : '加载失败';
+    notifyError('版本记录加载失败', error.value);
   } finally {
     loading.value = false;
   }
 }
 
-async function compare() {
-  diffError.value = '';
-  rollbackNotice.value = '';
-  if (!namespace.value || !baseVersion.value || !targetVersion.value) {
-    diffError.value = '请选择命名空间，并填写基线版本和目标版本';
+async function compareWith(item: ConfigSnapshotSummaryResponse) {
+  if (!selectedBase.value || !selectedBase.value.version || !item.version) {
+    diffError.value = '请先选择基线快照';
+    return;
+  }
+  const effectiveNamespace = item.namespace || selectedBase.value.namespace || namespace.value;
+  if (!effectiveNamespace) {
+    diffError.value = '快照缺少命名空间，不能对比';
     return;
   }
   diffLoading.value = true;
+  diffError.value = '';
+  rollbackNotice.value = '';
+  selectedTarget.value = item;
   try {
     diff.value = await diffConfigSnapshots(
-      namespace.value,
-      baseVersion.value,
-      targetVersion.value,
-      configShard.value || undefined
+      effectiveNamespace,
+      selectedBase.value.version,
+      item.version,
+      item.configShard || selectedBase.value.configShard || undefined
     );
+    notifySuccess('对比完成', diff.value.changed ? '两个版本存在变化' : '两个版本没有变化');
   } catch (err) {
     diff.value = null;
     diffError.value = err instanceof Error ? err.message : '对比失败';
+    notifyError('对比失败', diffError.value);
   } finally {
     diffLoading.value = false;
   }
@@ -274,6 +355,10 @@ async function rollbackTo(item: ConfigSnapshotSummaryResponse) {
   rollbackNotice.value = '';
   if (!item.namespace || !item.projectName || !item.version) {
     diffError.value = '快照缺少命名空间、项目或版本，不能回滚';
+    return;
+  }
+  if (!window.confirm(`确认回滚 ${item.projectName} 到版本 ${item.version}？`)) {
+    notifyWarning('已取消回滚', item.version);
     return;
   }
   diffLoading.value = true;
@@ -287,45 +372,48 @@ async function rollbackTo(item: ConfigSnapshotSummaryResponse) {
       createdBy: 'console'
     });
     rollbackNotice.value = `回滚请求已创建：${result.releaseId}`;
+    notifySuccess('回滚请求已创建', result.releaseId);
   } catch (err) {
     diffError.value = err instanceof Error ? err.message : '回滚失败';
+    notifyError('回滚失败', diffError.value);
   } finally {
     diffLoading.value = false;
   }
 }
 
 function setBase(item: ConfigSnapshotSummaryResponse) {
-  baseVersion.value = item.version || '';
+  selectedBase.value = item;
+  diffError.value = '';
+  rollbackNotice.value = '';
+  notifyInfo('已选择对比起点', item.version || '-');
 }
 
-function setTarget(item: ConfigSnapshotSummaryResponse) {
-  targetVersion.value = item.version || '';
+function clearBase() {
+  selectedBase.value = null;
+  clearDiff();
+  notifyInfo('已清空对比起点');
+}
+
+function canCompare(item: ConfigSnapshotSummaryResponse) {
+  return Boolean(selectedBase.value?.version && item.version && !isBase(item));
+}
+
+function isBase(item: ConfigSnapshotSummaryResponse) {
+  return Boolean(selectedBase.value && sameSnapshot(item, selectedBase.value));
+}
+
+function sameSnapshot(left: ConfigSnapshotSummaryResponse, right: ConfigSnapshotSummaryResponse | null) {
+  return Boolean(right
+    && left.namespace === right.namespace
+    && left.version === right.version
+    && (left.configShard || '') === (right.configShard || ''));
 }
 
 function clearDiff() {
   diff.value = null;
+  selectedTarget.value = null;
   diffError.value = '';
   confirmClear.value = false;
-}
-
-function shortHash(value?: string) {
-  if (!value) {
-    return '-';
-  }
-  return value.length > 12 ? `${value.slice(0, 12)}...` : value;
-}
-
-function formatTime(value?: string) {
-  if (!value) {
-    return '-';
-  }
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(value));
 }
 
 function resourceTypeLabel(value: string) {
@@ -353,6 +441,31 @@ function changeTone(value: string): 'success' | 'warning' | 'danger' | 'info' | 
   return 'neutral';
 }
 
-onMounted(load);
-watch(namespace, load);
+async function loadNamespaces() {
+  try {
+    const page = await listResources<NamespaceResource>('namespaces', 'system', 200);
+    namespaceOptions.value = page.items
+      .map((item) => item.metadata?.name)
+      .filter((item): item is string => Boolean(item && item !== 'default'));
+  } catch {
+    namespaceOptions.value = [];
+  }
+}
+
+onMounted(async () => {
+  unsubscribeNamespace = onGlobalNamespaceChange((value) => {
+    if (namespace.value !== value) {
+      namespace.value = value;
+    }
+  });
+  await loadNamespaces();
+  await load();
+});
+onUnmounted(() => {
+  unsubscribeNamespace?.();
+});
+watch(namespace, () => {
+  setGlobalNamespace(namespace.value);
+  void load();
+});
 </script>

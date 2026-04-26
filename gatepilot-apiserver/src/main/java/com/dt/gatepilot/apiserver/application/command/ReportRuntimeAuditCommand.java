@@ -68,6 +68,11 @@ public class ReportRuntimeAuditCommand {
         private String routeId;
 
         /**
+         * 项目名称。
+         */
+        private String projectName;
+
+        /**
          * 上游名称。
          */
         private String upstreamName;

@@ -20,6 +20,11 @@ public class CompiledRoute {
     private String routeId;
 
     /**
+     * 所属项目。
+     */
+    private String projectName;
+
+    /**
      * 入口协议。
      */
     private List<Protocol> protocols = new ArrayList<>();

@@ -6,6 +6,46 @@ package com.dt.gatepilot.apiserver.domain.resource;
 public final class GatePilotResourcePaths {
 
     /**
+     * 命名空间资源路径。
+     */
+    public static final String NAMESPACES = "namespaces";
+
+    /**
+     * 平台团队资源路径。
+     */
+    public static final String TEAMS = "teams";
+
+    /**
+     * 平台环境资源路径。
+     */
+    public static final String ENVIRONMENTS = "environments";
+
+    /**
+     * 配置分片资源路径。
+     */
+    public static final String CONFIG_SHARDS = "config-shards";
+
+    /**
+     * 隔离组资源路径。
+     */
+    public static final String ISOLATION_GROUPS = "isolation-groups";
+
+    /**
+     * 控制面动态参数资源路径。
+     */
+    public static final String CONTROL_PLANE_SETTINGS = "control-plane-settings";
+
+    /**
+     * 流量等级资源路径。
+     */
+    public static final String TRAFFIC_TIERS = "traffic-tiers";
+
+    /**
+     * 入口域名资源路径。
+     */
+    public static final String INGRESS_DOMAINS = "ingress-domains";
+
+    /**
      * 项目资源路径。
      */
     public static final String PROJECTS = "projects";

@@ -5,6 +5,14 @@ import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
+import com.dt.gatepilot.domain.resource.platform.ConfigShard;
+import com.dt.gatepilot.domain.resource.platform.ControlPlaneSetting;
+import com.dt.gatepilot.domain.resource.platform.GatewayNamespace;
+import com.dt.gatepilot.domain.resource.platform.IngressDomain;
+import com.dt.gatepilot.domain.resource.platform.IsolationGroup;
+import com.dt.gatepilot.domain.resource.platform.PlatformEnvironment;
+import com.dt.gatepilot.domain.resource.platform.PlatformTeam;
+import com.dt.gatepilot.domain.resource.platform.TrafficTier;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
@@ -28,6 +36,30 @@ public class ResourceMetadataSupport {
      * @return metadata
      */
     public ResourceMetadata metadataOf(Object resource) {
+        if (resource instanceof GatewayNamespace item) {
+            return item.getMetadata();
+        }
+        if (resource instanceof PlatformTeam item) {
+            return item.getMetadata();
+        }
+        if (resource instanceof PlatformEnvironment item) {
+            return item.getMetadata();
+        }
+        if (resource instanceof ConfigShard item) {
+            return item.getMetadata();
+        }
+        if (resource instanceof IsolationGroup item) {
+            return item.getMetadata();
+        }
+        if (resource instanceof ControlPlaneSetting item) {
+            return item.getMetadata();
+        }
+        if (resource instanceof TrafficTier item) {
+            return item.getMetadata();
+        }
+        if (resource instanceof IngressDomain item) {
+            return item.getMetadata();
+        }
         if (resource instanceof GatewayProject item) {
             return item.getMetadata();
         }

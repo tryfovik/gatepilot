@@ -15,6 +15,7 @@
         <result property="path" column="path"/>
         <result property="host" column="host"/>
         <result property="routeId" column="route_id"/>
+        <result property="projectName" column="project_name"/>
         <result property="upstreamName" column="upstream_name"/>
         <result property="upstreamUri" column="upstream_uri"/>
         <result property="status" column="status"/>
@@ -30,7 +31,7 @@
     </resultMap>
 
     <sql id="BaseColumns">
-        id, namespace, node_id, trace_id, client_ip, method, path, host, route_id,
+        id, namespace, node_id, trace_id, client_ip, method, path, host, route_id, project_name,
         upstream_name, upstream_uri, status, latency_millis, traffic_color,
         method_allowed, authentication_required, fallback, outcome, reason, error, occurred_at
     </sql>
@@ -50,11 +51,20 @@
         <if test="query.routeId != null and query.routeId != ''">
           and route_id = #{query.routeId}
         </if>
+        <if test="query.projectName != null and query.projectName != ''">
+          and project_name = #{query.projectName}
+        </if>
         <if test="query.traceId != null and query.traceId != ''">
           and trace_id = #{query.traceId}
         </if>
         <if test="query.outcome != null and query.outcome != ''">
           and outcome = #{query.outcome}
+        </if>
+        <if test="query.startedAt != null">
+          and occurred_at &gt;= #{query.startedAt}
+        </if>
+        <if test="query.endedAt != null">
+          and occurred_at &lt;= #{query.endedAt}
         </if>
     </sql>
 
@@ -69,11 +79,20 @@
         <if test="query.routeId != null and query.routeId != ''">
           and route_id = #{query.routeId}
         </if>
+        <if test="query.projectName != null and query.projectName != ''">
+          and project_name = #{query.projectName}
+        </if>
         <if test="query.traceId != null and query.traceId != ''">
           and trace_id = #{query.traceId}
         </if>
         <if test="query.outcome != null and query.outcome != ''">
           and outcome = #{query.outcome}
+        </if>
+        <if test="query.startedAt != null">
+          and occurred_at &gt;= #{query.startedAt}
+        </if>
+        <if test="query.endedAt != null">
+          and occurred_at &lt;= #{query.endedAt}
         </if>
     </sql>
 

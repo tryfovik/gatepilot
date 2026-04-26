@@ -3,10 +3,32 @@
     <section class="content-panel">
       <div class="panel-header">
         <div>
+          <h2>路由配置</h2>
+          <p>声明式路由看期望状态，运行目录看数据面当前消费的 PublishedConfig。</p>
+        </div>
+      </div>
+      <div class="tabbar">
+        <button
+          v-for="tab in routeTabs"
+          :key="tab.key"
+          class="tab-button"
+          :class="{ 'tab-button--active': activeRouteTab === tab.key }"
+          type="button"
+          @click="activeRouteTab = tab.key"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+    </section>
+
+    <template v-if="activeRouteTab === 'runtime'">
+    <section class="content-panel">
+      <div class="panel-header">
+        <div>
           <h2>路由目录</h2>
           <p>基于 PublishedConfig 展示当前数据面会消费的路由、上游、策略和节点应用状态。</p>
         </div>
-        <button class="ghost-button" type="button" @click="load">
+        <button class="ghost-button" type="button" :disabled="loading" @click="load">
           <RefreshCw :size="16" />
           刷新
         </button>
@@ -60,6 +82,7 @@
               <th>上游</th>
               <th>策略</th>
               <th>重写</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -87,6 +110,9 @@
                   <span>{{ route.rewritePathPrefix || '-' }}</span>
                   <span class="resource-subtitle">strip {{ route.stripPrefix ? '是' : '否' }}</span>
                 </div>
+              </td>
+              <td>
+                <button class="table-action" type="button" @click="diagnose(route)">诊断</button>
               </td>
             </tr>
           </tbody>
@@ -143,23 +169,44 @@
         </div>
       </div>
     </section>
+    </template>
+
+    <ResourceListView
+      v-else
+      resource-type="routes"
+      title="声明式路由"
+      description="查看 GatewayRoute 期望状态，包括入口 Host、路径匹配、默认上游、绑定策略和重写规则。"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { RefreshCw, Search } from 'lucide-vue-next';
+import ResourceListView from './ResourceListView.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import { RouteCatalogResponse, getRouteCatalog } from '../api/client';
+import { applyStateLabel, applyStateTone, formatTime, listText, shortHash } from '../utils/format';
+import { notifyError, notifyInfo } from '../utils/feedback';
+import { getGlobalNamespace, onGlobalNamespaceChange, setGlobalNamespace } from '../utils/namespace';
 
-const namespace = ref('default');
-const projectName = ref('');
-const version = ref('');
-const configShard = ref('');
+const currentRoute = useRoute();
+const router = useRouter();
+const routeTabs = [
+  { key: 'runtime', label: '运行目录' },
+  { key: 'declared', label: '声明式路由' }
+] as const;
+const activeRouteTab = ref<(typeof routeTabs)[number]['key']>('runtime');
+const namespace = ref(queryText('namespace', getGlobalNamespace('default')));
+const projectName = ref(queryText('projectName'));
+const version = ref(queryText('version'));
+const configShard = ref(queryText('configShard'));
 const keyword = ref('');
 const loading = ref(false);
 const error = ref('');
 const catalog = ref<RouteCatalogResponse | null>(null);
+let unsubscribeNamespace: (() => void) | null = null;
 
 const filteredRoutes = computed(() => {
   const value = keyword.value.trim().toLowerCase();
@@ -195,56 +242,55 @@ async function load() {
   } catch (err) {
     catalog.value = null;
     error.value = err instanceof Error ? err.message : '加载失败';
+    notifyError('路由目录加载失败', error.value);
   } finally {
     loading.value = false;
   }
 }
 
-function listText(values?: string[], emptyText = '-') {
-  if (!values || values.length === 0) {
-    return emptyText;
-  }
-  return values.join(', ');
+function applyRouteQuery() {
+  namespace.value = queryText('namespace', namespace.value || 'default');
+  projectName.value = queryText('projectName', projectName.value);
+  version.value = queryText('version', version.value);
+  configShard.value = queryText('configShard', configShard.value);
 }
 
-function shortHash(value?: string) {
-  if (!value) {
-    return '-';
-  }
-  return value.length > 12 ? `${value.slice(0, 12)}...` : value;
+function queryText(key: string, fallback = '') {
+  const value = currentRoute.query[key];
+  return Array.isArray(value) ? value[0] || fallback : value || fallback;
 }
 
-function formatTime(value?: string) {
-  if (!value) {
-    return '-';
-  }
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(value));
+function diagnose(route: RouteCatalogResponse['routes'][number]) {
+  notifyInfo('已带入路由诊断参数');
+  void router.push({
+    path: '/operations/route-diagnostics/request-workbench',
+    query: {
+      namespace: namespace.value || 'default',
+      projectName: catalog.value?.projectName || projectName.value || '',
+      version: catalog.value?.version || version.value || '',
+      configShard: catalog.value?.configShard || configShard.value || '',
+      host: route.hosts?.[0] || '',
+      path: route.path || '/api'
+    }
+  });
 }
 
-function applyStateLabel(value?: string) {
-  const labels: Record<string, string> = {
-    PENDING: '等待应用',
-    STAGED: '已暂存',
-    APPLIED: '已应用',
-    FAILED: '失败',
-    ROLLED_BACK: '已回滚'
-  };
-  return labels[value || ''] || '未知';
-}
-
-function applyStateTone(value?: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
-  if (value === 'APPLIED') return 'success';
-  if (value === 'PENDING' || value === 'STAGED') return 'info';
-  if (value === 'ROLLED_BACK') return 'warning';
-  if (value === 'FAILED') return 'danger';
-  return 'neutral';
-}
-
-onMounted(load);
+onMounted(() => {
+  unsubscribeNamespace = onGlobalNamespaceChange((value) => {
+    if (namespace.value !== value) {
+      namespace.value = value;
+    }
+  });
+  void load();
+});
+onUnmounted(() => {
+  unsubscribeNamespace?.();
+});
+watch(() => currentRoute.query, () => {
+  applyRouteQuery();
+  void load();
+});
+watch(namespace, (value) => {
+  setGlobalNamespace(value);
+});
 </script>

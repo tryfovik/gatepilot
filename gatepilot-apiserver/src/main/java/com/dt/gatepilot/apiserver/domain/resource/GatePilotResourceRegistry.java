@@ -5,6 +5,14 @@ import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
+import com.dt.gatepilot.domain.resource.platform.ConfigShard;
+import com.dt.gatepilot.domain.resource.platform.ControlPlaneSetting;
+import com.dt.gatepilot.domain.resource.platform.GatewayNamespace;
+import com.dt.gatepilot.domain.resource.platform.IngressDomain;
+import com.dt.gatepilot.domain.resource.platform.IsolationGroup;
+import com.dt.gatepilot.domain.resource.platform.PlatformEnvironment;
+import com.dt.gatepilot.domain.resource.platform.PlatformTeam;
+import com.dt.gatepilot.domain.resource.platform.TrafficTier;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
@@ -31,6 +39,15 @@ public class GatePilotResourceRegistry {
      */
     public GatePilotResourceRegistry() {
         // 注册表是资源 path 到资源类型的唯一入口
+        register(GatePilotResourcePaths.NAMESPACES, ResourceKind.GATEWAY_NAMESPACE, GatewayNamespace.class);
+        register(GatePilotResourcePaths.TEAMS, ResourceKind.PLATFORM_TEAM, PlatformTeam.class);
+        register(GatePilotResourcePaths.ENVIRONMENTS, ResourceKind.PLATFORM_ENVIRONMENT, PlatformEnvironment.class);
+        register(GatePilotResourcePaths.CONFIG_SHARDS, ResourceKind.CONFIG_SHARD, ConfigShard.class);
+        register(GatePilotResourcePaths.ISOLATION_GROUPS, ResourceKind.ISOLATION_GROUP, IsolationGroup.class);
+        register(GatePilotResourcePaths.CONTROL_PLANE_SETTINGS,
+                ResourceKind.CONTROL_PLANE_SETTING, ControlPlaneSetting.class);
+        register(GatePilotResourcePaths.TRAFFIC_TIERS, ResourceKind.TRAFFIC_TIER, TrafficTier.class);
+        register(GatePilotResourcePaths.INGRESS_DOMAINS, ResourceKind.INGRESS_DOMAIN, IngressDomain.class);
         register(GatePilotResourcePaths.PROJECTS, ResourceKind.GATEWAY_PROJECT, GatewayProject.class);
         register(GatePilotResourcePaths.ROUTES, ResourceKind.GATEWAY_ROUTE, GatewayRoute.class);
         register(GatePilotResourcePaths.TRAFFIC_POLICIES, ResourceKind.TRAFFIC_POLICY, TrafficPolicy.class);

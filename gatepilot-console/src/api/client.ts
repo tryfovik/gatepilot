@@ -1,3 +1,5 @@
+import { reactive } from 'vue';
+
 export interface ApiResponse<T> {
   status: 'success' | 'fail';
   code: number;
@@ -348,6 +350,7 @@ export interface RuntimeAuditRecord {
   id?: number;
   namespace?: string;
   nodeId?: string;
+  projectName?: string;
   traceId?: string;
   clientIp?: string;
   method?: string;
@@ -370,41 +373,168 @@ export interface RuntimeAuditRecord {
 
 const apiBase = '/api/gatepilot/v1';
 
+export const latestApiMeta = reactive<{
+  traceId: string;
+  timestamp: string;
+  costMillis?: number;
+}>({
+  traceId: '',
+  timestamp: ''
+});
+
+export const controlPlaneHealth = reactive<{
+  state: 'checking' | 'up' | 'down';
+  message: string;
+  checkedAt: string;
+}>({
+  state: 'checking',
+  message: '正在检测控制面',
+  checkedAt: ''
+});
+
+function assertApiSuccess<T>(body: ApiResponse<T>): T {
+  if (body.meta) {
+    latestApiMeta.traceId = body.meta.traceId || latestApiMeta.traceId;
+    latestApiMeta.timestamp = body.meta.timestamp || latestApiMeta.timestamp;
+    latestApiMeta.costMillis = body.meta.costMillis;
+  }
+  if (body.status !== 'success') {
+    markControlPlaneUp(body.message || '控制面已响应，业务请求未通过');
+    throw new Error(body.message || '请求失败');
+  }
+  markControlPlaneUp('控制面正常');
+  return body.data;
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const message = await errorMessage(response);
+    markControlPlaneDown(message);
+    throw new Error(message);
+  }
+  let body: ApiResponse<T>;
+  try {
+    body = (await response.json()) as ApiResponse<T>;
+  } catch (err) {
+    markControlPlaneDown(err instanceof Error ? err.message : '响应解析失败');
+    throw err;
+  }
+  return assertApiSuccess(body);
+}
+
+async function errorMessage(response: Response) {
+  const text = await response.text().catch(() => '');
+  if (text.trim()) {
+    return text.trim();
+  }
+  if (response.status >= 500) {
+    return '控制面未启动或接口代理异常';
+  }
+  return `请求失败：${response.status}`;
+}
+
+async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (err) {
+    markControlPlaneDown(err instanceof Error ? err.message : '控制面连接失败');
+    throw err;
+  }
+}
+
 async function postJson<T>(path: string, payload: unknown): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, {
+  const response = await apiFetch(`${apiBase}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload)
   });
-  if (!response.ok) {
-    throw new Error(`请求失败：${response.status}`);
-  }
-  const body = (await response.json()) as ApiResponse<T>;
-  if (body.status !== 'success') {
-    throw new Error(body.message || '请求失败');
-  }
-  return body.data;
+  return readJson<T>(response);
+}
+
+async function putJson<T>(path: string, payload: unknown): Promise<T> {
+  const response = await apiFetch(`${apiBase}${path}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+  return readJson<T>(response);
 }
 
 export async function listResources<T>(
   resourceType: string,
-  namespace = 'default'
+  namespace = 'default',
+  limit?: number
 ): Promise<CursorPageResponse<T>> {
   const params = new URLSearchParams();
   if (namespace) {
     params.set('namespace', namespace);
   }
-  const response = await fetch(`${apiBase}/resources/${resourceType}?${params.toString()}`);
+  if (limit) {
+    params.set('limit', String(limit));
+  }
+  const response = await apiFetch(`${apiBase}/resources/${resourceType}?${params.toString()}`);
+  return readJson<CursorPageResponse<T>>(response);
+}
+
+export async function probeControlPlane(): Promise<void> {
+  controlPlaneHealth.state = 'checking';
+  controlPlaneHealth.message = '正在检测控制面';
+  const params = new URLSearchParams({
+    namespace: 'system',
+    limit: '1'
+  });
+  try {
+    const response = await apiFetch(`${apiBase}/resources/namespaces?${params.toString()}`);
+    await readJson<CursorPageResponse<unknown>>(response);
+    markControlPlaneUp('控制面正常');
+  } catch (err) {
+    markControlPlaneDown(err instanceof Error ? err.message : '控制面不可用');
+  }
+}
+
+export async function getResource<T>(
+  resourceType: string,
+  namespace: string,
+  name: string
+): Promise<T> {
+  const response = await apiFetch(
+    `${apiBase}/resources/${encodeURIComponent(resourceType)}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`
+  );
+  return readJson<T>(response);
+}
+
+export async function saveResource<T>(
+  resourceType: string,
+  namespace: string,
+  name: string,
+  resource: T
+): Promise<T> {
+  return putJson<T>(
+    `/resources/${encodeURIComponent(resourceType)}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    resource
+  );
+}
+
+export async function deleteResource(
+  resourceType: string,
+  namespace: string,
+  name: string
+): Promise<void> {
+  const response = await apiFetch(
+    `${apiBase}/resources/${encodeURIComponent(resourceType)}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    { method: 'DELETE' }
+  );
   if (!response.ok) {
-    throw new Error(`请求失败：${response.status}`);
+    const message = await errorMessage(response);
+    markControlPlaneDown(message);
+    throw new Error(message);
   }
-  const body = (await response.json()) as ApiResponse<CursorPageResponse<T>>;
-  if (body.status !== 'success') {
-    throw new Error(body.message || '请求失败');
-  }
-  return body.data;
+  const body = (await response.json()) as ApiResponse<unknown>;
+  assertApiSuccess(body);
 }
 
 export async function diffConfigSnapshots(
@@ -421,15 +551,8 @@ export async function diffConfigSnapshots(
   if (configShard) {
     params.set('configShard', configShard);
   }
-  const response = await fetch(`${apiBase}/config-snapshots/diff?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error(`请求失败：${response.status}`);
-  }
-  const body = (await response.json()) as ApiResponse<ConfigDiffResponse>;
-  if (body.status !== 'success') {
-    throw new Error(body.message || '请求失败');
-  }
-  return body.data;
+  const response = await apiFetch(`${apiBase}/config-snapshots/diff?${params.toString()}`);
+  return readJson<ConfigDiffResponse>(response);
 }
 
 export async function listConfigSnapshotSummaries(params: {
@@ -445,15 +568,8 @@ export async function listConfigSnapshotSummaries(params: {
       search.set(key, String(value));
     }
   });
-  const response = await fetch(`${apiBase}/config-snapshots?${search.toString()}`);
-  if (!response.ok) {
-    throw new Error(`请求失败：${response.status}`);
-  }
-  const body = (await response.json()) as ApiResponse<CursorPageResponse<ConfigSnapshotSummaryResponse>>;
-  if (body.status !== 'success') {
-    throw new Error(body.message || '请求失败');
-  }
-  return body.data;
+  const response = await apiFetch(`${apiBase}/config-snapshots?${search.toString()}`);
+  return readJson<CursorPageResponse<ConfigSnapshotSummaryResponse>>(response);
 }
 
 export async function getRouteCatalog(params: {
@@ -468,15 +584,8 @@ export async function getRouteCatalog(params: {
       search.set(key, value);
     }
   });
-  const response = await fetch(`${apiBase}/diagnostics/route-catalog?${search.toString()}`);
-  if (!response.ok) {
-    throw new Error(`请求失败：${response.status}`);
-  }
-  const body = (await response.json()) as ApiResponse<RouteCatalogResponse>;
-  if (body.status !== 'success') {
-    throw new Error(body.message || '请求失败');
-  }
-  return body.data;
+  const response = await apiFetch(`${apiBase}/diagnostics/route-catalog?${search.toString()}`);
+  return readJson<RouteCatalogResponse>(response);
 }
 
 export async function diagnoseRoute(request: RouteDiagnosticsRequest): Promise<RouteDiagnosticsResponse> {
@@ -484,15 +593,8 @@ export async function diagnoseRoute(request: RouteDiagnosticsRequest): Promise<R
 }
 
 export async function getProjectTemplateDefaults(): Promise<ProjectTemplateDefaultsResponse> {
-  const response = await fetch(`${apiBase}/templates/projects/defaults`);
-  if (!response.ok) {
-    throw new Error(`请求失败：${response.status}`);
-  }
-  const body = (await response.json()) as ApiResponse<ProjectTemplateDefaultsResponse>;
-  if (body.status !== 'success') {
-    throw new Error(body.message || '请求失败');
-  }
-  return body.data;
+  const response = await apiFetch(`${apiBase}/templates/projects/defaults`);
+  return readJson<ProjectTemplateDefaultsResponse>(response);
 }
 
 export async function previewProjectTemplate(
@@ -528,9 +630,12 @@ export async function createRollback(request: CreateRollbackRequest): Promise<Re
 export async function listRuntimeAudits(params: {
   namespace?: string;
   nodeId?: string;
+  projectName?: string;
   routeId?: string;
   traceId?: string;
   outcome?: string;
+  startedAt?: string;
+  endedAt?: string;
   cursor?: string;
   limit?: number;
 }): Promise<CursorPageResponse<RuntimeAuditRecord>> {
@@ -540,13 +645,18 @@ export async function listRuntimeAudits(params: {
       search.set(key, String(value));
     }
   });
-  const response = await fetch(`${apiBase}/audits?${search.toString()}`);
-  if (!response.ok) {
-    throw new Error(`请求失败：${response.status}`);
-  }
-  const body = (await response.json()) as ApiResponse<CursorPageResponse<RuntimeAuditRecord>>;
-  if (body.status !== 'success') {
-    throw new Error(body.message || '请求失败');
-  }
-  return body.data;
+  const response = await apiFetch(`${apiBase}/audits?${search.toString()}`);
+  return readJson<CursorPageResponse<RuntimeAuditRecord>>(response);
+}
+
+function markControlPlaneUp(message: string) {
+  controlPlaneHealth.state = 'up';
+  controlPlaneHealth.message = message;
+  controlPlaneHealth.checkedAt = new Date().toISOString();
+}
+
+function markControlPlaneDown(message: string) {
+  controlPlaneHealth.state = 'down';
+  controlPlaneHealth.message = message || '控制面不可用';
+  controlPlaneHealth.checkedAt = new Date().toISOString();
 }

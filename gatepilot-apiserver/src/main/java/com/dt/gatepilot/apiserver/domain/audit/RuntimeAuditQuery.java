@@ -1,5 +1,6 @@
 package com.dt.gatepilot.apiserver.domain.audit;
 
+import java.time.LocalDateTime;
 import lombok.Data;
 
 /**
@@ -24,6 +25,11 @@ public class RuntimeAuditQuery {
     private String routeId;
 
     /**
+     * 项目名称。
+     */
+    private String projectName;
+
+    /**
      * TraceId。
      */
     private String traceId;
@@ -32,6 +38,16 @@ public class RuntimeAuditQuery {
      * 执行结果。
      */
     private String outcome;
+
+    /**
+     * 开始时间。
+     */
+    private LocalDateTime startedAt;
+
+    /**
+     * 结束时间。
+     */
+    private LocalDateTime endedAt;
 
     /**
      * 游标。

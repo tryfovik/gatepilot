@@ -34,6 +34,7 @@ class InProcessRuntimeAuditSinkTest {
                 "/orders/1",
                 "api.test",
                 "route-a",
+                "project-a",
                 "order-service",
                 "http://order-service",
                 200,
@@ -50,6 +51,7 @@ class InProcessRuntimeAuditSinkTest {
 
         assertThat(controlPlaneClient.reportedBatch.getEvents()).hasSize(1);
         assertThat(controlPlaneClient.reportedBatch.getEvents().get(0).getTraceId()).isEqualTo("trace-1");
+        assertThat(controlPlaneClient.reportedBatch.getEvents().get(0).getProjectName()).isEqualTo("project-a");
         assertThat(controlPlaneClient.reportedBatch.getEvents().get(0).getRouteId()).isEqualTo("route-a");
         assertThat(controlPlaneClient.reportedBatch.getEvents().get(0).getTrafficColor()).isEqualTo("blue");
     }

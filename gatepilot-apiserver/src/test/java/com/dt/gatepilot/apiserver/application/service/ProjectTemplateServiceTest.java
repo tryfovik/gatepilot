@@ -102,6 +102,9 @@ class ProjectTemplateServiceTest {
 
         assertThat(defaults.getValues().getProjectName()).isEqualTo(ProjectTemplateConstants.DEFAULT_PROJECT_NAME);
         assertThat(defaults.getValues().getConfigShard()).isEqualTo(ProjectTemplateConstants.DEFAULT_CONFIG_SHARD);
+        assertThat(defaults.getValues().getGovernance().getRateLimitEnabled()).isFalse();
+        assertThat(defaults.getValues().getGovernance().getRetryEnabled()).isFalse();
+        assertThat(defaults.getValues().getRelease().getEnabled()).isFalse();
         assertThat(defaults.getLoadBalances())
                 .filteredOn(item -> item.getValue().equals(LoadBalanceStrategy.CONSISTENT_HASH.name()))
                 .extracting(ProjectTemplateDefaultsResponse.OptionItem::isEnabled)

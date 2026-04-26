@@ -23,6 +23,7 @@ create table if not exists gatepilot_runtime_audit (
     path varchar(1024),
     host varchar(256),
     route_id varchar(256),
+    project_name varchar(256),
     upstream_name varchar(256),
     upstream_uri varchar(1024),
     status int,
@@ -38,6 +39,7 @@ create table if not exists gatepilot_runtime_audit (
     primary key (id),
     key idx_gatepilot_runtime_audit_ns_id (namespace, id),
     key idx_gatepilot_runtime_audit_trace (trace_id),
+    key idx_gatepilot_runtime_audit_project (namespace, project_name, id),
     key idx_gatepilot_runtime_audit_route (namespace, route_id, id),
     key idx_gatepilot_runtime_audit_node (namespace, node_id, id)
 );

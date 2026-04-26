@@ -7,6 +7,7 @@ import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditStore;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.apiserver.infrastructure.config.GatePilotApiserverConstants;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -76,9 +77,38 @@ public class InMemoryRuntimeAuditStore implements RuntimeAuditStore {
     private boolean matches(RuntimeAuditQuery query, RuntimeAuditRecord record) {
         return equalsIfPresent(query.getNamespace(), record.getNamespace())
                 && equalsIfPresent(query.getNodeId(), record.getNodeId())
+                && equalsIfPresent(query.getProjectName(), record.getProjectName())
                 && equalsIfPresent(query.getRouteId(), record.getRouteId())
                 && equalsIfPresent(query.getTraceId(), record.getTraceId())
-                && equalsIfPresent(query.getOutcome(), record.getOutcome());
+                && equalsIfPresent(query.getOutcome(), record.getOutcome())
+                && afterStartedAt(query, record)
+                && beforeEndedAt(query, record);
+    }
+
+    /**
+     * 判断记录是否晚于开始时间。
+     *
+     * @param query 查询条件
+     * @param record 审计记录
+     * @return 是否命中
+     */
+    private boolean afterStartedAt(RuntimeAuditQuery query, RuntimeAuditRecord record) {
+        return query.getStartedAt() == null
+                || (record.getOccurredAt() != null
+                && !record.getOccurredAt().isBefore(query.getStartedAt().toInstant(ZoneOffset.UTC)));
+    }
+
+    /**
+     * 判断记录是否早于结束时间。
+     *
+     * @param query 查询条件
+     * @param record 审计记录
+     * @return 是否命中
+     */
+    private boolean beforeEndedAt(RuntimeAuditQuery query, RuntimeAuditRecord record) {
+        return query.getEndedAt() == null
+                || (record.getOccurredAt() != null
+                && !record.getOccurredAt().isAfter(query.getEndedAt().toInstant(ZoneOffset.UTC)));
     }
 
     /**

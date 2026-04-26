@@ -11,6 +11,10 @@ import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotAp
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.getboot.web.api.response.ApiResponse;
 import jakarta.validation.Valid;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -57,9 +61,12 @@ public class GatePilotRuntimeAuditController {
      *
      * @param namespace 命名空间
      * @param nodeId 节点标识
+     * @param projectName 项目名称
      * @param routeId 路由标识
      * @param traceId TraceId
      * @param outcome 执行结果
+     * @param startedAt 开始时间
+     * @param endedAt 结束时间
      * @param cursor 游标
      * @param limit 返回条数
      * @return 审计分页结果
@@ -68,20 +75,39 @@ public class GatePilotRuntimeAuditController {
     public Mono<ApiResponse<CursorPage<RuntimeAuditRecord>>> list(
             @RequestParam(defaultValue = ResourceMetadataConstants.DEFAULT_NAMESPACE) String namespace,
             @RequestParam(required = false) String nodeId,
+            @RequestParam(required = false) String projectName,
             @RequestParam(required = false) String routeId,
             @RequestParam(required = false) String traceId,
             @RequestParam(required = false) String outcome,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startedAt,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endedAt,
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = RuntimeAuditConstants.DEFAULT_LIMIT_TEXT) int limit) {
         RuntimeAuditQuery query = new RuntimeAuditQuery();
         // 查询条件保持轻量，复杂诊断后续放专门用例
         query.setNamespace(namespace);
         query.setNodeId(nodeId);
+        query.setProjectName(projectName);
         query.setRouteId(routeId);
         query.setTraceId(traceId);
         query.setOutcome(outcome);
+        query.setStartedAt(toLocalDateTime(startedAt));
+        query.setEndedAt(toLocalDateTime(endedAt));
         query.setCursor(cursor);
         query.setLimit(limit);
         return Mono.just(ApiResponse.success(runtimeAuditService.list(query)));
+    }
+
+    /**
+     * 转换为数据库查询时间。
+     *
+     * @param instant 接口时间
+     * @return 数据库查询时间
+     */
+    private LocalDateTime toLocalDateTime(Instant instant) {
+        if (instant == null) {
+            return null;
+        }
+        return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 }

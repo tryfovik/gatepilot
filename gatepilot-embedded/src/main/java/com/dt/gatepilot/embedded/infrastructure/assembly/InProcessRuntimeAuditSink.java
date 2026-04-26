@@ -44,6 +44,7 @@ public class InProcessRuntimeAuditSink implements RuntimeAuditSink {
         auditEvent.setPath(event.path());
         auditEvent.setHost(event.host());
         auditEvent.setRouteId(event.routeId());
+        auditEvent.setProjectName(event.projectName());
         auditEvent.setUpstreamName(event.upstreamName());
         auditEvent.setUpstreamUri(event.upstreamUri());
         auditEvent.setStatus(event.status());

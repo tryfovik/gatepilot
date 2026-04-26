@@ -30,6 +30,8 @@ getboot:
       response-header-enabled: true
       mdc-key: traceId
       request-attribute-name: GETBOOT_TRACE_ID
+      id-generator: short
+      short-length: 16
       async-propagation-enabled: true
     reactor:
       enabled: true

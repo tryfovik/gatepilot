@@ -70,6 +70,7 @@ public class ProxyRuntimeAuditRecorder {
                        long startNanos) {
         long latencyMillis = latencyMillis(startNanos);
         String routeId = route == null ? null : route.getRouteId();
+        String projectName = route == null ? null : route.getProjectName();
         RuntimeAuditSink.RuntimeAuditEvent event = new RuntimeAuditSink.RuntimeAuditEvent(
                 traceId(request),
                 remoteAddress(request),
@@ -77,6 +78,7 @@ public class ProxyRuntimeAuditRecorder {
                 request.uri().getRawPath(),
                 host(request),
                 routeId,
+                projectName,
                 upstreamName,
                 upstreamUri == null ? null : upstreamUri.toString(),
                 status,
@@ -125,6 +127,7 @@ public class ProxyRuntimeAuditRecorder {
                        long startNanos) {
         long latencyMillis = latencyMillis(startNanos);
         String routeId = route == null ? null : route.getRouteId();
+        String projectName = route == null ? null : route.getProjectName();
         RuntimeAuditSink.RuntimeAuditEvent event = new RuntimeAuditSink.RuntimeAuditEvent(
                 traceId(exchange),
                 remoteAddress(exchange),
@@ -132,6 +135,7 @@ public class ProxyRuntimeAuditRecorder {
                 exchange.getRequest().getURI().getRawPath(),
                 host(exchange),
                 routeId,
+                projectName,
                 upstreamName,
                 upstreamUri == null ? null : upstreamUri.toString(),
                 status,
