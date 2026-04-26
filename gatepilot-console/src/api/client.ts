@@ -196,7 +196,136 @@ export interface RouteDiagnosticsResponse {
   warnings: string[];
 }
 
+export interface ProjectTemplateRenderRequest {
+  namespace?: string;
+  projectName?: string;
+  displayName?: string;
+  ownerTeam?: string;
+  environment?: string;
+  trafficTier?: string;
+  configShard?: string;
+  isolationGroup?: string;
+  route?: {
+    host?: string;
+    path?: string;
+    stripPrefix?: boolean;
+    methods?: string[];
+  };
+  upstream?: {
+    host?: string;
+    port?: number;
+    protocol?: string;
+    loadBalance?: string;
+    healthCheckEnabled?: boolean;
+    healthPath?: string;
+  };
+  candidate?: {
+    enabled?: boolean;
+    host?: string;
+    port?: number;
+  };
+  governance?: {
+    rateLimitEnabled?: boolean;
+    requestsPerSecond?: number;
+    burstCapacity?: number;
+    retryEnabled?: boolean;
+    maxAttempts?: number;
+  };
+  release?: {
+    enabled?: boolean;
+    strategy?: string;
+    candidateWeight?: number;
+    colorHeader?: string;
+    candidateColor?: string;
+  };
+  auth?: {
+    type?: string;
+    anonymousAllowed?: boolean;
+  };
+}
+
+export interface ProjectTemplateRenderedResource {
+  resourceType: string;
+  kind: string;
+  namespace: string;
+  name: string;
+  action: 'CREATE' | 'UPDATE' | 'UNCHANGED';
+  resource: unknown;
+}
+
+export interface ProjectTemplatePreviewResponse {
+  namespace: string;
+  projectName: string;
+  configShard?: string;
+  resources: ProjectTemplateRenderedResource[];
+  releaseRequest: CreateReleaseRequest;
+  diff: {
+    changed: boolean;
+    createCount: number;
+    updateCount: number;
+    unchangedCount: number;
+  };
+}
+
+export interface DryRunMessage {
+  level: string;
+  reason: string;
+  message: string;
+}
+
+export interface ProjectTemplateDryRunResponse {
+  passed: boolean;
+  preview: ProjectTemplatePreviewResponse;
+  messages: DryRunMessage[];
+}
+
+export interface ProjectTemplateApplyResponse {
+  savedResourceCount: number;
+  dryRun: ProjectTemplateDryRunResponse;
+}
+
+export interface CreateReleaseRequest {
+  namespace: string;
+  projectName: string;
+  configShard?: string;
+  description?: string;
+  createdBy?: string;
+  resourceRefs?: Array<{
+    kind?: string;
+    namespace?: string;
+    name?: string;
+    uid?: string;
+  }>;
+  targetNodeSelector?: unknown;
+}
+
+export interface ReleaseResult {
+  releaseId: string;
+  version: string;
+  phase: string;
+  configShard?: string;
+  createdAt?: string;
+}
+
 const apiBase = '/api/gatepilot/v1';
+
+async function postJson<T>(path: string, payload: unknown): Promise<T> {
+  const response = await fetch(`${apiBase}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw new Error(`请求失败：${response.status}`);
+  }
+  const body = (await response.json()) as ApiResponse<T>;
+  if (body.status !== 'success') {
+    throw new Error(body.message || '请求失败');
+  }
+  return body.data;
+}
 
 export async function listResources<T>(
   resourceType: string,
@@ -290,19 +419,27 @@ export async function getRouteCatalog(params: {
 }
 
 export async function diagnoseRoute(request: RouteDiagnosticsRequest): Promise<RouteDiagnosticsResponse> {
-  const response = await fetch(`${apiBase}/diagnostics/route`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(request)
-  });
-  if (!response.ok) {
-    throw new Error(`请求失败：${response.status}`);
-  }
-  const body = (await response.json()) as ApiResponse<RouteDiagnosticsResponse>;
-  if (body.status !== 'success') {
-    throw new Error(body.message || '请求失败');
-  }
-  return body.data;
+  return postJson<RouteDiagnosticsResponse>('/diagnostics/route', request);
+}
+
+export async function previewProjectTemplate(
+  request: ProjectTemplateRenderRequest
+): Promise<ProjectTemplatePreviewResponse> {
+  return postJson<ProjectTemplatePreviewResponse>('/templates/projects/preview', request);
+}
+
+export async function dryRunProjectTemplate(
+  request: ProjectTemplateRenderRequest
+): Promise<ProjectTemplateDryRunResponse> {
+  return postJson<ProjectTemplateDryRunResponse>('/templates/projects/dry-run', request);
+}
+
+export async function applyProjectTemplate(
+  request: ProjectTemplateRenderRequest
+): Promise<ProjectTemplateApplyResponse> {
+  return postJson<ProjectTemplateApplyResponse>('/templates/projects/apply', request);
+}
+
+export async function createRelease(request: CreateReleaseRequest): Promise<ReleaseResult> {
+  return postJson<ReleaseResult>('/releases', request);
 }

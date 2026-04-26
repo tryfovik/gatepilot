@@ -3,6 +3,7 @@ import ConfigSnapshotsView from './views/ConfigSnapshotsView.vue';
 import DiagnosticsView from './views/DiagnosticsView.vue';
 import NodesView from './views/NodesView.vue';
 import OverviewView from './views/OverviewView.vue';
+import ProjectTemplateView from './views/ProjectTemplateView.vue';
 import ResourceListView from './views/ResourceListView.vue';
 import RouteCatalogView from './views/RouteCatalogView.vue';
 
@@ -16,6 +17,10 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: OverviewView },
+    {
+      path: '/onboarding',
+      component: ProjectTemplateView
+    },
     {
       path: '/projects',
       component: ResourceListView,

@@ -51,7 +51,8 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
-  Stethoscope
+  Stethoscope,
+  WandSparkles
 } from 'lucide-vue-next';
 import StatusBadge from './components/StatusBadge.vue';
 
@@ -59,6 +60,7 @@ const route = useRoute();
 
 const navItems = [
   { path: '/', label: '总览', kicker: '运行状态', icon: LayoutDashboard },
+  { path: '/onboarding', label: '接入', kicker: '项目向导', icon: WandSparkles },
   { path: '/projects', label: '项目', kicker: '资源管理', icon: Boxes },
   { path: '/routes', label: '路由', kicker: '流量入口', icon: Route },
   { path: '/policies', label: '策略', kicker: '治理规则', icon: ShieldCheck },
