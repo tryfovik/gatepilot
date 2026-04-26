@@ -31,17 +31,42 @@ public class ReleaseUpstreamResolver {
         if (normalizedColor == null) {
             return route.getUpstreamName();
         }
-        for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_RELEASE)) {
-            String upstreamName = resolveFromPolicy(policy, normalizedColor);
-            if (StringUtils.hasText(upstreamName)) {
-                return upstreamName;
-            }
+        String upstreamName = resolveFromPolicy(releasePolicy(runtime, route), normalizedColor);
+        if (StringUtils.hasText(upstreamName)) {
+            return upstreamName;
         }
         return route.getUpstreamName();
     }
 
-    private String resolveFromPolicy(CompiledPolicy policy, String normalizedColor) {
-        for (ReleaseSplit split : trafficSplits(policy)) {
+    /**
+     * 预编译发布上游策略。
+     *
+     * @param runtime 已编译运行态
+     * @param route 已命中路由
+     * @return 发布上游策略
+     */
+    public CompiledReleaseUpstreamPolicy compile(CompiledProxyRuntime runtime, CompiledRoute route) {
+        CompiledReleaseUpstreamPolicy target = new CompiledReleaseUpstreamPolicy();
+        if (runtime == null || route == null) {
+            return target;
+        }
+        for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_RELEASE)) {
+            target.getSplits().addAll(trafficSplits(policy));
+        }
+        return target;
+    }
+
+    private CompiledReleaseUpstreamPolicy releasePolicy(CompiledProxyRuntime runtime, CompiledRoute route) {
+        if (route.isPoliciesPrecompiled()) {
+            return route.getReleaseUpstreamPolicy() == null
+                    ? new CompiledReleaseUpstreamPolicy()
+                    : route.getReleaseUpstreamPolicy();
+        }
+        return route.getReleaseUpstreamPolicy() == null ? compile(runtime, route) : route.getReleaseUpstreamPolicy();
+    }
+
+    private String resolveFromPolicy(CompiledReleaseUpstreamPolicy policy, String normalizedColor) {
+        for (CompiledReleaseUpstreamSplit split : policy.getSplits()) {
             if (split.matches(normalizedColor)) {
                 return split.upstreamName();
             }
@@ -60,15 +85,15 @@ public class ReleaseUpstreamResolver {
         return policies;
     }
 
-    private List<ReleaseSplit> trafficSplits(CompiledPolicy policy) {
+    private List<CompiledReleaseUpstreamSplit> trafficSplits(CompiledPolicy policy) {
         Object splits = policy.getConfig().get(PublishedConfigConstants.KEY_TRAFFIC_SPLITS);
         if (!(splits instanceof Iterable<?> iterable)) {
             return List.of();
         }
-        List<ReleaseSplit> parsedSplits = new ArrayList<>();
+        List<CompiledReleaseUpstreamSplit> parsedSplits = new ArrayList<>();
         for (Object item : iterable) {
             // 单条分流配置异常时跳过，不影响其他分流
-            ReleaseSplit split = trafficSplit(item);
+            CompiledReleaseUpstreamSplit split = trafficSplit(item);
             if (split != null) {
                 parsedSplits.add(split);
             }
@@ -76,7 +101,7 @@ public class ReleaseUpstreamResolver {
         return parsedSplits;
     }
 
-    private ReleaseSplit trafficSplit(Object item) {
+    private CompiledReleaseUpstreamSplit trafficSplit(Object item) {
         if (item instanceof ReleasePolicy.TrafficSplit split) {
             return trafficSplit(split.getTarget(), split.getColor(), upstreamName(split.getUpstreamRef()));
         }
@@ -90,13 +115,13 @@ public class ReleaseUpstreamResolver {
         return null;
     }
 
-    private ReleaseSplit trafficSplit(String target, String color, String upstreamName) {
+    private CompiledReleaseUpstreamSplit trafficSplit(String target, String color, String upstreamName) {
         String normalizedTarget = normalize(target);
         String normalizedColor = normalize(color);
         if (!StringUtils.hasText(upstreamName) || (normalizedTarget == null && normalizedColor == null)) {
             return null;
         }
-        return new ReleaseSplit(normalizedTarget, normalizedColor, upstreamName.trim());
+        return new CompiledReleaseUpstreamSplit(normalizedTarget, normalizedColor, upstreamName.trim());
     }
 
     private String upstreamName(ResourceReference reference) {
@@ -125,10 +150,4 @@ public class ReleaseUpstreamResolver {
         return value.trim().toLowerCase(Locale.ROOT);
     }
 
-    private record ReleaseSplit(String target, String color, String upstreamName) {
-
-        private boolean matches(String trafficColor) {
-            return trafficColor.equals(color) || trafficColor.equals(target);
-        }
-    }
 }

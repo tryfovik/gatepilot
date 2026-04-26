@@ -25,6 +25,9 @@ public class RateLimitPolicyResolver {
         if (runtime == null || route == null) {
             return Optional.empty();
         }
+        if (route.isPoliciesPrecompiled()) {
+            return Optional.ofNullable(route.getRateLimitPolicy());
+        }
         for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_TRAFFIC)) {
             // 一个路由命中多个策略时，先使用第一个有有效规则的限流策略
             Optional<CompiledRateLimitPolicy> rateLimit = compile(policy, route);

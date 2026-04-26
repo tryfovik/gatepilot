@@ -68,4 +68,39 @@ public class CompiledRoute {
      * 策略名称。
      */
     private List<String> policyNames = new ArrayList<>();
+
+    /**
+     * 策略是否已预编译。
+     */
+    private boolean policiesPrecompiled;
+
+    /**
+     * 预编译认证策略。
+     */
+    private List<CompiledAuthPolicy> authPolicies;
+
+    /**
+     * 预编译流量染色策略。
+     */
+    private CompiledTrafficColorPolicy trafficColorPolicy;
+
+    /**
+     * 预编译发布上游策略。
+     */
+    private CompiledReleaseUpstreamPolicy releaseUpstreamPolicy;
+
+    /**
+     * 预编译限流策略。
+     */
+    private CompiledRateLimitPolicy rateLimitPolicy;
+
+    /**
+     * 预编译熔断策略。
+     */
+    private CompiledCircuitBreakerPolicy circuitBreakerPolicy;
+
+    /**
+     * 预编译重试策略。
+     */
+    private CompiledRetryPolicy retryPolicy;
 }

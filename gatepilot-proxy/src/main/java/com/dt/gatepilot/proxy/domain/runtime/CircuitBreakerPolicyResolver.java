@@ -27,6 +27,9 @@ public class CircuitBreakerPolicyResolver {
         if (runtime == null || route == null) {
             return Optional.empty();
         }
+        if (route.isPoliciesPrecompiled()) {
+            return Optional.ofNullable(route.getCircuitBreakerPolicy());
+        }
         for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_TRAFFIC)) {
             // 一个路由命中多个策略时，先使用第一个启用的熔断策略
             Optional<CompiledCircuitBreakerPolicy> circuitBreaker = compile(policy, route);

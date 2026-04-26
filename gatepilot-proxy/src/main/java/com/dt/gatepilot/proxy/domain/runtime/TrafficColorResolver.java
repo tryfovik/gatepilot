@@ -36,55 +36,107 @@ public class TrafficColorResolver {
         if (route == null) {
             return null;
         }
-        String trustedHeaderColor = resolveTrustedHeaderColor(runtime, route, request);
+        CompiledTrafficColorPolicy policy = trafficColorPolicy(runtime, route);
+        String trustedHeaderColor = resolveTrustedHeaderColor(policy, request);
         if (trustedHeaderColor != null) {
             return trustedHeaderColor;
         }
-        String ruleColor = resolveRuleColor(runtime, route, request);
+        String ruleColor = resolveRuleColor(policy, request);
         if (ruleColor != null) {
             return ruleColor;
         }
-        String weightedColor = resolveWeightedColor(runtime, route, request);
+        String weightedColor = resolveWeightedColor(policy, route, request);
         if (weightedColor != null) {
             return weightedColor;
         }
-        return defaultColor(runtime, route);
+        return policy.getDefaultColor();
     }
 
-    private String resolveTrustedHeaderColor(CompiledProxyRuntime runtime,
-                                             CompiledRoute route,
+    /**
+     * 预编译流量染色策略。
+     *
+     * @param runtime 已编译运行态
+     * @param route 已命中路由
+     * @return 预编译流量染色策略
+     */
+    public CompiledTrafficColorPolicy compile(CompiledProxyRuntime runtime, CompiledRoute route) {
+        CompiledTrafficColorPolicy target = new CompiledTrafficColorPolicy();
+        if (runtime == null || route == null) {
+            return target;
+        }
+        boolean headerNameConfigured = false;
+        boolean defaultColorConfigured = false;
+        for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_TRAFFIC)) {
+            if (Boolean.TRUE.equals(booleanValue(policy.getConfig().get(
+                    PublishedConfigConstants.KEY_TRUST_REQUEST_HEADER)))) {
+                target.setTrustRequestHeader(true);
+            }
+            if (!headerNameConfigured) {
+                String headerName = normalizeText(stringValue(policy.getConfig(),
+                        PublishedConfigConstants.KEY_HEADER_NAME));
+                if (headerName != null) {
+                    target.setHeaderName(headerName);
+                    headerNameConfigured = true;
+                }
+            }
+            if (!defaultColorConfigured) {
+                String defaultColor = normalizeColor(stringValue(policy.getConfig(),
+                        PublishedConfigConstants.KEY_DEFAULT_COLOR), null);
+                if (defaultColor != null) {
+                    target.setDefaultColor(defaultColor);
+                    defaultColorConfigured = true;
+                }
+            }
+            target.getRules().addAll(trafficColorRules(policy));
+        }
+        for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_RELEASE)) {
+            List<CompiledTrafficSplit> splits = trafficSplits(policy);
+            if (!splits.isEmpty()) {
+                target.getWeightedPolicies().add(new CompiledWeightedTrafficPolicy(
+                        policy.getName(),
+                        weightHashHeaders(policy),
+                        splits
+                ));
+            }
+        }
+        return target;
+    }
+
+    private CompiledTrafficColorPolicy trafficColorPolicy(CompiledProxyRuntime runtime, CompiledRoute route) {
+        if (route.isPoliciesPrecompiled()) {
+            return route.getTrafficColorPolicy() == null
+                    ? new CompiledTrafficColorPolicy()
+                    : route.getTrafficColorPolicy();
+        }
+        return route.getTrafficColorPolicy() == null ? compile(runtime, route) : route.getTrafficColorPolicy();
+    }
+
+    private String resolveTrustedHeaderColor(CompiledTrafficColorPolicy policy,
                                              TrafficColorRequest request) {
-        if (!trustRequestHeader(runtime, route)) {
+        if (!policy.isTrustRequestHeader()) {
             return null;
         }
-        return normalizeColor(request.header(headerName(runtime, route)), null);
+        return normalizeColor(request.header(policy.getHeaderName()), null);
     }
 
-    private String resolveRuleColor(CompiledProxyRuntime runtime,
-                                    CompiledRoute route,
+    private String resolveRuleColor(CompiledTrafficColorPolicy policy,
                                     TrafficColorRequest request) {
-        for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_TRAFFIC)) {
-            for (TrafficColorRule rule : trafficColorRules(policy)) {
-                String candidate = extractCandidate(request, rule.source(), rule.fieldName());
-                if (candidate != null && rule.matches(candidate)) {
-                    return rule.color();
-                }
+        for (CompiledTrafficColorRule rule : policy.getRules()) {
+            String candidate = extractCandidate(request, rule.source(), rule.fieldName());
+            if (candidate != null && rule.matches(candidate)) {
+                return rule.color();
             }
         }
         return null;
     }
 
-    private String resolveWeightedColor(CompiledProxyRuntime runtime,
+    private String resolveWeightedColor(CompiledTrafficColorPolicy policy,
                                         CompiledRoute route,
                                         TrafficColorRequest request) {
-        for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_RELEASE)) {
-            List<TrafficSplit> splits = trafficSplits(policy);
-            if (splits.isEmpty()) {
-                continue;
-            }
-            int bucket = calculateBucket(buildWeightedHashKey(policy, route, request));
+        for (CompiledWeightedTrafficPolicy weightedPolicy : policy.getWeightedPolicies()) {
+            int bucket = calculateBucket(buildWeightedHashKey(weightedPolicy, route, request));
             int cumulativeWeight = 0;
-            for (TrafficSplit split : splits) {
+            for (CompiledTrafficSplit split : weightedPolicy.splits()) {
                 cumulativeWeight = Math.min(TrafficColorConstants.WEIGHT_BUCKET_SIZE,
                         cumulativeWeight + split.weight());
                 if (bucket < cumulativeWeight) {
@@ -106,15 +158,15 @@ public class TrafficColorResolver {
         return policies;
     }
 
-    private List<TrafficColorRule> trafficColorRules(CompiledPolicy policy) {
+    private List<CompiledTrafficColorRule> trafficColorRules(CompiledPolicy policy) {
         Object rules = policy.getConfig().get(PublishedConfigConstants.KEY_COLOR_RULES);
         if (!(rules instanceof Iterable<?> iterable)) {
             return List.of();
         }
-        List<TrafficColorRule> parsedRules = new ArrayList<>();
+        List<CompiledTrafficColorRule> parsedRules = new ArrayList<>();
         for (Object item : iterable) {
             // 单条规则解析失败时跳过，不影响其他规则
-            TrafficColorRule rule = trafficColorRule(item);
+            CompiledTrafficColorRule rule = trafficColorRule(item);
             if (rule != null) {
                 parsedRules.add(rule);
             }
@@ -122,7 +174,7 @@ public class TrafficColorResolver {
         return parsedRules;
     }
 
-    private TrafficColorRule trafficColorRule(Object item) {
+    private CompiledTrafficColorRule trafficColorRule(Object item) {
         if (item instanceof TrafficPolicy.TrafficColorRule rule) {
             return trafficColorRule(
                     sourceName(rule.getSource()),
@@ -147,11 +199,11 @@ public class TrafficColorResolver {
         return null;
     }
 
-    private TrafficColorRule trafficColorRule(String source,
-                                              String fieldName,
-                                              String pattern,
-                                              String matchStrategy,
-                                              String color) {
+    private CompiledTrafficColorRule trafficColorRule(String source,
+                                                      String fieldName,
+                                                      String pattern,
+                                                      String matchStrategy,
+                                                      String color) {
         String normalizedSource = normalizeLiteral(source, TrafficColorConstants.SOURCE_HEADER);
         String normalizedFieldName = normalizeText(fieldName);
         String normalizedPattern = normalizeText(pattern);
@@ -166,7 +218,7 @@ public class TrafficColorResolver {
         Pattern regexPattern = TrafficColorConstants.MATCH_REGEX.equals(normalizedMatchStrategy)
                 ? Pattern.compile(normalizedPattern)
                 : null;
-        return new TrafficColorRule(
+        return new CompiledTrafficColorRule(
                 normalizedSource,
                 normalizedFieldName,
                 normalizedPattern,
@@ -176,15 +228,15 @@ public class TrafficColorResolver {
         );
     }
 
-    private List<TrafficSplit> trafficSplits(CompiledPolicy policy) {
+    private List<CompiledTrafficSplit> trafficSplits(CompiledPolicy policy) {
         Object splits = policy.getConfig().get(PublishedConfigConstants.KEY_TRAFFIC_SPLITS);
         if (!(splits instanceof Iterable<?> iterable)) {
             return List.of();
         }
-        List<TrafficSplit> parsedSplits = new ArrayList<>();
+        List<CompiledTrafficSplit> parsedSplits = new ArrayList<>();
         for (Object item : iterable) {
             // 权重配置非法时跳过当前分组
-            TrafficSplit split = trafficSplit(item);
+            CompiledTrafficSplit split = trafficSplit(item);
             if (split != null) {
                 parsedSplits.add(split);
             }
@@ -192,7 +244,7 @@ public class TrafficColorResolver {
         return parsedSplits;
     }
 
-    private TrafficSplit trafficSplit(Object item) {
+    private CompiledTrafficSplit trafficSplit(Object item) {
         if (item instanceof ReleasePolicy.TrafficSplit split) {
             return trafficSplit(split.getTarget(), split.getColor(), split.getWeight());
         }
@@ -204,7 +256,7 @@ public class TrafficColorResolver {
         return null;
     }
 
-    private TrafficSplit trafficSplit(String target, String color, Integer weight) {
+    private CompiledTrafficSplit trafficSplit(String target, String color, Integer weight) {
         if (weight == null || weight <= 0) {
             return null;
         }
@@ -215,7 +267,7 @@ public class TrafficColorResolver {
         if (normalizedColor == null) {
             return null;
         }
-        return new TrafficSplit(normalizedColor, Math.min(TrafficColorConstants.WEIGHT_BUCKET_SIZE, weight));
+        return new CompiledTrafficSplit(normalizedColor, Math.min(TrafficColorConstants.WEIGHT_BUCKET_SIZE, weight));
     }
 
     private String extractCandidate(TrafficColorRequest request, String source, String fieldName) {
@@ -238,8 +290,10 @@ public class TrafficColorResolver {
                 || TrafficColorConstants.SOURCE_REMOTE_ADDRESS_COMPACT.equals(source);
     }
 
-    private String buildWeightedHashKey(CompiledPolicy policy, CompiledRoute route, TrafficColorRequest request) {
-        String identity = firstHeaderValue(request, weightHashHeaders(policy));
+    private String buildWeightedHashKey(CompiledWeightedTrafficPolicy policy,
+                                        CompiledRoute route,
+                                        TrafficColorRequest request) {
+        String identity = firstHeaderValue(request, policy.weightHashHeaders());
         if (identity == null) {
             identity = normalizeText(request.remoteAddress());
         }
@@ -280,29 +334,6 @@ public class TrafficColorResolver {
         CRC32 crc32 = new CRC32();
         crc32.update(Objects.toString(value, "").getBytes(StandardCharsets.UTF_8));
         return (int) (crc32.getValue() % TrafficColorConstants.WEIGHT_BUCKET_SIZE);
-    }
-
-    private boolean trustRequestHeader(CompiledProxyRuntime runtime, CompiledRoute route) {
-        return policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_TRAFFIC).stream()
-                .map(policy -> booleanValue(policy.getConfig().get(PublishedConfigConstants.KEY_TRUST_REQUEST_HEADER)))
-                .anyMatch(Boolean.TRUE::equals);
-    }
-
-    private String headerName(CompiledProxyRuntime runtime, CompiledRoute route) {
-        return policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_TRAFFIC).stream()
-                .map(policy -> normalizeText(stringValue(policy.getConfig(), PublishedConfigConstants.KEY_HEADER_NAME)))
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(TrafficColorConstants.DEFAULT_HEADER_NAME);
-    }
-
-    private String defaultColor(CompiledProxyRuntime runtime, CompiledRoute route) {
-        return policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_TRAFFIC).stream()
-                .map(policy -> normalizeColor(stringValue(policy.getConfig(), PublishedConfigConstants.KEY_DEFAULT_COLOR),
-                        null))
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(TrafficColorConstants.DEFAULT_COLOR);
     }
 
     private String sourceName(TrafficColorSource source) {
@@ -365,24 +396,4 @@ public class TrafficColorResolver {
         return COLOR_NAME_PATTERN.matcher(normalized).matches() ? normalized : defaultValue;
     }
 
-    private record TrafficColorRule(String source,
-                                    String fieldName,
-                                    String pattern,
-                                    String matchStrategy,
-                                    String color,
-                                    Pattern regexPattern) {
-
-        private boolean matches(String candidate) {
-            return switch (matchStrategy) {
-                case TrafficColorConstants.MATCH_PREFIX -> candidate.startsWith(pattern);
-                case TrafficColorConstants.MATCH_CONTAINS -> candidate.contains(pattern);
-                case TrafficColorConstants.MATCH_REGEX -> regexPattern != null && regexPattern.matcher(candidate)
-                        .matches();
-                default -> candidate.equals(pattern);
-            };
-        }
-    }
-
-    private record TrafficSplit(String color, int weight) {
-    }
 }

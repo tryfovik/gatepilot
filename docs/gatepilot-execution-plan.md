@@ -343,7 +343,7 @@ console
 - [x] CR 发布版本号生成策略，评估是否接入 getboot 统一 ID 能力或单独版本序列，避免继续依赖本地时间。
 - [x] CR MyBatis-Plus 资源表索引、乐观锁和发布事件 claim 原子性，避免多 controller-manager 抢占时只靠内存判断。
 - [x] CR agent last-good 存储当前仍是内存实现的问题，补文件或外部卷持久化，保证 proxy 控制面不可用时可恢复启动。
-- [ ] CR proxy 运行态策略解析中的 Map 兼容逻辑，确认大配置下没有反射/转换热点拖慢转发路径。
+- [x] CR proxy 运行态策略解析中的 Map 兼容逻辑，确认大配置下没有反射/转换热点拖慢转发路径。
 - [ ] CR proxy 本机熔断状态机是否继续保留，优先评估接入 getboot-governance / Sentinel 或 Resilience4j，避免长期维护自研熔断算法。
 - [ ] CR proxy 上游健康探测是否可收敛到 Spring Cloud LoadBalancer HealthCheck 或 getboot 统一健康检查能力，避免长期维护重复探测逻辑。
 - [ ] CR `LoadBalanceStrategy` 中一致性哈希、最少连接等策略的控制面校验和组件选型；没有成熟组件前禁止在 proxy 热路径继续补手写算法。

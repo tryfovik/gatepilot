@@ -55,21 +55,63 @@ public class RouteAccessEvaluator {
     }
 
     private boolean authenticationRequired(CompiledProxyRuntime runtime, CompiledRoute route, String requestPath) {
+        if (route.isPoliciesPrecompiled()) {
+            return authenticationRequired(route.getAuthPolicies() == null ? List.of() : route.getAuthPolicies(),
+                    requestPath);
+        }
+        if (route.getAuthPolicies() != null) {
+            return authenticationRequired(route.getAuthPolicies(), requestPath);
+        }
         for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_AUTH)) {
             if (publicPath(route, policy, requestPath)) {
                 continue;
             }
-            if (Boolean.TRUE.equals(booleanValue(policy.getConfig().get(
-                    PublishedConfigConstants.KEY_ANONYMOUS_ALLOWED)))) {
-                continue;
+            if (requiresAuthentication(policy)) {
+                return true;
             }
-            if (AuthType.NONE.name().equalsIgnoreCase(Objects.toString(
-                    policy.getConfig().get(PublishedConfigConstants.KEY_TYPE), ""))) {
-                continue;
-            }
-            return true;
         }
         return false;
+    }
+
+    /**
+     * 预编译路由认证策略。
+     *
+     * @param runtime 已编译运行态
+     * @param route 已命中路由
+     * @return 预编译认证策略
+     */
+    public List<CompiledAuthPolicy> compile(CompiledProxyRuntime runtime, CompiledRoute route) {
+        if (runtime == null || route == null) {
+            return List.of();
+        }
+        List<CompiledAuthPolicy> compiledPolicies = new ArrayList<>();
+        for (CompiledPolicy policy : policiesByType(runtime, route, PublishedConfigConstants.POLICY_TYPE_AUTH)) {
+            compiledPolicies.add(new CompiledAuthPolicy(requiresAuthentication(policy),
+                    publicPathPrefixes(route, policy)));
+        }
+        return List.copyOf(compiledPolicies);
+    }
+
+    private boolean authenticationRequired(List<CompiledAuthPolicy> policies, String requestPath) {
+        String normalizedRequestPath = normalizePath(requestPath);
+        for (CompiledAuthPolicy policy : policies) {
+            if (policy.publicPath(normalizedRequestPath)) {
+                continue;
+            }
+            if (policy.requiresAuthentication()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean requiresAuthentication(CompiledPolicy policy) {
+        if (Boolean.TRUE.equals(booleanValue(policy.getConfig().get(
+                PublishedConfigConstants.KEY_ANONYMOUS_ALLOWED)))) {
+            return false;
+        }
+        return !AuthType.NONE.name().equalsIgnoreCase(Objects.toString(
+                policy.getConfig().get(PublishedConfigConstants.KEY_TYPE), ""));
     }
 
     private boolean publicPath(CompiledRoute route, CompiledPolicy policy, String requestPath) {
@@ -92,6 +134,26 @@ public class RouteAccessEvaluator {
             }
         }
         return false;
+    }
+
+    private List<String> publicPathPrefixes(CompiledRoute route, CompiledPolicy policy) {
+        Object publicPaths = policy.getConfig().get(PublishedConfigConstants.KEY_PUBLIC_PATHS);
+        if (!(publicPaths instanceof Iterable<?> iterable)) {
+            return List.of();
+        }
+        String routePrefix = normalizePath(route.getPathPrefix());
+        if (routePrefix == null) {
+            return List.of();
+        }
+        List<String> prefixes = new ArrayList<>();
+        for (Object item : iterable) {
+            // 编译阶段就把相对路径转成完整前缀
+            String publicPath = normalizeRelativePath(Objects.toString(item, null));
+            if (publicPath != null) {
+                prefixes.add(ProxyPathConstants.ROOT_PATH.equals(publicPath) ? routePrefix : routePrefix + publicPath);
+            }
+        }
+        return List.copyOf(prefixes);
     }
 
     private List<CompiledPolicy> policiesByType(CompiledProxyRuntime runtime, CompiledRoute route, String type) {

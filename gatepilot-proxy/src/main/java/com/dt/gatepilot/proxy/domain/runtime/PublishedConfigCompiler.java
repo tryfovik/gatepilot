@@ -26,8 +26,33 @@ public class PublishedConfigCompiler {
         runtime.setRoutes(config.getSpec().getRoutes().stream().map(this::compileRoute).toList());
         runtime.setUpstreamsByName(compileUpstreams(config));
         runtime.setPoliciesByName(compilePolicies(config));
+        compileRoutePolicies(runtime);
         runtime.setRoutesByHostAndPath(compileRouteIndex(runtime.getRoutes()));
         return runtime;
+    }
+
+    /**
+     * 预编译路由绑定策略。
+     *
+     * @param runtime 已编译运行态
+     */
+    private void compileRoutePolicies(CompiledProxyRuntime runtime) {
+        RouteAccessEvaluator accessEvaluator = new RouteAccessEvaluator();
+        TrafficColorResolver trafficColorResolver = new TrafficColorResolver();
+        ReleaseUpstreamResolver releaseUpstreamResolver = new ReleaseUpstreamResolver();
+        RateLimitPolicyResolver rateLimitPolicyResolver = new RateLimitPolicyResolver();
+        CircuitBreakerPolicyResolver circuitBreakerPolicyResolver = new CircuitBreakerPolicyResolver();
+        RetryPolicyResolver retryPolicyResolver = new RetryPolicyResolver();
+        for (CompiledRoute route : runtime.getRoutes()) {
+            // 策略解析在发布 apply 阶段完成，业务请求只读预编译结果
+            route.setAuthPolicies(accessEvaluator.compile(runtime, route));
+            route.setTrafficColorPolicy(trafficColorResolver.compile(runtime, route));
+            route.setReleaseUpstreamPolicy(releaseUpstreamResolver.compile(runtime, route));
+            route.setRateLimitPolicy(rateLimitPolicyResolver.resolve(runtime, route).orElse(null));
+            route.setCircuitBreakerPolicy(circuitBreakerPolicyResolver.resolve(runtime, route).orElse(null));
+            route.setRetryPolicy(retryPolicyResolver.resolve(runtime, route).orElse(null));
+            route.setPoliciesPrecompiled(true);
+        }
     }
 
     private CompiledRoute compileRoute(PublishedConfig.PublishedRoute source) {
