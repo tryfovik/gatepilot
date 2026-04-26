@@ -164,6 +164,7 @@ private String version;
 | 数据访问 | getboot-datasource / MyBatis-Plus | 写实体、Mapper、Service 和必要 mapper.xml | 手写 JDBC SQL 作为默认实现 |
 | 分布式互斥 | getboot-lock | 在调度入口声明锁语义 | 自己用数据库字段或内存锁冒充分布式锁 |
 | 发布 ID / 版本 | GatePilot 发布域生成器 | 用 releaseId 生成不依赖本机时间的发布版本 | 用本机时间戳拼版本；把 TraceId 当业务版本 |
+| 上游健康探测 | 待补 getboot 统一健康检查能力 | 在 proxy 本机按已发布配置探测并上报摘要 | 扩展成通用健康检查框架；用 Spring Cloud LoadBalancer HealthCheck 直接替换动态配置语义 |
 
 GatePilot 默认 Trace 约定：
 
@@ -304,6 +305,7 @@ controller-manager 与 apiserver 的关系：
 - 轮询、随机和加权轮询交给 Spring Cloud LoadBalancer 的 `RoundRobinLoadBalancer`、`RandomLoadBalancer` 和 `WeightedServiceInstanceListSupplier`。
 - 一致性哈希、最少连接等策略如果没有成熟组件支撑，必须先在控制面校验为不支持或引入明确组件适配，禁止回到 proxy 热路径手写算法。
 - 健康探测状态可以影响实例列表，但健康探测本身必须保持非业务转发通道，不能替代 SCG 业务转发链路。
+- Spring Cloud LoadBalancer `HealthCheckServiceInstanceListSupplier` 只作为后续接入参考，不能直接替换当前上游健康探测；替换前必须满足动态实例重取、单 upstream path / timeout / 阈值、agent 健康摘要上报和全部端点失败开放。
 
 禁止放：
 
