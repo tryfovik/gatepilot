@@ -36,6 +36,11 @@ public final class GatePilotApiPaths {
     public static final String AUDITS = API_V1_PREFIX + "/audits";
 
     /**
+     * 诊断查询路径。
+     */
+    public static final String DIAGNOSTICS = API_V1_PREFIX + "/diagnostics";
+
+    /**
      * agent 注册路径。
      */
     public static final String AGENT_REGISTER = "/register";
@@ -74,6 +79,16 @@ public final class GatePilotApiPaths {
      * 配置快照 diff 路径。
      */
     public static final String CONFIG_SNAPSHOT_DIFF = "/diff";
+
+    /**
+     * 路由目录路径。
+     */
+    public static final String DIAGNOSTICS_ROUTE_CATALOG = "/route-catalog";
+
+    /**
+     * 路由诊断路径。
+     */
+    public static final String DIAGNOSTICS_ROUTE = "/route";
 
     private GatePilotApiPaths() {
         // REST 路径常量不允许实例化

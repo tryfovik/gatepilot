@@ -1,8 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import ConfigSnapshotsView from './views/ConfigSnapshotsView.vue';
+import DiagnosticsView from './views/DiagnosticsView.vue';
 import NodesView from './views/NodesView.vue';
 import OverviewView from './views/OverviewView.vue';
 import ResourceListView from './views/ResourceListView.vue';
+import RouteCatalogView from './views/RouteCatalogView.vue';
 
 const resourcePageProps = (resourceType: string, title: string, description: string) => ({
   resourceType,
@@ -21,8 +23,7 @@ export const router = createRouter({
     },
     {
       path: '/routes',
-      component: ResourceListView,
-      props: resourcePageProps('routes', '路由', '查看 GatewayRoute 的入口匹配、上游绑定和当前发布版本。')
+      component: RouteCatalogView
     },
     {
       path: '/policies',
@@ -49,8 +50,7 @@ export const router = createRouter({
     },
     {
       path: '/diagnostics',
-      component: ResourceListView,
-      props: resourcePageProps('events', '诊断', '从事件和条件快速定位发布、同步和运行异常。')
+      component: DiagnosticsView
     },
     {
       path: '/audits',
