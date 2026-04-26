@@ -99,7 +99,7 @@ private String version;
 - 回滚入口。
 - 给 console 提供 REST/JSON API。
 - 给 agent 提供注册、心跳、配置 watch / pull、状态上报 API。
-- 配置模板、部署向导和 values 渲染属于控制面能力，只能生成声明式资源或部署清单，不能把模板逻辑下沉到 agent / proxy。
+- 配置模板、字段选项、默认 values、校验和渲染属于控制面能力，只能生成声明式资源、发布请求或部署清单，不能把模板逻辑下沉到 agent / proxy。
 
 存储边界：
 
@@ -345,10 +345,11 @@ Console 页面设计必须遵守 [GatePilot Console 设计规范](console-design
 
 配置复杂度治理：
 
-- Console 后续应提供类似 Helm values 的配置向导页面，用中文表单收集项目、路由、上游、治理策略、灰度蓝绿和 Kubernetes 部署参数。
-- 模板渲染和校验由 apiserver 提供，console 只负责填写、预览、diff 和提交。
+- Console 提供类似 Helm values 的项目接入向导页面，用中文表单收集项目、路由、上游、治理策略、灰度蓝绿和认证参数。
+- 模板默认值、字段选项、渲染和校验由 apiserver 提供，console 只负责填写、预览、diff 和提交。
 - 渲染结果必须落成 GatePilot 声明式资源、发布请求或 Kubernetes 部署清单，不允许绕过资源模型直接改 runtime 配置。
 - agent / proxy 不感知模板和表单来源，它们仍然只消费 `PublishedConfig`。
+- 当前不扩 Kubernetes 读取或集群联动，部署参数先由网关后台配置和运维体系承接，避免把集群编排职责混进 GatePilot 数据面。
 
 ### gatepilot-embedded
 

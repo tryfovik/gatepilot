@@ -349,13 +349,30 @@ console
 - [x] CR `LoadBalanceStrategy` 中一致性哈希、最少连接等策略的控制面校验和组件选型；没有成熟组件前禁止在 proxy 热路径继续补手写算法。结论：当前只支持 `ROUND_ROBIN`、`WEIGHTED_ROUND_ROBIN`、`RANDOM`，由 Spring Cloud LoadBalancer 承接；`LEAST_CONNECTIONS` 和 `CONSISTENT_HASH` 保留模型枚举但发布 dry-run、controller-manager 组装和 proxy apply 都会拒绝，避免静默降级成轮询。
 - [x] CR proxy 运行指标采集接入 Micrometer 或 getboot metrics 能力，避免 RuntimeMetricsSink 长期停留在空实现。结论：proxy 接入 getboot-observability 提供的 Micrometer / Prometheus 能力，新增 `RuntimeMetricsSink` 的 Micrometer 适配，只记录路由请求总量和延迟；公共标签、Actuator 和 Prometheus 暴露仍统一走 getboot 配置。
 
-### Phase 10：配置复杂度治理（后续，不纳入今天收尾范围）
+### Phase 10：配置复杂度治理
 
-- [ ] 设计 Console 模板 / 向导页面，用中文表单降低项目接入、Kubernetes 部署和网关治理配置复杂度。
-- [ ] 设计 GatePilot values 模型，参考 Helm values 但输出必须是 GatePilot 声明式资源、发布请求或 Kubernetes 部署清单。
-- [ ] 在 apiserver 增加模板渲染、dry-run、diff 和预览 API，console 只调用 apiserver。
-- [ ] 模板默认值、字段说明和校验规则集中管理，禁止散落在前端页面和 runtime 代码里。
-- [ ] agent / proxy 不感知模板来源，继续只消费 `PublishedConfig`。
+- [x] 设计 Console 项目接入向导页面，用中文表单降低项目接入、路由、上游、网关治理和蓝绿 / 灰度配置复杂度。
+- [x] 设计 GatePilot values 模型，参考 Helm values 的填写体验，但输出只允许是 GatePilot 声明式资源和发布请求。
+- [x] 在 apiserver 增加模板默认值、渲染、dry-run、diff、预览和保存 API，console 只调用 apiserver。
+- [x] 模板默认值、字段选项和校验规则集中在 apiserver，禁止散落在前端页面和 runtime 代码里。
+- [x] agent / proxy 不感知模板来源，继续只消费 `PublishedConfig`。
+
+项目接入闭环：
+
+```text
+console 加载模板默认值
+  -> apiserver 返回 values 和字段选项
+  -> console 提交 preview / dry-run
+  -> apiserver 渲染 GatewayProject / GatewayRoute / Upstream / Policy
+  -> console apply 保存声明式资源
+  -> console 创建发布请求
+  -> controller-manager reconcile
+  -> controller-manager 生成 PublishedConfig
+  -> agent pull PublishedConfig
+  -> proxy 原子切换运行态
+```
+
+当前不再扩 Kubernetes 读取或集群联动能力；部署形态按网关后台配置和现有运维体系管理，模板页只负责 GatePilot 自身资源和发布请求。
 
 ## 5. 打勾规则
 
