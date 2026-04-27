@@ -13,7 +13,9 @@ import org.springframework.test.web.reactive.server.WebTestClient;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "server.port=0",
-                "gatepilot.agent.enabled=false"
+                "gatepilot.agent.enabled=false",
+                "spring.autoconfigure.exclude=org.redisson.spring.starter.RedissonAutoConfigurationV2,"
+                        + "cn.dev33.satoken.dao.SaTokenDaoRedisJackson"
         }
 )
 @AutoConfigureWebTestClient

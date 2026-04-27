@@ -27,7 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "gatepilot.agent.local-config.store-type=memory",
                 "gatepilot.apiserver.store.type=memory",
                 "gatepilot.controller-manager.distributed-lock-required=false",
-                "management.health.redis.enabled=false"
+                "management.health.redis.enabled=false",
+                "spring.autoconfigure.exclude=org.redisson.spring.starter.RedissonAutoConfigurationV2,"
+                        + "cn.dev33.satoken.dao.SaTokenDaoRedisJackson"
         }
 )
 class GatePilotStandaloneAssemblyTest {

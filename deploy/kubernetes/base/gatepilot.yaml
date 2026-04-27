@@ -31,6 +31,8 @@ data:
           probes:
             enabled: true
     getboot:
+      database:
+        enabled: true
       lock:
         enabled: true
         type: database

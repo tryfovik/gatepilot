@@ -47,6 +47,10 @@
         </dependency>
         <dependency>
             <groupId>com.dt</groupId>
+            <artifactId>getboot-coordination</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.dt</groupId>
             <artifactId>getboot-auth</artifactId>
             <exclusions>
                 <exclusion>

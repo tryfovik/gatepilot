@@ -235,16 +235,14 @@ public class GatePilotProxyAutoConfiguration {
      *
      * @param runtimeState proxy 运行态
      * @param healthRegistry 端点健康状态表
-     * @param webClientBuilder WebClient 构造器
      * @return 上游健康探测器
      */
     @Bean
     @ConditionalOnMissingBean
     public UpstreamHealthProbe upstreamHealthProbe(ProxyRuntimeState runtimeState,
-                                                   UpstreamEndpointHealthRegistry healthRegistry,
-                                                   WebClient.Builder webClientBuilder) {
-        // 健康探测使用独立 WebClient 实例，不影响业务转发客户端
-        return new UpstreamHealthProbe(runtimeState, healthRegistry, webClientBuilder.build());
+                                                   UpstreamEndpointHealthRegistry healthRegistry) {
+        // 健康探测必须绕开 LoadBalancer，否则 IP 会被当成服务名
+        return new UpstreamHealthProbe(runtimeState, healthRegistry, WebClient.builder().build());
     }
 
     /**

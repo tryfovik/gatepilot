@@ -24,7 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "gatepilot.apiserver.enabled=false",
                 "gatepilot.controller-manager.enabled=false",
                 "gatepilot.agent.enabled=false",
-                "gatepilot.proxy.enabled=false"
+                "gatepilot.proxy.enabled=false",
+                "spring.autoconfigure.exclude=org.redisson.spring.starter.RedissonAutoConfigurationV2,"
+                        + "cn.dev33.satoken.dao.SaTokenDaoRedisJackson"
         }
 )
 class GatePilotRoleSwitchTest {

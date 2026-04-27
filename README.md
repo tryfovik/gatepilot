@@ -139,6 +139,8 @@ Client -> VIP / Nginx -> Kubernetes Service -> gatepilot-proxy -> Upstream
 
 VIP、Nginx 和 Kubernetes Service 负责入口高可用和基础转发，项目级路由、蓝绿灰度、染色、限流、熔断、审计和诊断由 GatePilot 执行。
 
+生产部署建议把 apiserver 的资源存储接到 MySQL，并开启 `getboot.database.enabled=true`。如果启用流量限流策略，proxy 需要配置 GetBoot limiter 的 Redis / Redisson 后端，避免运行态只能看到策略却没有限流执行器。
+
 ## 快速开始
 
 构建后端：
