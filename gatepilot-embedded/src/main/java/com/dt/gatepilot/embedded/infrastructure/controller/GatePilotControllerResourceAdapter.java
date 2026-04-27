@@ -142,13 +142,17 @@ public class GatePilotControllerResourceAdapter
                 intent.getNamespace(),
                 intent.getProjectName()
         );
+        List<String> runtimeProjectNames = runtimeProjects(intent, project)
+                .stream()
+                .map(item -> item.getMetadata().getName())
+                .toList();
         GatewayDesiredState desiredState = new GatewayDesiredState();
         desiredState.setProject(project);
-        desiredState.setRoutes(projectRoutes(intent));
-        desiredState.setUpstreams(projectUpstreams(intent));
-        desiredState.setTrafficPolicies(projectTrafficPolicies(intent));
-        desiredState.setReleasePolicies(projectReleasePolicies(intent));
-        desiredState.setAuthPolicies(projectAuthPolicies(intent));
+        desiredState.setRoutes(projectRoutes(intent.getNamespace(), runtimeProjectNames));
+        desiredState.setUpstreams(projectUpstreams(intent.getNamespace(), runtimeProjectNames));
+        desiredState.setTrafficPolicies(projectTrafficPolicies(intent.getNamespace(), runtimeProjectNames));
+        desiredState.setReleasePolicies(projectReleasePolicies(intent.getNamespace(), runtimeProjectNames));
+        desiredState.setAuthPolicies(projectAuthPolicies(intent.getNamespace(), runtimeProjectNames));
         desiredState.setTargetNodes(targetNodes(intent, project));
         return desiredState;
     }
@@ -213,38 +217,47 @@ public class GatePilotControllerResourceAdapter
                 publishedConfig.getMetadata().getName(), publishedConfig);
     }
 
-    private List<GatewayRoute> projectRoutes(ReleaseIntent intent) {
-        return list(GatePilotResourcePaths.ROUTES, intent.getNamespace(), GatewayRoute.class)
+    private List<GatewayProject> runtimeProjects(ReleaseIntent intent, GatewayProject targetProject) {
+        return list(GatePilotResourcePaths.PROJECTS, intent.getNamespace(), GatewayProject.class)
                 .stream()
-                .filter(route -> projectMatches(route.getSpec().getProjectRef(), intent.getProjectName()))
+                .filter(project -> shardEquals(project.getSpec().getConfigShard(), intent.getConfigShard()))
+                .filter(project -> isolationGroupEquals(project.getSpec().getIsolationGroup(),
+                        targetProject.getSpec().getIsolationGroup()))
                 .toList();
     }
 
-    private List<Upstream> projectUpstreams(ReleaseIntent intent) {
-        return list(GatePilotResourcePaths.UPSTREAMS, intent.getNamespace(), Upstream.class)
+    private List<GatewayRoute> projectRoutes(String namespace, List<String> projectNames) {
+        return list(GatePilotResourcePaths.ROUTES, namespace, GatewayRoute.class)
                 .stream()
-                .filter(upstream -> projectMatches(upstream.getSpec().getProjectRef(), intent.getProjectName()))
+                .filter(route -> projectMatches(route.getSpec().getProjectRef(), projectNames))
                 .toList();
     }
 
-    private List<TrafficPolicy> projectTrafficPolicies(ReleaseIntent intent) {
-        return list(GatePilotResourcePaths.TRAFFIC_POLICIES, intent.getNamespace(), TrafficPolicy.class)
+    private List<Upstream> projectUpstreams(String namespace, List<String> projectNames) {
+        return list(GatePilotResourcePaths.UPSTREAMS, namespace, Upstream.class)
                 .stream()
-                .filter(policy -> projectMatches(policy.getSpec().getProjectRef(), intent.getProjectName()))
+                .filter(upstream -> projectMatches(upstream.getSpec().getProjectRef(), projectNames))
                 .toList();
     }
 
-    private List<ReleasePolicy> projectReleasePolicies(ReleaseIntent intent) {
-        return list(GatePilotResourcePaths.RELEASE_POLICIES, intent.getNamespace(), ReleasePolicy.class)
+    private List<TrafficPolicy> projectTrafficPolicies(String namespace, List<String> projectNames) {
+        return list(GatePilotResourcePaths.TRAFFIC_POLICIES, namespace, TrafficPolicy.class)
                 .stream()
-                .filter(policy -> projectMatches(policy.getSpec().getProjectRef(), intent.getProjectName()))
+                .filter(policy -> projectMatches(policy.getSpec().getProjectRef(), projectNames))
                 .toList();
     }
 
-    private List<AuthPolicy> projectAuthPolicies(ReleaseIntent intent) {
-        return list(GatePilotResourcePaths.AUTH_POLICIES, intent.getNamespace(), AuthPolicy.class)
+    private List<ReleasePolicy> projectReleasePolicies(String namespace, List<String> projectNames) {
+        return list(GatePilotResourcePaths.RELEASE_POLICIES, namespace, ReleasePolicy.class)
                 .stream()
-                .filter(policy -> projectMatches(policy.getSpec().getProjectRef(), intent.getProjectName()))
+                .filter(policy -> projectMatches(policy.getSpec().getProjectRef(), projectNames))
+                .toList();
+    }
+
+    private List<AuthPolicy> projectAuthPolicies(String namespace, List<String> projectNames) {
+        return list(GatePilotResourcePaths.AUTH_POLICIES, namespace, AuthPolicy.class)
+                .stream()
+                .filter(policy -> projectMatches(policy.getSpec().getProjectRef(), projectNames))
                 .toList();
     }
 
@@ -345,6 +358,10 @@ public class GatePilotControllerResourceAdapter
         return reference != null && Objects.equals(reference.getName(), projectName);
     }
 
+    private boolean projectMatches(ResourceReference reference, List<String> projectNames) {
+        return reference != null && projectNames.contains(reference.getName());
+    }
+
     private boolean shardMatches(GatewayNode node, String configShard) {
         if (!StringUtils.hasText(configShard)) {
             return true;
@@ -403,6 +420,10 @@ public class GatePilotControllerResourceAdapter
     }
 
     private boolean shardEquals(String left, String right) {
+        return Objects.equals(normalize(left), normalize(right));
+    }
+
+    private boolean isolationGroupEquals(String left, String right) {
         return Objects.equals(normalize(left), normalize(right));
     }
 

@@ -71,7 +71,7 @@ public final class ProxyRateLimitConstants {
     public static final long DEFAULT_PERMITS = 1L;
 
     /**
-     * 默认限流等待时间。
+     * 默认限流等待时间
      */
     public static final long DEFAULT_TIMEOUT = 0L;
 

@@ -43,7 +43,7 @@ public class GetbootRuntimeRateLimiter implements RuntimeRateLimiter {
             return RateLimitAcquireResult.UNAVAILABLE;
         }
         try {
-            // GatePilot 当前模型只有每秒额度，先映射为 getboot 滑动窗口规则
+            // 令牌桶没有滑动窗口锁竞争，更适合作为网关入口默认限流算法
             boolean acquired = registry.tryAcquire(
                     limiterName,
                     limiterRule(rule),
@@ -65,7 +65,7 @@ public class GetbootRuntimeRateLimiter implements RuntimeRateLimiter {
      */
     private LimiterRule limiterRule(CompiledRateLimitRule rule) {
         LimiterRule limiterRule = new LimiterRule();
-        limiterRule.setAlgorithm(LimiterAlgorithm.SLIDING_WINDOW);
+        limiterRule.setAlgorithm(LimiterAlgorithm.TOKEN_BUCKET);
         limiterRule.setRate(rule.getRequestsPerSecond());
         limiterRule.setInterval(ProxyRateLimitConstants.DEFAULT_INTERVAL);
         limiterRule.setIntervalUnit(ProxyRateLimitConstants.DEFAULT_INTERVAL_UNIT);

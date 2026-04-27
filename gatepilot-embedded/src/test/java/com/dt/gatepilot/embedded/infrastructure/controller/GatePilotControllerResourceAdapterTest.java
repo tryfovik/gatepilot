@@ -301,12 +301,17 @@ class GatePilotControllerResourceAdapterTest {
             assertThat(pullResponse.isChanged()).isTrue();
             assertThat(publishedConfig.getSpec().getVersion()).isEqualTo(release.getVersion());
             assertThat(publishedConfig.getSpec().getProjectRef().getName()).isEqualTo(targetProjectName);
+            assertThat(publishedConfig.getSpec().getRoutes()).hasSize(SCALE_PROJECT_COUNT);
             assertThat(publishedConfig.getSpec().getRoutes())
                     .extracting(PublishedConfig.PublishedRoute::getPath)
-                    .containsExactly(scaleRoutePath(SCALE_PROJECT_COUNT - 1));
+                    .contains(scaleRoutePath(0), scaleRoutePath(SCALE_PROJECT_COUNT - 1));
+            assertThat(publishedConfig.getSpec().getRoutes())
+                    .extracting(PublishedConfig.PublishedRoute::getProjectName)
+                    .contains(scaleProjectName(0), scaleProjectName(SCALE_PROJECT_COUNT - 1));
+            assertThat(publishedConfig.getSpec().getUpstreams()).hasSize(SCALE_PROJECT_COUNT);
             assertThat(publishedConfig.getSpec().getUpstreams())
                     .extracting(PublishedConfig.PublishedUpstream::getName)
-                    .containsExactly(scaleUpstreamName(SCALE_PROJECT_COUNT - 1));
+                    .contains(scaleUpstreamName(0), scaleUpstreamName(SCALE_PROJECT_COUNT - 1));
 
             // 页面列表也要按 cursor 走完整分页
             assertThat(countResourcesByPage(GatePilotResourcePaths.PROJECTS)).isEqualTo(SCALE_PROJECT_COUNT);

@@ -19,12 +19,14 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.zip.CRC32;
@@ -63,14 +65,30 @@ public class GatePilotDiagnosticsService {
         PublishedConfig config = selectPublishedConfig(namespace, projectName, version, configShard);
         RouteCatalogResponse result = new RouteCatalogResponse();
         fillConfigSummary(result, config);
+        boolean scopedCatalog = StringUtils.hasText(projectName);
+        if (scopedCatalog) {
+            result.setProjectName(projectName);
+        }
         Map<String, PublishedConfig.PublishedUpstream> upstreams = upstreamIndex(config);
-        for (PublishedConfig.PublishedRoute route : config.getSpec().getRoutes()) {
+        List<PublishedConfig.PublishedRoute> routes = config.getSpec().getRoutes()
+                .stream()
+                .filter(route -> routeProjectMatches(route, projectName))
+                .toList();
+        Set<String> policyNames = scopedPolicyNames(routes);
+        Set<String> upstreamNames = scopedUpstreamNames(routes, policyNames, policyIndex(config));
+        for (PublishedConfig.PublishedRoute route : routes) {
             result.getRoutes().add(routeView(route, upstreams));
         }
         for (PublishedConfig.PublishedUpstream upstream : config.getSpec().getUpstreams()) {
+            if (scopedCatalog && !upstreamNames.contains(upstream.getName())) {
+                continue;
+            }
             result.getUpstreams().add(upstreamView(upstream));
         }
         for (PublishedConfig.PublishedPolicy policy : config.getSpec().getPolicies()) {
+            if (scopedCatalog && !policyNames.contains(policy.getName())) {
+                continue;
+            }
             result.getPolicies().add(policyView(policy));
         }
         for (PublishedConfig.NodeApplyResult nodeApplyResult : config.getStatus().getNodeApplyResults()) {
@@ -97,12 +115,16 @@ public class GatePilotDiagnosticsService {
                 request == null ? null : request.getVersion(),
                 request == null ? null : request.getConfigShard()
         );
+        String requestedProjectName = request == null ? null : request.getProjectName();
         RouteDiagnosticsResponse result = new RouteDiagnosticsResponse();
         fillConfigSummary(result, config);
+        if (StringUtils.hasText(requestedProjectName)) {
+            result.setProjectName(requestedProjectName);
+        }
         result.setMethod(normalizedRequest.method());
         result.setHost(normalizedRequest.host());
         result.setPath(normalizedRequest.path());
-        Optional<PublishedConfig.PublishedRoute> matchedRoute = matchRoute(config, normalizedRequest);
+        Optional<PublishedConfig.PublishedRoute> matchedRoute = matchRoute(config, normalizedRequest, requestedProjectName);
         if (matchedRoute.isEmpty()) {
             // 没命中时仍返回版本信息，方便确认诊断基于哪份配置
             result.setMatched(false);
@@ -598,6 +620,37 @@ public class GatePilotDiagnosticsService {
                         GatePilotDiagnosticsConstants.MESSAGE_PUBLISHED_CONFIG_NOT_FOUND));
     }
 
+    private Set<String> scopedPolicyNames(List<PublishedConfig.PublishedRoute> routes) {
+        Set<String> policyNames = new LinkedHashSet<>();
+        for (PublishedConfig.PublishedRoute route : routes) {
+            policyNames.addAll(safeList(route.getPolicyNames()));
+        }
+        return policyNames;
+    }
+
+    private Set<String> scopedUpstreamNames(List<PublishedConfig.PublishedRoute> routes,
+                                            Set<String> policyNames,
+                                            Map<String, PublishedConfig.PublishedPolicy> policies) {
+        Set<String> upstreamNames = new LinkedHashSet<>();
+        for (PublishedConfig.PublishedRoute route : routes) {
+            if (StringUtils.hasText(route.getUpstreamName())) {
+                upstreamNames.add(route.getUpstreamName());
+            }
+        }
+        for (String policyName : policyNames) {
+            PublishedConfig.PublishedPolicy policy = policies.get(policyName);
+            if (policy == null || !PublishedConfigConstants.POLICY_TYPE_RELEASE.equals(policy.getType())) {
+                continue;
+            }
+            for (TrafficSplitView split : trafficSplits(policy)) {
+                if (StringUtils.hasText(split.upstreamName())) {
+                    upstreamNames.add(split.upstreamName());
+                }
+            }
+        }
+        return upstreamNames;
+    }
+
     private List<PublishedConfig> publishedConfigs(String namespace) {
         List<PublishedConfig> configs = new ArrayList<>();
         String cursor = null;
@@ -618,8 +671,11 @@ public class GatePilotDiagnosticsService {
         return configs;
     }
 
-    private Optional<PublishedConfig.PublishedRoute> matchRoute(PublishedConfig config, NormalizedRequest request) {
+    private Optional<PublishedConfig.PublishedRoute> matchRoute(PublishedConfig config,
+                                                                NormalizedRequest request,
+                                                                String projectName) {
         return config.getSpec().getRoutes().stream()
+                .filter(route -> routeProjectMatches(route, projectName))
                 .filter(route -> hostMatches(route, request.host()))
                 .filter(route -> pathMatches(route, request.path()))
                 .max(Comparator.comparingInt(route -> normalizeRoutePath(route.getPath()).length()));
@@ -899,7 +955,16 @@ public class GatePilotDiagnosticsService {
             return true;
         }
         ResourceReference projectRef = config.getSpec().getProjectRef();
-        return projectRef != null && projectName.equals(projectRef.getName());
+        return projectRef != null && projectName.equals(projectRef.getName())
+                || config.getSpec().getRoutes().stream().anyMatch(route -> routeProjectMatches(route, projectName));
+    }
+
+    private boolean routeProjectMatches(PublishedConfig.PublishedRoute route, String projectName) {
+        if (!StringUtils.hasText(projectName)) {
+            return true;
+        }
+        String routeProjectName = route.getProjectName();
+        return !StringUtils.hasText(routeProjectName) || projectName.equals(routeProjectName);
     }
 
     private boolean versionMatches(PublishedConfig config, String version) {

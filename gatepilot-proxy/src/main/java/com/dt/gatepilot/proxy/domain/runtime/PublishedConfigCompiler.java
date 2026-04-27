@@ -24,9 +24,9 @@ public class PublishedConfigCompiler {
         // 每次发布编译成全新运行态，后面直接原子替换
         CompiledProxyRuntime runtime = new CompiledProxyRuntime();
         runtime.initMetadata(config);
-        String projectName = projectName(config);
+        String fallbackProjectName = projectName(config);
         runtime.setRoutes(config.getSpec().getRoutes().stream()
-                .map(route -> compileRoute(route, projectName))
+                .map(route -> compileRoute(route, fallbackProjectName))
                 .toList());
         runtime.setUpstreamsByName(compileUpstreams(config));
         runtime.setPoliciesByName(compilePolicies(config));
@@ -59,11 +59,11 @@ public class PublishedConfigCompiler {
         }
     }
 
-    private CompiledRoute compileRoute(PublishedConfig.PublishedRoute source, String projectName) {
+    private CompiledRoute compileRoute(PublishedConfig.PublishedRoute source, String fallbackProjectName) {
         // 发布产物允许字段缺省，编译期统一兜底
         CompiledRoute route = new CompiledRoute();
         route.setRouteId(source.getRouteId());
-        route.setProjectName(projectName);
+        route.setProjectName(hasText(source.getProjectName()) ? source.getProjectName() : fallbackProjectName);
         route.setProtocols(emptyIfNull(source.getProtocols()));
         route.setHosts(normalizeHosts(source.getHosts()));
         route.setPathPrefix(normalizePath(source.getPath()));
@@ -238,5 +238,9 @@ public class PublishedConfigCompiler {
     private <T> List<T> emptyIfNull(List<T> values) {
         // 运行态尽量不用 null 列表，少做热路径判断
         return values == null ? List.of() : values;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

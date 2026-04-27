@@ -146,6 +146,11 @@ public class PublishedConfig {
         private ResourceReference sourceRef;
 
         /**
+         * 所属项目名称
+         */
+        private String projectName;
+
+        /**
          * 入口协议。
          */
         private List<Protocol> protocols = new ArrayList<>();

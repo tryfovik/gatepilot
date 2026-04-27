@@ -35,7 +35,9 @@ class PublishedConfigCompilerTest {
     @Test
     void shouldMatchRouteByHostAndLongestPathPrefix() {
         PublishedConfig config = config("v1", "hash-v1");
-        config.getSpec().getRoutes().add(route("project", "API.EXAMPLE.COM:443", "/api/game"));
+        PublishedConfig.PublishedRoute projectRoute = route("project", "API.EXAMPLE.COM:443", "/api/game");
+        projectRoute.setProjectName("game");
+        config.getSpec().getRoutes().add(projectRoute);
         config.getSpec().getRoutes().add(route("admin", "api.example.com", "/api/game/admin"));
         config.getSpec().getRoutes().add(route("public", null, "/api/public"));
 
@@ -43,6 +45,7 @@ class PublishedConfigCompilerTest {
 
         assertThat(runtime.match("api.example.com", "/api/game/admin/users").getRouteId()).isEqualTo("admin");
         assertThat(runtime.match("api.example.com:443", "/api/game/orders").getRouteId()).isEqualTo("project");
+        assertThat(runtime.match("api.example.com:443", "/api/game/orders").getProjectName()).isEqualTo("game");
         assertThat(runtime.match("other.example.com", "/api/public/ping").getRouteId()).isEqualTo("public");
         assertThat(runtime.match("other.example.com", "/api/missing")).isNull();
     }

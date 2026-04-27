@@ -151,6 +151,7 @@ public class PublishedConfigAssembler {
         snapshot.setRouteId(route.getMetadata().getUid());
         snapshot.setSourceRef(ref(ResourceKind.GATEWAY_ROUTE, route.getMetadata().getNamespace(),
                 route.getMetadata().getName(), route.getMetadata().getUid()));
+        snapshot.setProjectName(projectName(route.getSpec().getProjectRef()));
         snapshot.setProtocols(route.getSpec().getProtocols());
         snapshot.setHosts(route.getSpec().getHosts());
         snapshot.setPath(Optional.ofNullable(route.getSpec().getPath()).map(GatewayRoute.RoutePathMatch::getValue)
@@ -302,6 +303,10 @@ public class PublishedConfigAssembler {
         return reference;
     }
 
+    private String projectName(ResourceReference reference) {
+        return reference == null ? null : reference.getName();
+    }
+
     private List<PublishedConfig.PublishedRoute> copyRoutes(List<PublishedConfig.PublishedRoute> routes) {
         return routes.stream().map(this::copyRoute).toList();
     }
@@ -311,6 +316,7 @@ public class PublishedConfigAssembler {
         // 回滚快照只复制 proxy 运行态需要的字段
         copy.setRouteId(route.getRouteId());
         copy.setSourceRef(copyReference(route.getSourceRef()));
+        copy.setProjectName(route.getProjectName());
         copy.setProtocols(new ArrayList<>(route.getProtocols()));
         copy.setHosts(new ArrayList<>(route.getHosts()));
         copy.setPath(route.getPath());
