@@ -3,6 +3,7 @@ package com.dt.gatepilot.proxy.interfaces.gateway;
 import com.dt.gatepilot.domain.enums.HttpMethod;
 import com.dt.gatepilot.domain.enums.Protocol;
 import com.dt.gatepilot.domain.enums.TrafficColorSource;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
@@ -133,6 +134,21 @@ class GatePilotGatewayFilterTest {
                         loadBalancedUri("admin-upstream", "/admin/users"),
                         loadBalancedUri("admin-upstream", "/admin/users")
                 );
+    }
+
+    /**
+     * Nacos 上游没有静态端点时仍应交给 LoadBalancer 解析实例
+     */
+    @Test
+    void shouldPrepareLoadBalancedUriForNacosUpstreamWithoutStaticEndpoints() {
+        GatePilotGatewayFilter filter = filter(runtimeWithNacosDiscovery());
+        List<URI> targetUris = new ArrayList<>();
+
+        filter.filter(exchange("http://api.example.com/api/game/admin/users"), captureUriChain(targetUris))
+                .block(Duration.ofSeconds(1));
+
+        assertThat(targetUris).extracting(URI::toString)
+                .containsExactly(loadBalancedUri("admin-upstream", "/admin/users"));
     }
 
     /**
@@ -321,6 +337,12 @@ class GatePilotGatewayFilterTest {
         return state;
     }
 
+    private ProxyRuntimeState runtimeWithNacosDiscovery() {
+        ProxyRuntimeState state = new ProxyRuntimeState();
+        state.switchTo(new PublishedConfigCompiler().compile(configWithNacosDiscovery()));
+        return state;
+    }
+
     private ProxyRuntimeState runtimeWithAuthRequired() {
         ProxyRuntimeState state = new ProxyRuntimeState();
         state.switchTo(new PublishedConfigCompiler().compile(configWithAuthRequired()));
@@ -354,6 +376,17 @@ class GatePilotGatewayFilterTest {
         PublishedConfig config = config();
         config.getSpec().getUpstreams().clear();
         config.getSpec().getUpstreams().add(upstreamWithMultipleEndpoints());
+        return config;
+    }
+
+    private PublishedConfig configWithNacosDiscovery() {
+        PublishedConfig config = config();
+        PublishedConfig.PublishedUpstream upstream = config.getSpec().getUpstreams().get(0);
+        upstream.getEndpoints().clear();
+        PublishedConfig.PublishedDiscovery discovery = new PublishedConfig.PublishedDiscovery();
+        discovery.setType(UpstreamDiscoveryType.NACOS);
+        discovery.setServiceName("admin-service");
+        upstream.setDiscovery(discovery);
         return config;
     }
 

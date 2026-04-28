@@ -1,5 +1,6 @@
 package com.dt.gatepilot.proxy.interfaces.gateway;
 
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuthChecker;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuthResult;
 import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
@@ -269,7 +270,7 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
         }
         String upstreamName = releaseUpstreamResolver.resolve(runtime, accessDecision.route(), trafficColor);
         CompiledUpstream upstream = runtime.getUpstreamsByName().get(upstreamName);
-        if (upstream == null || upstream.getEndpoints().isEmpty()) {
+        if (unavailableUpstream(upstream)) {
             // 发布产物缺上游时直接阻断，避免把请求发到占位地址
             return statusResponse(
                     exchange,
@@ -316,6 +317,21 @@ public class GatePilotGatewayFilter implements GlobalFilter, Ordered {
         return forward(exchange, chain, context)
                 .doOnSuccess(ignored -> recordForwardResult(exchange, context))
                 .onErrorResume(error -> recordForwardError(exchange, context, error));
+    }
+
+    private boolean unavailableUpstream(CompiledUpstream upstream) {
+        if (upstream == null) {
+            return true;
+        }
+        UpstreamDiscoveryType discoveryType = upstream.getDiscovery() == null
+                ? UpstreamDiscoveryType.STATIC
+                : upstream.getDiscovery().getType();
+        // 静态上游必须带端点，服务发现上游由 LoadBalancer 实时取实例
+        return staticDiscovery(discoveryType) && upstream.getEndpoints().isEmpty();
+    }
+
+    private boolean staticDiscovery(UpstreamDiscoveryType discoveryType) {
+        return discoveryType == null || discoveryType == UpstreamDiscoveryType.STATIC;
     }
 
     private Optional<Mono<Void>> rateLimitRejection(CompiledRateLimitPolicy policy,
