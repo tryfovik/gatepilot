@@ -1,4 +1,4 @@
-export type FieldType = 'text' | 'number' | 'boolean' | 'textarea';
+export type FieldType = 'text' | 'number' | 'boolean' | 'textarea' | 'secret';
 
 export interface FieldSchema {
   key: string;
@@ -61,7 +61,7 @@ export const platformResourceGroups: PlatformResourceGroup[] = [
     key: 'runtime',
     path: '/platform/runtime/control-plane-settings',
     description: '控制面、agent、proxy 热生效参数',
-    resourceTypes: ['control-plane-settings']
+    resourceTypes: ['control-plane-settings', 'registry-centers']
   }
 ];
 
@@ -278,6 +278,51 @@ export const platformResourcePages: PlatformResourcePage[] = [
       { key: 'hotReloadable', label: '热生效', help: 'GatePilot 后端应监听该资源并动态刷新运行参数', type: 'boolean' },
       { key: 'enabled', label: '启用', help: '关闭后该参数不参与动态生效', type: 'boolean' },
       { key: 'description', label: '参数说明', help: '说明参数含义、影响范围和风险', type: 'textarea' }
+    ]
+  },
+  {
+    label: '注册中心',
+    resourceType: 'registry-centers',
+    path: '/platform/runtime/registry-centers',
+    group: '运行参数',
+    groupKey: 'runtime',
+    description: '统一保存 Nacos 连接信息，上游服务只引用注册中心和服务名',
+    nameLabel: '注册中心编码',
+    nameHelp: '注册中心资源的唯一标识，建议按环境命名，例如 nacos-prod',
+    namePlaceholder: '例如 nacos-prod',
+    fields: [
+      { key: 'displayName', label: '展示名称', help: '页面展示名，例如生产 Nacos', type: 'text', required: true },
+      {
+        key: 'type',
+        label: '注册中心类型',
+        help: '当前主路径是 Nacos，后续如确有必要再扩展其他类型',
+        type: 'text',
+        required: true,
+        options: [
+          { label: 'Nacos', value: 'NACOS' }
+        ]
+      },
+      { key: 'serverAddr', label: '服务地址', help: 'Nacos serverAddr，例如 nacos-headless:8848 或 10.0.0.1:8848', type: 'text', required: true },
+      { key: 'namespace', label: '默认命名空间', help: 'Nacos 命名空间 ID，留空表示 public', type: 'text' },
+      { key: 'group', label: '默认分组', help: 'Nacos 分组，默认 DEFAULT_GROUP', type: 'text' },
+      {
+        key: 'authType',
+        label: '认证方式',
+        help: '注册中心认证方式，密码会作为敏感配置保存，页面只用于录入和更新',
+        type: 'text',
+        required: true,
+        options: [
+          { label: '无认证', value: 'NONE' },
+          { label: '用户名密码', value: 'USERNAME_PASSWORD' },
+          { label: 'AK/SK', value: 'AKSK' }
+        ]
+      },
+      { key: 'username', label: '用户名', help: '用户名密码认证时填写', type: 'text' },
+      { key: 'password', label: '密码', help: '用户名密码认证时填写；生产环境后续应接入统一密钥加密能力', type: 'secret' },
+      { key: 'accessKey', label: 'AccessKey', help: 'AK/SK 认证时填写', type: 'text' },
+      { key: 'secretKey', label: 'SecretKey', help: 'AK/SK 认证时填写；生产环境后续应接入统一密钥加密能力', type: 'secret' },
+      { key: 'acceptingUpstreams', label: '允许新上游', help: '关闭后新上游不应再选择该注册中心', type: 'boolean' },
+      { key: 'description', label: '说明', help: '写清楚注册中心归属环境、网络边界和使用范围', type: 'textarea' }
     ]
   }
 ];

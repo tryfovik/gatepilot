@@ -16,6 +16,7 @@ import com.dt.gatepilot.domain.enums.Protocol;
 import com.dt.gatepilot.domain.enums.ReleaseStrategy;
 import com.dt.gatepilot.domain.enums.ResourceKind;
 import com.dt.gatepilot.domain.enums.TrafficColorSource;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
@@ -28,6 +29,7 @@ import com.dt.gatepilot.domain.resource.upstream.Upstream;
 import com.getboot.exception.api.code.CommonErrorCode;
 import com.getboot.exception.api.exception.BusinessException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -145,11 +147,35 @@ public class ProjectTemplateService {
     }
 
     private void validate(ProjectTemplateDryRunResponse response, ProjectTemplateRenderRequest request) {
-        ProjectTemplateRenderRequest.UpstreamValues upstream = request.getUpstream();
-        LoadBalanceStrategy strategy = upstream == null ? null : upstream.getLoadBalance();
+        TemplateValues values = normalize(request);
+        LoadBalanceStrategy strategy = values.loadBalance();
         if (strategy != null && !strategy.isSupported()) {
             addMessage(response, ProjectTemplateConstants.REASON_TEMPLATE_INVALID,
                     ProjectTemplateConstants.MESSAGE_UNSUPPORTED_LOAD_BALANCE_PREFIX + strategy.name());
+        }
+        validateNacosUpstream(response, ProjectTemplateConstants.SUFFIX_STABLE_UPSTREAM,
+                values.discoveryType(), values.registryCenterName(), values.serviceName());
+        if (values.releaseEnabled()) {
+            validateNacosUpstream(response, ProjectTemplateConstants.SUFFIX_CANDIDATE_UPSTREAM,
+                    values.candidateDiscoveryType(), values.candidateRegistryCenterName(), values.candidateServiceName());
+        }
+    }
+
+    private void validateNacosUpstream(ProjectTemplateDryRunResponse response,
+                                       String role,
+                                       UpstreamDiscoveryType discoveryType,
+                                       String registryCenterName,
+                                       String serviceName) {
+        if (discoveryType != UpstreamDiscoveryType.NACOS) {
+            return;
+        }
+        if (!StringUtils.hasText(registryCenterName)) {
+            addMessage(response, ProjectTemplateConstants.REASON_TEMPLATE_INVALID,
+                    ProjectTemplateConstants.MESSAGE_NACOS_REGISTRY_MISSING_PREFIX + role);
+        }
+        if (!StringUtils.hasText(serviceName)) {
+            addMessage(response, ProjectTemplateConstants.REASON_TEMPLATE_INVALID,
+                    ProjectTemplateConstants.MESSAGE_NACOS_SERVICE_NAME_MISSING_PREFIX + role);
         }
     }
 
@@ -174,12 +200,14 @@ public class ProjectTemplateService {
         request.getRoute().setPath(ProjectTemplateConstants.DEFAULT_PATH);
         request.getRoute().setStripPrefix(true);
         request.getRoute().setMethods(List.of(HttpMethod.ANY));
+        request.getUpstream().setDiscoveryType(UpstreamDiscoveryType.STATIC);
         request.getUpstream().setHost(ProjectTemplateConstants.DEFAULT_UPSTREAM_HOST);
         request.getUpstream().setPort(ProjectTemplateConstants.DEFAULT_HTTP_PORT);
         request.getUpstream().setProtocol(Protocol.HTTP);
         request.getUpstream().setLoadBalance(LoadBalanceStrategy.ROUND_ROBIN);
         request.getUpstream().setHealthCheckEnabled(true);
         request.getUpstream().setHealthPath(ProjectTemplateConstants.DEFAULT_HEALTH_PATH);
+        request.getCandidate().setDiscoveryType(UpstreamDiscoveryType.STATIC);
         request.getCandidate().setHost(ProjectTemplateConstants.DEFAULT_UPSTREAM_HOST);
         request.getCandidate().setPort(ProjectTemplateConstants.DEFAULT_HTTP_PORT);
         request.getGovernance().setRateLimitEnabled(false);
@@ -320,10 +348,10 @@ public class ProjectTemplateService {
         boolean releaseEnabled = values.releaseEnabled();
         String candidateUpstreamName = name(values.projectName(), ProjectTemplateConstants.SUFFIX_CANDIDATE_UPSTREAM);
         resources.add(new ResourceEnvelope(ResourceKind.UPSTREAM, values.namespace(), stableUpstreamName,
-                upstream(values, stableUpstreamName, values.upstreamHost(), values.upstreamPort())));
+                upstream(values, stableUpstreamName, false)));
         if (releaseEnabled) {
             resources.add(new ResourceEnvelope(ResourceKind.UPSTREAM, values.namespace(), candidateUpstreamName,
-                    upstream(values, candidateUpstreamName, values.candidateHost(), values.candidatePort())));
+                    upstream(values, candidateUpstreamName, true)));
         }
         resources.add(new ResourceEnvelope(ResourceKind.TRAFFIC_POLICY, values.namespace(), trafficPolicyName,
                 trafficPolicy(values, trafficPolicyName, routeName, releaseEnabled)));
@@ -354,22 +382,45 @@ public class ProjectTemplateService {
         return project;
     }
 
-    private Upstream upstream(TemplateValues values, String name, String host, Integer port) {
+    private Upstream upstream(TemplateValues values, String name, boolean candidate) {
         Upstream upstream = new Upstream();
         decorate(upstream.getMetadata(), values, name);
         upstream.getSpec().setProjectRef(projectRef(values));
         upstream.getSpec().setProtocol(values.protocol());
         upstream.getSpec().setLoadBalance(values.loadBalance());
-        Upstream.UpstreamEndpoint endpoint = new Upstream.UpstreamEndpoint();
-        endpoint.setHost(host);
-        endpoint.setPort(port);
-        endpoint.setWeight(ProjectTemplateConstants.MAX_TRAFFIC_WEIGHT);
-        upstream.getSpec().getEndpoints().add(endpoint);
+        if (discoveryType(values, candidate) == UpstreamDiscoveryType.NACOS) {
+            upstream.getSpec().setDiscovery(nacosDiscovery(values, candidate));
+        } else {
+            Upstream.UpstreamEndpoint endpoint = new Upstream.UpstreamEndpoint();
+            endpoint.setHost(candidate ? values.candidateHost() : values.upstreamHost());
+            endpoint.setPort(candidate ? values.candidatePort() : values.upstreamPort());
+            endpoint.setWeight(ProjectTemplateConstants.MAX_TRAFFIC_WEIGHT);
+            upstream.getSpec().getEndpoints().add(endpoint);
+        }
         upstream.getSpec().getHealthCheck().setEnabled(values.healthCheckEnabled());
         upstream.getSpec().getHealthCheck().setPath(values.healthPath());
         upstream.getSpec().getHealthCheck().setTimeout(ProjectTemplateConstants.DEFAULT_HEALTH_TIMEOUT);
         upstream.getSpec().getHealthCheck().setUnhealthyThreshold(ProjectTemplateConstants.DEFAULT_UNHEALTHY_THRESHOLD);
         return upstream;
+    }
+
+    private Upstream.UpstreamDiscoverySpec nacosDiscovery(TemplateValues values, boolean candidate) {
+        Upstream.UpstreamDiscoverySpec discovery = new Upstream.UpstreamDiscoverySpec();
+        discovery.setType(UpstreamDiscoveryType.NACOS);
+        discovery.setRegistryRef(ref(ResourceKind.REGISTRY_CENTER, ResourceMetadataConstants.SYSTEM_NAMESPACE,
+                candidate ? values.candidateRegistryCenterName() : values.registryCenterName()));
+        discovery.setServiceName(candidate ? values.candidateServiceName() : values.serviceName());
+        discovery.setNamespace(candidate ? values.candidateDiscoveryNamespace() : values.discoveryNamespace());
+        discovery.setGroup(candidate ? values.candidateDiscoveryGroup() : values.discoveryGroup());
+        discovery.setClusters(candidate ? values.candidateClusters() : values.clusters());
+        discovery.setMetadataSelector(candidate ? values.candidateMetadataSelector() : values.metadataSelector());
+        discovery.setHealthyOnly(true);
+        discovery.setEnabledOnly(true);
+        return discovery;
+    }
+
+    private UpstreamDiscoveryType discoveryType(TemplateValues values, boolean candidate) {
+        return candidate ? values.candidateDiscoveryType() : values.discoveryType();
     }
 
     private TrafficPolicy trafficPolicy(TemplateValues values,
@@ -519,6 +570,13 @@ public class ProjectTemplateService {
                 normalizePath(text(route.getPath(), ProjectTemplateConstants.DEFAULT_PATH)),
                 value(route.getStripPrefix(), true),
                 route.getMethods() == null || route.getMethods().isEmpty() ? List.of(HttpMethod.ANY) : route.getMethods(),
+                value(upstream.getDiscoveryType(), UpstreamDiscoveryType.STATIC),
+                text(upstream.getRegistryCenterName(), null),
+                text(upstream.getServiceName(), null),
+                text(upstream.getDiscoveryNamespace(), null),
+                text(upstream.getDiscoveryGroup(), null),
+                copyList(upstream.getClusters()),
+                copyMap(upstream.getMetadataSelector()),
                 text(upstream.getHost(), ProjectTemplateConstants.DEFAULT_UPSTREAM_HOST),
                 upstreamPort,
                 value(upstream.getProtocol(), Protocol.HTTP),
@@ -526,6 +584,15 @@ public class ProjectTemplateService {
                 value(upstream.getHealthCheckEnabled(), true),
                 text(upstream.getHealthPath(), ProjectTemplateConstants.DEFAULT_HEALTH_PATH),
                 releaseEnabled,
+                value(candidate.getDiscoveryType(), UpstreamDiscoveryType.STATIC),
+                text(candidate.getRegistryCenterName(), text(upstream.getRegistryCenterName(), null)),
+                text(candidate.getServiceName(), text(upstream.getServiceName(), null)),
+                text(candidate.getDiscoveryNamespace(), text(upstream.getDiscoveryNamespace(), null)),
+                text(candidate.getDiscoveryGroup(), text(upstream.getDiscoveryGroup(), null)),
+                candidate.getClusters() == null || candidate.getClusters().isEmpty()
+                        ? copyList(upstream.getClusters())
+                        : copyList(candidate.getClusters()),
+                copyMap(candidate.getMetadataSelector()),
                 text(candidate.getHost(), text(upstream.getHost(), ProjectTemplateConstants.DEFAULT_UPSTREAM_HOST)),
                 value(candidate.getPort(), upstreamPort),
                 value(governance.getRateLimitEnabled(), false),
@@ -570,6 +637,26 @@ public class ProjectTemplateService {
         return value == null ? fallback : value;
     }
 
+    private List<String> copyList(List<String> values) {
+        return values == null ? List.of() : values.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .toList();
+    }
+
+    private Map<String, String> copyMap(Map<String, String> values) {
+        if (values == null || values.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> copy = new LinkedHashMap<>();
+        values.forEach((key, value) -> {
+            if (StringUtils.hasText(key) && StringUtils.hasText(value)) {
+                copy.put(key.trim(), value.trim());
+            }
+        });
+        return copy;
+    }
+
     private Integer candidateWeight(ReleaseStrategy releaseStrategy, Integer candidateWeight) {
         if (releaseStrategy == ReleaseStrategy.BLUE_GREEN) {
             // 蓝绿发布是稳定版本到绿色版本的整体切换
@@ -596,6 +683,13 @@ public class ProjectTemplateService {
                                   String path,
                                   Boolean stripPrefix,
                                   List<HttpMethod> methods,
+                                  UpstreamDiscoveryType discoveryType,
+                                  String registryCenterName,
+                                  String serviceName,
+                                  String discoveryNamespace,
+                                  String discoveryGroup,
+                                  List<String> clusters,
+                                  Map<String, String> metadataSelector,
                                   String upstreamHost,
                                   Integer upstreamPort,
                                   Protocol protocol,
@@ -603,6 +697,13 @@ public class ProjectTemplateService {
                                   Boolean healthCheckEnabled,
                                   String healthPath,
                                   boolean releaseEnabled,
+                                  UpstreamDiscoveryType candidateDiscoveryType,
+                                  String candidateRegistryCenterName,
+                                  String candidateServiceName,
+                                  String candidateDiscoveryNamespace,
+                                  String candidateDiscoveryGroup,
+                                  List<String> candidateClusters,
+                                  Map<String, String> candidateMetadataSelector,
                                   String candidateHost,
                                   Integer candidatePort,
                                   Boolean rateLimitEnabled,

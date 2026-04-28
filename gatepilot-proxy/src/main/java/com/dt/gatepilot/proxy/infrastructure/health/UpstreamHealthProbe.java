@@ -1,6 +1,7 @@
 package com.dt.gatepilot.proxy.infrastructure.health;
 
 import com.dt.gatepilot.domain.enums.Protocol;
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledProxyRuntime;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledUpstream;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
@@ -32,6 +33,11 @@ public class UpstreamHealthProbe {
     private final UpstreamEndpointHealthRegistry healthRegistry;
 
     /**
+     * 上游服务发现注册表。
+     */
+    private final UpstreamDiscoveryRegistry upstreamDiscoveryRegistry;
+
+    /**
      * 健康检查 HTTP 客户端。
      */
     private final WebClient webClient;
@@ -41,13 +47,16 @@ public class UpstreamHealthProbe {
      *
      * @param runtimeState proxy 运行态
      * @param healthRegistry 端点健康状态表
+     * @param upstreamDiscoveryRegistry 上游服务发现注册表
      * @param webClient WebClient
      */
     public UpstreamHealthProbe(ProxyRuntimeState runtimeState,
                                UpstreamEndpointHealthRegistry healthRegistry,
+                               UpstreamDiscoveryRegistry upstreamDiscoveryRegistry,
                                WebClient webClient) {
         this.runtimeState = runtimeState;
         this.healthRegistry = healthRegistry;
+        this.upstreamDiscoveryRegistry = upstreamDiscoveryRegistry;
         this.webClient = webClient;
     }
 
@@ -65,7 +74,7 @@ public class UpstreamHealthProbe {
     private Mono<Void> probeRuntime(CompiledProxyRuntime runtime) {
         return Flux.fromIterable(runtime.getUpstreamsByName().values())
                 .filter(this::healthCheckEnabled)
-                .flatMap(upstream -> Flux.fromIterable(upstream.getEndpoints())
+                .flatMap(upstream -> Flux.fromIterable(upstreamDiscoveryRegistry.instances(upstream))
                         .flatMap(endpoint -> probeEndpoint(upstream, endpoint)))
                 .then();
     }

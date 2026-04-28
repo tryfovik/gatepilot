@@ -4,13 +4,17 @@ import com.dt.gatepilot.controller.application.command.ReconcileRequest;
 import com.dt.gatepilot.controller.domain.model.GatewayDesiredState;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
+import com.dt.gatepilot.domain.enums.RegistryAuthType;
 import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
+import com.dt.gatepilot.domain.resource.platform.RegistryCenter;
+import com.dt.gatepilot.domain.resource.platform.RegistryCenterConstants;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
 import com.dt.gatepilot.domain.resource.route.GatewayRoute;
@@ -59,7 +63,9 @@ public class PublishedConfigAssembler {
         spec.setFullSnapshot(true);
         spec.setGeneratedAt(Instant.now());
         spec.setRoutes(desiredState.getRoutes().stream().map(this::routeSnapshot).toList());
-        spec.setUpstreams(desiredState.getUpstreams().stream().map(this::upstreamSnapshot).toList());
+        spec.setUpstreams(desiredState.getUpstreams().stream()
+                .map(upstream -> upstreamSnapshot(upstream, desiredState))
+                .toList());
         spec.setPolicies(policySnapshots(desiredState));
         spec.setTargetNodeRefs(desiredState.getTargetNodes().stream().map(this::nodeRef).toList());
         spec.setConfigHash(hash(spec));
@@ -173,7 +179,7 @@ public class PublishedConfigAssembler {
         return snapshot;
     }
 
-    private PublishedConfig.PublishedUpstream upstreamSnapshot(Upstream upstream) {
+    private PublishedConfig.PublishedUpstream upstreamSnapshot(Upstream upstream, GatewayDesiredState desiredState) {
         PublishedConfig.PublishedUpstream snapshot = new PublishedConfig.PublishedUpstream();
         // 上游发布快照只保留转发所需字段
         snapshot.setName(upstream.getMetadata().getName());
@@ -182,8 +188,60 @@ public class PublishedConfigAssembler {
         snapshot.setProtocol(upstream.getSpec().getProtocol());
         snapshot.setLoadBalance(loadBalance(upstream));
         snapshot.setEndpoints(upstream.getSpec().getEndpoints().stream().map(this::endpointSnapshot).toList());
+        snapshot.setDiscovery(discoverySnapshot(upstream, desiredState));
         snapshot.setHealthCheck(healthCheckSnapshot(upstream.getSpec().getHealthCheck()));
         return snapshot;
+    }
+
+    private PublishedConfig.PublishedDiscovery discoverySnapshot(Upstream upstream,
+                                                                 GatewayDesiredState desiredState) {
+        Upstream.UpstreamDiscoverySpec discovery = upstream.getSpec().getDiscovery();
+        UpstreamDiscoveryType type = discovery == null || discovery.getType() == null
+                ? UpstreamDiscoveryType.STATIC
+                : discovery.getType();
+        PublishedConfig.PublishedDiscovery snapshot = new PublishedConfig.PublishedDiscovery();
+        snapshot.setType(type);
+        if (type == UpstreamDiscoveryType.STATIC) {
+            return snapshot;
+        }
+        RegistryCenter registryCenter = requireRegistryCenter(upstream, desiredState);
+        RegistryCenter.RegistryCenterSpec registrySpec = registryCenter.getSpec();
+        snapshot.setRegistryRef(copyReference(discovery.getRegistryRef()));
+        snapshot.setRegistryType(registrySpec.getType());
+        snapshot.setServerAddr(registrySpec.getServerAddr());
+        snapshot.setNamespace(text(discovery.getNamespace(), registrySpec.getNamespace()));
+        snapshot.setGroup(text(discovery.getGroup(), text(registrySpec.getGroup(),
+                RegistryCenterConstants.DEFAULT_NACOS_GROUP)));
+        snapshot.setServiceName(discovery.getServiceName());
+        snapshot.setClusters(discovery.getClusters() == null ? List.of() : List.copyOf(discovery.getClusters()));
+        snapshot.setMetadataSelector(discovery.getMetadataSelector() == null
+                ? Map.of()
+                : new LinkedHashMap<>(discovery.getMetadataSelector()));
+        snapshot.setAuthType(registrySpec.getAuthType() == null ? RegistryAuthType.NONE : registrySpec.getAuthType());
+        snapshot.setUsername(registrySpec.getUsername());
+        snapshot.setPassword(registrySpec.getPassword());
+        snapshot.setAccessKey(registrySpec.getAccessKey());
+        snapshot.setSecretKey(registrySpec.getSecretKey());
+        snapshot.setHealthyOnly(!Boolean.FALSE.equals(discovery.getHealthyOnly()));
+        snapshot.setEnabledOnly(!Boolean.FALSE.equals(discovery.getEnabledOnly()));
+        return snapshot;
+    }
+
+    private RegistryCenter requireRegistryCenter(Upstream upstream, GatewayDesiredState desiredState) {
+        Upstream.UpstreamDiscoverySpec discovery = upstream.getSpec().getDiscovery();
+        ResourceReference registryRef = discovery == null ? null : discovery.getRegistryRef();
+        if (registryRef == null || !hasText(registryRef.getName())) {
+            throw new IllegalArgumentException(PublishedConfigAssemblerConstants.ERROR_REGISTRY_REF_MISSING_PREFIX
+                    + upstream.getMetadata().getName());
+        }
+        String namespace = text(registryRef.getNamespace(), ResourceMetadataConstants.SYSTEM_NAMESPACE);
+        return desiredState.getRegistryCenters().stream()
+                .filter(item -> Objects.equals(item.getMetadata().getName(), registryRef.getName()))
+                .filter(item -> Objects.equals(item.getMetadata().getNamespace(), namespace))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        PublishedConfigAssemblerConstants.ERROR_REGISTRY_CENTER_MISSING_PREFIX
+                                + registryRef.getName()));
     }
 
     private String loadBalance(Upstream upstream) {
@@ -207,6 +265,7 @@ public class PublishedConfigAssembler {
         snapshot.setHost(endpoint.getHost());
         snapshot.setPort(endpoint.getPort());
         snapshot.setWeight(endpoint.getWeight());
+        snapshot.setLabels(endpoint.getLabels() == null ? Map.of() : new LinkedHashMap<>(endpoint.getLabels()));
         return snapshot;
     }
 
@@ -342,7 +401,35 @@ public class PublishedConfigAssembler {
         copy.setProtocol(upstream.getProtocol());
         copy.setLoadBalance(upstream.getLoadBalance());
         copy.setEndpoints(upstream.getEndpoints().stream().map(this::copyEndpoint).toList());
+        copy.setDiscovery(copyDiscovery(upstream.getDiscovery()));
         copy.setHealthCheck(copyHealthCheck(upstream.getHealthCheck()));
+        return copy;
+    }
+
+    private PublishedConfig.PublishedDiscovery copyDiscovery(PublishedConfig.PublishedDiscovery discovery) {
+        if (discovery == null) {
+            return null;
+        }
+        PublishedConfig.PublishedDiscovery copy = new PublishedConfig.PublishedDiscovery();
+        // discovery 包含注册中心连接信息，回滚时必须完整保留
+        copy.setType(discovery.getType());
+        copy.setRegistryRef(copyReference(discovery.getRegistryRef()));
+        copy.setRegistryType(discovery.getRegistryType());
+        copy.setServerAddr(discovery.getServerAddr());
+        copy.setNamespace(discovery.getNamespace());
+        copy.setGroup(discovery.getGroup());
+        copy.setServiceName(discovery.getServiceName());
+        copy.setClusters(discovery.getClusters() == null ? List.of() : List.copyOf(discovery.getClusters()));
+        copy.setMetadataSelector(discovery.getMetadataSelector() == null
+                ? Map.of()
+                : new LinkedHashMap<>(discovery.getMetadataSelector()));
+        copy.setAuthType(discovery.getAuthType());
+        copy.setUsername(discovery.getUsername());
+        copy.setPassword(discovery.getPassword());
+        copy.setAccessKey(discovery.getAccessKey());
+        copy.setSecretKey(discovery.getSecretKey());
+        copy.setHealthyOnly(discovery.getHealthyOnly());
+        copy.setEnabledOnly(discovery.getEnabledOnly());
         return copy;
     }
 
@@ -351,6 +438,7 @@ public class PublishedConfigAssembler {
         copy.setHost(endpoint.getHost());
         copy.setPort(endpoint.getPort());
         copy.setWeight(endpoint.getWeight());
+        copy.setLabels(endpoint.getLabels() == null ? Map.of() : new LinkedHashMap<>(endpoint.getLabels()));
         return copy;
     }
 
@@ -398,6 +486,14 @@ public class PublishedConfigAssembler {
         copy.setName(reference.getName());
         copy.setUid(reference.getUid());
         return copy;
+    }
+
+    private String text(String preferred, String fallback) {
+        return hasText(preferred) ? preferred : fallback;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private String hash(PublishedConfig.PublishedConfigSpec spec) {

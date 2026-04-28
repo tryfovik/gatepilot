@@ -1,6 +1,7 @@
 package com.dt.gatepilot.proxy.domain.runtime;
 
 import com.dt.gatepilot.domain.resource.node.GatewayNodeStatus;
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -82,6 +83,18 @@ public class UpstreamEndpointHealthRegistry {
      * @return 上游健康摘要
      */
     public List<GatewayNodeStatus.UpstreamHealth> snapshot(CompiledProxyRuntime runtime) {
+        return snapshot(runtime, new StaticUpstreamDiscoveryRegistry());
+    }
+
+    /**
+     * 生成上游健康摘要。
+     *
+     * @param runtime 当前运行态
+     * @param discoveryRegistry 上游服务发现注册表
+     * @return 上游健康摘要
+     */
+    public List<GatewayNodeStatus.UpstreamHealth> snapshot(CompiledProxyRuntime runtime,
+                                                           UpstreamDiscoveryRegistry discoveryRegistry) {
         if (runtime == null) {
             return List.of();
         }
@@ -91,7 +104,7 @@ public class UpstreamEndpointHealthRegistry {
             health.setUpstreamName(upstream.getName());
             int healthy = 0;
             int unhealthy = 0;
-            for (CompiledUpstream.CompiledEndpoint endpoint : upstream.getEndpoints()) {
+            for (CompiledUpstream.CompiledEndpoint endpoint : discoveryRegistry.instances(upstream)) {
                 if (selectable(upstream.getName(), endpoint)) {
                     healthy++;
                 } else {

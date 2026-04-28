@@ -1,9 +1,15 @@
 package com.dt.gatepilot.proxy.domain.runtime;
 
 import com.dt.gatepilot.domain.enums.Protocol;
+import com.dt.gatepilot.domain.enums.RegistryAuthType;
+import com.dt.gatepilot.domain.enums.RegistryCenterType;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
+import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.Data;
 
 /**
@@ -33,6 +39,11 @@ public class CompiledUpstream {
     private List<CompiledEndpoint> endpoints = new ArrayList<>();
 
     /**
+     * 服务发现配置。
+     */
+    private CompiledDiscovery discovery = new CompiledDiscovery();
+
+    /**
      * 主动健康检查配置。
      */
     private CompiledHealthCheck healthCheck = new CompiledHealthCheck();
@@ -57,6 +68,98 @@ public class CompiledUpstream {
          * 权重。
          */
         private Integer weight;
+
+        /**
+         * 标签。
+         */
+        private Map<String, String> labels = new LinkedHashMap<>();
+    }
+
+    /**
+     * 预编译服务发现配置。
+     */
+    @Data
+    public static class CompiledDiscovery {
+
+        /**
+         * 实例发现方式。
+         */
+        private UpstreamDiscoveryType type = UpstreamDiscoveryType.STATIC;
+
+        /**
+         * 注册中心引用。
+         */
+        private ResourceReference registryRef;
+
+        /**
+         * 注册中心类型。
+         */
+        private RegistryCenterType registryType;
+
+        /**
+         * 服务端地址。
+         */
+        private String serverAddr;
+
+        /**
+         * 注册中心命名空间。
+         */
+        private String namespace;
+
+        /**
+         * 注册中心分组。
+         */
+        private String group;
+
+        /**
+         * 注册中心服务名。
+         */
+        private String serviceName;
+
+        /**
+         * Nacos 集群列表。
+         */
+        private List<String> clusters = new ArrayList<>();
+
+        /**
+         * 实例元数据筛选条件。
+         */
+        private Map<String, String> metadataSelector = new LinkedHashMap<>();
+
+        /**
+         * 认证类型。
+         */
+        private RegistryAuthType authType = RegistryAuthType.NONE;
+
+        /**
+         * 用户名。
+         */
+        private String username;
+
+        /**
+         * 密码。
+         */
+        private String password;
+
+        /**
+         * AccessKey。
+         */
+        private String accessKey;
+
+        /**
+         * SecretKey。
+         */
+        private String secretKey;
+
+        /**
+         * 是否只选择健康实例。
+         */
+        private Boolean healthyOnly = true;
+
+        /**
+         * 是否只选择启用实例。
+         */
+        private Boolean enabledOnly = true;
     }
 
     /**

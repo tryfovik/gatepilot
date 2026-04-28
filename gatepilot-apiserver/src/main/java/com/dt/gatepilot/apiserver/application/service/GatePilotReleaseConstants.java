@@ -121,6 +121,16 @@ public final class GatePilotReleaseConstants {
     public static final String REASON_UPSTREAM_LOAD_BALANCE_UNSUPPORTED = "UpstreamLoadBalanceUnsupported";
 
     /**
+     * 上游注册中心缺失原因码。
+     */
+    public static final String REASON_UPSTREAM_REGISTRY_MISSING = "UpstreamRegistryMissing";
+
+    /**
+     * 上游服务名缺失原因码。
+     */
+    public static final String REASON_UPSTREAM_SERVICE_NAME_MISSING = "UpstreamServiceNameMissing";
+
+    /**
      * 发布策略上游缺失原因码。
      */
     public static final String REASON_RELEASE_UPSTREAM_MISSING = "ReleaseUpstreamMissing";
@@ -185,6 +195,16 @@ public final class GatePilotReleaseConstants {
      */
     public static final String MESSAGE_UPSTREAM_LOAD_BALANCE_UNSUPPORTED_PREFIX =
             "上游负载均衡策略当前没有成熟组件承接: ";
+
+    /**
+     * 上游注册中心缺失提示前缀。
+     */
+    public static final String MESSAGE_UPSTREAM_REGISTRY_MISSING_PREFIX = "上游引用的注册中心不存在: ";
+
+    /**
+     * 上游服务名缺失提示前缀。
+     */
+    public static final String MESSAGE_UPSTREAM_SERVICE_NAME_MISSING_PREFIX = "Nacos 上游未配置服务名: ";
 
     /**
      * 发布策略上游缺失提示前缀。

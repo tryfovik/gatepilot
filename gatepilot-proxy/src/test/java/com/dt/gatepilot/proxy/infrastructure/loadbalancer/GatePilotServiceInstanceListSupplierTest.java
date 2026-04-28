@@ -2,9 +2,12 @@ package com.dt.gatepilot.proxy.infrastructure.loadbalancer;
 
 import com.dt.gatepilot.domain.enums.Protocol;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledUpstream;
+import com.dt.gatepilot.proxy.domain.runtime.CompiledProxyRuntime;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.PublishedConfigCompiler;
+import com.dt.gatepilot.proxy.domain.runtime.StaticUpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
 import java.time.Duration;
 import java.util.List;
@@ -82,12 +85,35 @@ class GatePilotServiceInstanceListSupplierTest {
                 .containsExactlyInAnyOrder("upstream-a.local", "upstream-b.local");
     }
 
+    /**
+     * 应优先使用服务发现注册表提供的动态实例
+     */
+    @Test
+    void shouldExposeDiscoveredInstances() {
+        ProxyRuntimeState state = runtime("ROUND_ROBIN");
+        GatePilotServiceInstanceListSupplier supplier = supplier(state, new UpstreamEndpointHealthRegistry(),
+                new FixedDiscoveryRegistry(endpoint("10.0.0.11", 8080, 100)));
+
+        List<ServiceInstance> instances = supplier.get().blockFirst(Duration.ofSeconds(1));
+
+        assertThat(instances).hasSize(1);
+        assertThat(instances.get(0).getHost()).isEqualTo("10.0.0.11");
+        assertThat(instances.get(0).getPort()).isEqualTo(8080);
+    }
+
     private GatePilotServiceInstanceListSupplier supplier(ProxyRuntimeState state,
                                                           UpstreamEndpointHealthRegistry healthRegistry) {
+        return supplier(state, healthRegistry, new StaticUpstreamDiscoveryRegistry());
+    }
+
+    private GatePilotServiceInstanceListSupplier supplier(ProxyRuntimeState state,
+                                                          UpstreamEndpointHealthRegistry healthRegistry,
+                                                          UpstreamDiscoveryRegistry discoveryRegistry) {
         return new GatePilotServiceInstanceListSupplier(
                 GatePilotLoadBalancerServiceIds.fromUpstreamName("admin-upstream"),
                 state,
-                healthRegistry
+                healthRegistry,
+                discoveryRegistry
         );
     }
 
@@ -114,6 +140,46 @@ class GatePilotServiceInstanceListSupplierTest {
         endpoint.setPort(port);
         endpoint.setWeight(weight);
         return endpoint;
+    }
+
+    /**
+     * 测试用固定服务发现注册表
+     */
+    private static class FixedDiscoveryRegistry implements UpstreamDiscoveryRegistry {
+
+        /**
+         * 固定端点。
+         */
+        private final PublishedConfig.PublishedEndpoint endpoint;
+
+        FixedDiscoveryRegistry(PublishedConfig.PublishedEndpoint endpoint) {
+            this.endpoint = endpoint;
+        }
+
+        /**
+         * 根据新运行态刷新订阅。
+         *
+         * @param runtime 新运行态
+         */
+        @Override
+        public void refresh(CompiledProxyRuntime runtime) {
+            // 测试不需要后台订阅
+        }
+
+        /**
+         * 查询上游当前实例。
+         *
+         * @param upstream 已编译上游
+         * @return 当前可用实例
+         */
+        @Override
+        public List<CompiledUpstream.CompiledEndpoint> instances(CompiledUpstream upstream) {
+            CompiledUpstream.CompiledEndpoint compiledEndpoint = new CompiledUpstream.CompiledEndpoint();
+            compiledEndpoint.setHost(endpoint.getHost());
+            compiledEndpoint.setPort(endpoint.getPort());
+            compiledEndpoint.setWeight(endpoint.getWeight());
+            return List.of(compiledEndpoint);
+        }
     }
 
     /**

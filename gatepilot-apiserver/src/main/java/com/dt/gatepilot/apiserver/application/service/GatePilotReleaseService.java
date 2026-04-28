@@ -11,6 +11,7 @@ import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotAp
 import com.dt.gatepilot.domain.enums.EventSeverity;
 import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
 import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
 import com.dt.gatepilot.domain.resource.event.GatewayEventConstants;
@@ -20,6 +21,7 @@ import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
+import com.dt.gatepilot.domain.resource.platform.RegistryCenter;
 import com.dt.gatepilot.domain.resource.route.GatewayRoute;
 import com.dt.gatepilot.domain.resource.upstream.Upstream;
 import com.getboot.exception.api.code.CommonErrorCode;
@@ -105,6 +107,8 @@ public class GatePilotReleaseService {
         }
         List<GatewayRoute> routes = projectRoutes(request);
         List<Upstream> upstreams = projectUpstreams(request);
+        List<RegistryCenter> registryCenters = listAll(GatePilotResourcePaths.REGISTRY_CENTERS,
+                ResourceMetadataConstants.SYSTEM_NAMESPACE, RegistryCenter.class);
         List<TrafficPolicy> trafficPolicies = projectTrafficPolicies(request);
         List<ReleasePolicy> releasePolicies = projectReleasePolicies(request);
         List<AuthPolicy> authPolicies = projectAuthPolicies(request);
@@ -120,7 +124,7 @@ public class GatePilotReleaseService {
                     GatePilotReleaseConstants.REASON_NO_UPSTREAM, GatePilotReleaseConstants.MESSAGE_NO_UPSTREAM);
         }
         validateRoutes(response, routes, upstreams, trafficPolicies, releasePolicies, authPolicies);
-        validateUpstreams(response, upstreams);
+        validateUpstreams(response, upstreams, registryCenters);
         validateReleasePolicies(response, releasePolicies, upstreams);
         response.setPassed(response.getMessages().stream().noneMatch(message ->
                 GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR.equals(message.getLevel())));
@@ -360,15 +364,46 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateUpstreams(ReleaseDryRunResult response, List<Upstream> upstreams) {
+    private void validateUpstreams(ReleaseDryRunResult response,
+                                   List<Upstream> upstreams,
+                                   List<RegistryCenter> registryCenters) {
+        Set<String> registryNames = registryNames(registryCenters);
         for (Upstream upstream : upstreams) {
-            if (upstream.getSpec().getEndpoints().isEmpty()) {
+            Upstream.UpstreamDiscoverySpec discovery = upstream.getSpec().getDiscovery();
+            UpstreamDiscoveryType discoveryType = discovery == null || discovery.getType() == null
+                    ? UpstreamDiscoveryType.STATIC
+                    : discovery.getType();
+            if (discoveryType == UpstreamDiscoveryType.NACOS) {
+                validateNacosDiscovery(response, upstream, discovery, registryNames);
+            } else if (upstream.getSpec().getEndpoints().isEmpty()) {
                 addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
                         GatePilotReleaseConstants.REASON_UPSTREAM_ENDPOINT_MISSING,
                         GatePilotReleaseConstants.MESSAGE_UPSTREAM_ENDPOINT_MISSING_PREFIX
                                 + upstream.getMetadata().getName());
             }
             validateUpstreamLoadBalance(response, upstream);
+        }
+    }
+
+    private void validateNacosDiscovery(ReleaseDryRunResult response,
+                                        Upstream upstream,
+                                        Upstream.UpstreamDiscoverySpec discovery,
+                                        Set<String> registryNames) {
+        ResourceReference registryRef = discovery == null ? null : discovery.getRegistryRef();
+        String registryName = registryRef == null ? null : registryRef.getName();
+        if (!StringUtils.hasText(registryName) || !registryNames.contains(registryName)) {
+            addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
+                    GatePilotReleaseConstants.REASON_UPSTREAM_REGISTRY_MISSING,
+                    GatePilotReleaseConstants.MESSAGE_UPSTREAM_REGISTRY_MISSING_PREFIX
+                            + upstream.getMetadata().getName()
+                            + GatePilotReleaseConstants.REFERENCE_SEPARATOR
+                            + Objects.toString(registryName, GatePilotReleaseConstants.EMPTY_REFERENCE_VALUE));
+        }
+        if (discovery == null || !StringUtils.hasText(discovery.getServiceName())) {
+            addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
+                    GatePilotReleaseConstants.REASON_UPSTREAM_SERVICE_NAME_MISSING,
+                    GatePilotReleaseConstants.MESSAGE_UPSTREAM_SERVICE_NAME_MISSING_PREFIX
+                            + upstream.getMetadata().getName());
         }
     }
 
@@ -433,6 +468,14 @@ public class GatePilotReleaseService {
         for (Upstream upstream : upstreams) {
             // 上游名称来自 metadata，是发布产物里的稳定 key
             names.add(upstream.getMetadata().getName());
+        }
+        return names;
+    }
+
+    private Set<String> registryNames(List<RegistryCenter> registryCenters) {
+        Set<String> names = new HashSet<>();
+        for (RegistryCenter registryCenter : registryCenters) {
+            names.add(registryCenter.getMetadata().getName());
         }
         return names;
     }

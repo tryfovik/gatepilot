@@ -12,7 +12,9 @@ import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryGatePilotResourceStore;
 import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
 import com.dt.gatepilot.domain.enums.ReleaseStrategy;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
+import com.dt.gatepilot.domain.resource.upstream.Upstream;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -109,6 +111,36 @@ class ProjectTemplateServiceTest {
                 .filteredOn(item -> item.getValue().equals(LoadBalanceStrategy.CONSISTENT_HASH.name()))
                 .extracting(ProjectTemplateDefaultsResponse.OptionItem::isEnabled)
                 .containsExactly(false);
+    }
+
+    @Test
+    void shouldRenderNacosUpstreamFromProjectTemplate() {
+        ProjectTemplateRenderRequest request = request();
+        request.getUpstream().setDiscoveryType(UpstreamDiscoveryType.NACOS);
+        request.getUpstream().setRegistryCenterName("nacos-prod");
+        request.getUpstream().setServiceName("game-service");
+        request.getUpstream().setDiscoveryGroup("GAME_GROUP");
+        request.getUpstream().setHost(null);
+        request.getUpstream().setPort(null);
+        request.getCandidate().setDiscoveryType(UpstreamDiscoveryType.NACOS);
+        request.getCandidate().setRegistryCenterName("nacos-prod");
+        request.getCandidate().setServiceName("game-service-green");
+        request.getCandidate().setHost(null);
+        request.getCandidate().setPort(null);
+
+        ProjectTemplateDryRunResponse dryRun = templateService.dryRun(request);
+        ProjectTemplatePreviewResponse preview = dryRun.getPreview();
+
+        assertThat(dryRun.isPassed()).isTrue();
+        assertThat(preview.getResources())
+                .filteredOn(resource -> resource.getKind().equals("UPSTREAM"))
+                .map(ProjectTemplatePreviewResponse.RenderedResource::getResource)
+                .map(Upstream.class::cast)
+                .allSatisfy(upstream -> {
+                    assertThat(upstream.getSpec().getEndpoints()).isEmpty();
+                    assertThat(upstream.getSpec().getDiscovery().getType()).isEqualTo(UpstreamDiscoveryType.NACOS);
+                    assertThat(upstream.getSpec().getDiscovery().getRegistryRef().getName()).isEqualTo("nacos-prod");
+                });
     }
 
     private ProjectTemplateRenderRequest request() {

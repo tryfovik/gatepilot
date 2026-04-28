@@ -5,6 +5,7 @@ import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.NodePhase;
 import com.dt.gatepilot.domain.resource.node.GatewayNodeStatus;
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledProxyRuntime;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
@@ -25,15 +26,23 @@ public class InProcessProxyRuntimeStatusReader implements ProxyRuntimeStatusRead
     private final UpstreamEndpointHealthRegistry healthRegistry;
 
     /**
+     * 上游服务发现注册表。
+     */
+    private final UpstreamDiscoveryRegistry upstreamDiscoveryRegistry;
+
+    /**
      * 创建进程内 proxy 运行状态读取器。
      *
      * @param runtimeState proxy 运行态
      * @param healthRegistry 上游端点健康状态表
+     * @param upstreamDiscoveryRegistry 上游服务发现注册表
      */
     public InProcessProxyRuntimeStatusReader(ProxyRuntimeState runtimeState,
-                                             UpstreamEndpointHealthRegistry healthRegistry) {
+                                             UpstreamEndpointHealthRegistry healthRegistry,
+                                             UpstreamDiscoveryRegistry upstreamDiscoveryRegistry) {
         this.runtimeState = runtimeState;
         this.healthRegistry = healthRegistry;
+        this.upstreamDiscoveryRegistry = upstreamDiscoveryRegistry;
     }
 
     /**
@@ -60,7 +69,7 @@ public class InProcessProxyRuntimeStatusReader implements ProxyRuntimeStatusRead
         snapshot.setLoadedRouteCount(runtime.getRoutes().size());
         snapshot.setLoadedUpstreamCount(runtime.getUpstreamsByName().size());
         snapshot.setLoadedPolicyCount(runtime.getPoliciesByName().size());
-        snapshot.setUpstreamHealth(healthRegistry.snapshot(runtime));
+        snapshot.setUpstreamHealth(healthRegistry.snapshot(runtime, upstreamDiscoveryRegistry));
     }
 
     private void fillEmptyRuntime(AgentHeartbeatSnapshot snapshot) {

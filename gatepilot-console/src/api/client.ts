@@ -214,6 +214,13 @@ export interface ProjectTemplateRenderRequest {
     methods?: string[];
   };
   upstream?: {
+    discoveryType?: string;
+    registryCenterName?: string;
+    serviceName?: string;
+    discoveryNamespace?: string;
+    discoveryGroup?: string;
+    clusters?: string[];
+    metadataSelector?: Record<string, string>;
     host?: string;
     port?: number;
     protocol?: string;
@@ -223,6 +230,13 @@ export interface ProjectTemplateRenderRequest {
   };
   candidate?: {
     enabled?: boolean;
+    discoveryType?: string;
+    registryCenterName?: string;
+    serviceName?: string;
+    discoveryNamespace?: string;
+    discoveryGroup?: string;
+    clusters?: string[];
+    metadataSelector?: Record<string, string>;
     host?: string;
     port?: number;
   };

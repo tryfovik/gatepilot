@@ -181,6 +181,16 @@ public final class ProjectTemplateConstants {
     public static final String MESSAGE_UNSUPPORTED_LOAD_BALANCE_PREFIX = "当前负载均衡策略暂不支持: ";
 
     /**
+     * Nacos 注册中心缺失提示前缀
+     */
+    public static final String MESSAGE_NACOS_REGISTRY_MISSING_PREFIX = "Nacos 上游未选择注册中心: ";
+
+    /**
+     * Nacos 服务名缺失提示前缀
+     */
+    public static final String MESSAGE_NACOS_SERVICE_NAME_MISSING_PREFIX = "Nacos 上游未填写服务名: ";
+
+    /**
      * 模板不支持的资源类型提示前缀
      */
     public static final String MESSAGE_UNSUPPORTED_TEMPLATE_RESOURCE_TYPE = "模板不支持资源类型: ";

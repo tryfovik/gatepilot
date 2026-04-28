@@ -1,6 +1,8 @@
 package com.dt.gatepilot.proxy.domain.runtime;
 
 import com.dt.gatepilot.domain.enums.AuthType;
+import com.dt.gatepilot.domain.enums.RegistryCenterType;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfigConstants;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import java.util.LinkedHashMap;
@@ -72,6 +74,30 @@ class PublishedConfigCompilerTest {
         assertThatThrownBy(() -> new PublishedConfigCompiler().compile(config))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining(ProxyLoadBalanceConstants.ERROR_UNSUPPORTED_STRATEGY_PREFIX);
+    }
+
+    @Test
+    void shouldCompileNacosDiscovery() {
+        PublishedConfig config = config("v1", "hash-v1");
+        PublishedConfig.PublishedUpstream upstream = new PublishedConfig.PublishedUpstream();
+        upstream.setName("order-upstream");
+        PublishedConfig.PublishedDiscovery discovery = new PublishedConfig.PublishedDiscovery();
+        discovery.setType(UpstreamDiscoveryType.NACOS);
+        discovery.setRegistryType(RegistryCenterType.NACOS);
+        discovery.setServerAddr("nacos.prod:8848");
+        discovery.setGroup("DEFAULT_GROUP");
+        discovery.setServiceName("order-service");
+        discovery.getMetadataSelector().put("version", "stable");
+        upstream.setDiscovery(discovery);
+        config.getSpec().getUpstreams().add(upstream);
+
+        CompiledUpstream compiled = new PublishedConfigCompiler().compile(config)
+                .getUpstreamsByName()
+                .get("order-upstream");
+
+        assertThat(compiled.getDiscovery().getType()).isEqualTo(UpstreamDiscoveryType.NACOS);
+        assertThat(compiled.getDiscovery().getServiceName()).isEqualTo("order-service");
+        assertThat(compiled.getDiscovery().getMetadataSelector()).containsEntry("version", "stable");
     }
 
     @Test

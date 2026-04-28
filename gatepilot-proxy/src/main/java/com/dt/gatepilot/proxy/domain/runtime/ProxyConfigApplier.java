@@ -5,6 +5,7 @@ import com.dt.gatepilot.proxy.application.dto.ProxyApplyConstants;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyRequest;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyResult;
 import com.dt.gatepilot.proxy.domain.port.RuntimeGovernanceRulePublisher;
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import java.time.Instant;
 
 /**
@@ -18,12 +19,14 @@ public class ProxyConfigApplier {
 
     private final RuntimeGovernanceRulePublisher governanceRulePublisher;
 
+    private final UpstreamDiscoveryRegistry upstreamDiscoveryRegistry;
+
     /**
      * 创建配置应用器。
      */
     public ProxyConfigApplier() {
         this(new PublishedConfigCompiler(), new ProxyRuntimeState(), runtime -> {
-        });
+        }, new StaticUpstreamDiscoveryRegistry());
     }
 
     /**
@@ -34,7 +37,7 @@ public class ProxyConfigApplier {
      */
     public ProxyConfigApplier(PublishedConfigCompiler compiler, ProxyRuntimeState runtimeState) {
         this(compiler, runtimeState, runtime -> {
-        });
+        }, new StaticUpstreamDiscoveryRegistry());
     }
 
     /**
@@ -47,9 +50,25 @@ public class ProxyConfigApplier {
     public ProxyConfigApplier(PublishedConfigCompiler compiler,
                               ProxyRuntimeState runtimeState,
                               RuntimeGovernanceRulePublisher governanceRulePublisher) {
+        this(compiler, runtimeState, governanceRulePublisher, new StaticUpstreamDiscoveryRegistry());
+    }
+
+    /**
+     * 创建配置应用器。
+     *
+     * @param compiler 配置编译器
+     * @param runtimeState 运行态
+     * @param governanceRulePublisher 治理规则发布端口
+     * @param upstreamDiscoveryRegistry 上游服务发现注册表
+     */
+    public ProxyConfigApplier(PublishedConfigCompiler compiler,
+                              ProxyRuntimeState runtimeState,
+                              RuntimeGovernanceRulePublisher governanceRulePublisher,
+                              UpstreamDiscoveryRegistry upstreamDiscoveryRegistry) {
         this.compiler = compiler;
         this.runtimeState = runtimeState;
         this.governanceRulePublisher = governanceRulePublisher;
+        this.upstreamDiscoveryRegistry = upstreamDiscoveryRegistry;
     }
 
     /**
@@ -96,6 +115,7 @@ public class ProxyConfigApplier {
                         exception.getMessage(), startedAt);
             }
             runtimeState.switchTo(compiledRuntime);
+            upstreamDiscoveryRegistry.refresh(compiledRuntime);
         }
         return ProxyApplyResult.applied(version, configHash, startedAt);
     }

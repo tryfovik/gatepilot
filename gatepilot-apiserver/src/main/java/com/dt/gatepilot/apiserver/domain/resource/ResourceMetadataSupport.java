@@ -12,6 +12,7 @@ import com.dt.gatepilot.domain.resource.platform.IngressDomain;
 import com.dt.gatepilot.domain.resource.platform.IsolationGroup;
 import com.dt.gatepilot.domain.resource.platform.PlatformEnvironment;
 import com.dt.gatepilot.domain.resource.platform.PlatformTeam;
+import com.dt.gatepilot.domain.resource.platform.RegistryCenter;
 import com.dt.gatepilot.domain.resource.platform.TrafficTier;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
@@ -52,6 +53,9 @@ public class ResourceMetadataSupport {
             return item.getMetadata();
         }
         if (resource instanceof ControlPlaneSetting item) {
+            return item.getMetadata();
+        }
+        if (resource instanceof RegistryCenter item) {
             return item.getMetadata();
         }
         if (resource instanceof TrafficTier item) {

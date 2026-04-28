@@ -4,6 +4,7 @@ import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
 import com.dt.gatepilot.domain.resource.policy.TrafficPolicy;
+import com.dt.gatepilot.domain.resource.platform.RegistryCenter;
 import com.dt.gatepilot.domain.resource.project.GatewayProject;
 import com.dt.gatepilot.domain.resource.route.GatewayRoute;
 import com.dt.gatepilot.domain.resource.upstream.Upstream;
@@ -31,6 +32,11 @@ public class GatewayDesiredState {
      * 上游资源列表。
      */
     private List<Upstream> upstreams = new ArrayList<>();
+
+    /**
+     * 注册中心资源列表。
+     */
+    private List<RegistryCenter> registryCenters = new ArrayList<>();
 
     /**
      * 流量治理策略列表。

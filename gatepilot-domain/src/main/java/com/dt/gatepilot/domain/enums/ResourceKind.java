@@ -36,6 +36,11 @@ public enum ResourceKind {
     CONTROL_PLANE_SETTING,
 
     /**
+     * 注册中心。
+     */
+    REGISTRY_CENTER,
+
+    /**
      * 流量等级。
      */
     TRAFFIC_TIER,

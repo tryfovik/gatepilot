@@ -12,6 +12,7 @@ import com.dt.gatepilot.domain.resource.platform.IngressDomain;
 import com.dt.gatepilot.domain.resource.platform.IsolationGroup;
 import com.dt.gatepilot.domain.resource.platform.PlatformEnvironment;
 import com.dt.gatepilot.domain.resource.platform.PlatformTeam;
+import com.dt.gatepilot.domain.resource.platform.RegistryCenter;
 import com.dt.gatepilot.domain.resource.platform.TrafficTier;
 import com.dt.gatepilot.domain.resource.policy.AuthPolicy;
 import com.dt.gatepilot.domain.resource.policy.ReleasePolicy;
@@ -46,6 +47,7 @@ public class GatePilotResourceRegistry {
         register(GatePilotResourcePaths.ISOLATION_GROUPS, ResourceKind.ISOLATION_GROUP, IsolationGroup.class);
         register(GatePilotResourcePaths.CONTROL_PLANE_SETTINGS,
                 ResourceKind.CONTROL_PLANE_SETTING, ControlPlaneSetting.class);
+        register(GatePilotResourcePaths.REGISTRY_CENTERS, ResourceKind.REGISTRY_CENTER, RegistryCenter.class);
         register(GatePilotResourcePaths.TRAFFIC_TIERS, ResourceKind.TRAFFIC_TIER, TrafficTier.class);
         register(GatePilotResourcePaths.INGRESS_DOMAINS, ResourceKind.INGRESS_DOMAIN, IngressDomain.class);
         register(GatePilotResourcePaths.PROJECTS, ResourceKind.GATEWAY_PROJECT, GatewayProject.class);

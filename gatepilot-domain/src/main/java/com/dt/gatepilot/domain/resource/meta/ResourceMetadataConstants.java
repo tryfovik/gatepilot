@@ -11,6 +11,11 @@ public final class ResourceMetadataConstants {
     public static final String DEFAULT_NAMESPACE = "default";
 
     /**
+     * 平台资源命名空间。
+     */
+    public static final String SYSTEM_NAMESPACE = "system";
+
+    /**
      * GatePilot 标签前缀。
      */
     public static final String LABEL_PREFIX = "gatepilot.io/";

@@ -5,7 +5,9 @@ import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyRequest;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyResult;
 import com.dt.gatepilot.proxy.application.dto.ProxyApplyConstants;
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -95,6 +97,26 @@ class ProxyConfigApplierTest {
         });
     }
 
+    @Test
+    void shouldRefreshUpstreamDiscoveryAfterRuntimeSwitched() {
+        RecordingDiscoveryRegistry discoveryRegistry = new RecordingDiscoveryRegistry();
+        ProxyConfigApplier applier = new ProxyConfigApplier(
+                new PublishedConfigCompiler(),
+                new ProxyRuntimeState(),
+                runtime -> {
+                },
+                discoveryRegistry
+        );
+        ProxyApplyRequest request = new ProxyApplyRequest();
+        request.setPublishedConfig(config("v1", "hash-v1"));
+
+        ProxyApplyResult result = applier.apply(request);
+
+        assertThat(result.getState()).isEqualTo(ConfigApplyState.APPLIED);
+        assertThat(discoveryRegistry.refreshedRuntime).isNotNull();
+        assertThat(discoveryRegistry.refreshedRuntime.getVersion()).isEqualTo("v1");
+    }
+
     private PublishedConfig config(String version, String configHash) {
         PublishedConfig config = new PublishedConfig();
         config.getSpec().setVersion(version);
@@ -114,5 +136,37 @@ class ProxyConfigApplierTest {
             config.getSpec().getRoutes().add(route);
         }
         return config;
+    }
+
+    /**
+     * 记录刷新调用的服务发现注册表。
+     */
+    private static class RecordingDiscoveryRegistry implements UpstreamDiscoveryRegistry {
+
+        /**
+         * 最近刷新运行态。
+         */
+        private CompiledProxyRuntime refreshedRuntime;
+
+        /**
+         * 根据新运行态刷新订阅。
+         *
+         * @param runtime 新运行态
+         */
+        @Override
+        public void refresh(CompiledProxyRuntime runtime) {
+            this.refreshedRuntime = runtime;
+        }
+
+        /**
+         * 查询上游当前实例。
+         *
+         * @param upstream 已编译上游
+         * @return 当前可用实例
+         */
+        @Override
+        public List<CompiledUpstream.CompiledEndpoint> instances(CompiledUpstream upstream) {
+            return upstream.getEndpoints();
+        }
     }
 }

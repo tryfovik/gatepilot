@@ -2,6 +2,7 @@ package com.dt.gatepilot.domain.resource.upstream;
 
 import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
 import com.dt.gatepilot.domain.enums.Protocol;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadata;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.meta.ResourceStatus;
@@ -61,6 +62,11 @@ public class Upstream {
         private List<UpstreamEndpoint> endpoints = new ArrayList<>();
 
         /**
+         * 服务发现配置。
+         */
+        private UpstreamDiscoverySpec discovery = new UpstreamDiscoverySpec();
+
+        /**
          * 主动健康检查配置。
          */
         private HealthCheckSpec healthCheck = new HealthCheckSpec();
@@ -96,6 +102,58 @@ public class Upstream {
          * 端点标签。
          */
         private Map<String, String> labels = new LinkedHashMap<>();
+    }
+
+    /**
+     * 上游服务发现配置。
+     */
+    @Data
+    public static class UpstreamDiscoverySpec {
+
+        /**
+         * 实例发现方式。
+         */
+        private UpstreamDiscoveryType type = UpstreamDiscoveryType.STATIC;
+
+        /**
+         * 注册中心引用。
+         */
+        private ResourceReference registryRef;
+
+        /**
+         * 注册中心命名空间覆盖值。
+         */
+        private String namespace;
+
+        /**
+         * 注册中心分组覆盖值。
+         */
+        private String group;
+
+        /**
+         * 注册中心服务名。
+         */
+        private String serviceName;
+
+        /**
+         * Nacos 集群列表。
+         */
+        private List<String> clusters = new ArrayList<>();
+
+        /**
+         * 实例元数据筛选条件。
+         */
+        private Map<String, String> metadataSelector = new LinkedHashMap<>();
+
+        /**
+         * 是否只选择健康实例。
+         */
+        private Boolean healthyOnly = true;
+
+        /**
+         * 是否只选择启用实例。
+         */
+        private Boolean enabledOnly = true;
     }
 
     /**

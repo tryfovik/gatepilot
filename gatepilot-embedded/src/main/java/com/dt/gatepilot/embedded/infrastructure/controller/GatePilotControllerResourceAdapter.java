@@ -6,6 +6,7 @@ import com.dt.gatepilot.domain.resource.event.GatewayEventConstants;
 import com.dt.gatepilot.domain.resource.meta.LabelSelector;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
+import com.dt.gatepilot.domain.resource.platform.RegistryCenter;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.event.GatewayEvent;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
@@ -150,6 +151,7 @@ public class GatePilotControllerResourceAdapter
         desiredState.setProject(project);
         desiredState.setRoutes(projectRoutes(intent.getNamespace(), runtimeProjectNames));
         desiredState.setUpstreams(projectUpstreams(intent.getNamespace(), runtimeProjectNames));
+        desiredState.setRegistryCenters(registryCenters());
         desiredState.setTrafficPolicies(projectTrafficPolicies(intent.getNamespace(), runtimeProjectNames));
         desiredState.setReleasePolicies(projectReleasePolicies(intent.getNamespace(), runtimeProjectNames));
         desiredState.setAuthPolicies(projectAuthPolicies(intent.getNamespace(), runtimeProjectNames));
@@ -238,6 +240,11 @@ public class GatePilotControllerResourceAdapter
                 .stream()
                 .filter(upstream -> projectMatches(upstream.getSpec().getProjectRef(), projectNames))
                 .toList();
+    }
+
+    private List<RegistryCenter> registryCenters() {
+        return list(GatePilotResourcePaths.REGISTRY_CENTERS, ResourceMetadataConstants.SYSTEM_NAMESPACE,
+                RegistryCenter.class);
     }
 
     private List<TrafficPolicy> projectTrafficPolicies(String namespace, List<String> projectNames) {

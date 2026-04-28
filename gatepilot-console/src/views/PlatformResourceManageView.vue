@@ -190,7 +190,7 @@
                     v-else
                     v-model="form[field.key]"
                     class="search-input"
-                    :type="field.type === 'number' ? 'number' : 'text'"
+                    :type="field.type === 'number' ? 'number' : field.type === 'secret' ? 'password' : 'text'"
                     :required="field.required"
                   />
                 </template>
@@ -625,6 +625,11 @@ function summaryText(item: SettingsResource) {
   }
   if (activePage.value.resourceType === 'ingress-domains') {
     return [spec.host, spec.ownerTeam, spec.defaultNamespace, spec.acceptingProjects === false ? '停止接入' : '允许接入']
+      .filter(Boolean)
+      .join(' / ');
+  }
+  if (activePage.value.resourceType === 'registry-centers') {
+    return [spec.type, spec.serverAddr, spec.namespace || 'public', spec.group || 'DEFAULT_GROUP', spec.acceptingUpstreams === false ? '停止接入' : '允许接入']
       .filter(Boolean)
       .join(' / ');
   }

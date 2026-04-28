@@ -93,10 +93,38 @@ public class PublishedConfigCompiler {
             upstream.setProtocol(source.getProtocol());
             upstream.setLoadBalance(normalizeLoadBalance(source.getLoadBalance()));
             upstream.setEndpoints(source.getEndpoints().stream().map(this::compileEndpoint).toList());
+            upstream.setDiscovery(compileDiscovery(source.getDiscovery()));
             upstream.setHealthCheck(compileHealthCheck(source.getHealthCheck()));
             upstreams.put(upstream.getName(), upstream);
         }
         return upstreams;
+    }
+
+    private CompiledUpstream.CompiledDiscovery compileDiscovery(PublishedConfig.PublishedDiscovery source) {
+        CompiledUpstream.CompiledDiscovery discovery = new CompiledUpstream.CompiledDiscovery();
+        if (source == null) {
+            return discovery;
+        }
+        // 服务发现只在后台刷新实例，不进入请求热路径做远程调用
+        discovery.setType(source.getType());
+        discovery.setRegistryRef(copyReference(source.getRegistryRef()));
+        discovery.setRegistryType(source.getRegistryType());
+        discovery.setServerAddr(source.getServerAddr());
+        discovery.setNamespace(source.getNamespace());
+        discovery.setGroup(source.getGroup());
+        discovery.setServiceName(source.getServiceName());
+        discovery.setClusters(source.getClusters() == null ? List.of() : List.copyOf(source.getClusters()));
+        discovery.setMetadataSelector(source.getMetadataSelector() == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(source.getMetadataSelector()));
+        discovery.setAuthType(source.getAuthType());
+        discovery.setUsername(source.getUsername());
+        discovery.setPassword(source.getPassword());
+        discovery.setAccessKey(source.getAccessKey());
+        discovery.setSecretKey(source.getSecretKey());
+        discovery.setHealthyOnly(source.getHealthyOnly());
+        discovery.setEnabledOnly(source.getEnabledOnly());
+        return discovery;
     }
 
     private String normalizeLoadBalance(String strategy) {
@@ -118,7 +146,20 @@ public class PublishedConfigCompiler {
         endpoint.setHost(source.getHost());
         endpoint.setPort(source.getPort());
         endpoint.setWeight(source.getWeight());
+        endpoint.setLabels(source.getLabels() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getLabels()));
         return endpoint;
+    }
+
+    private ResourceReference copyReference(ResourceReference reference) {
+        if (reference == null) {
+            return null;
+        }
+        ResourceReference copy = new ResourceReference();
+        copy.setKind(reference.getKind());
+        copy.setNamespace(reference.getNamespace());
+        copy.setName(reference.getName());
+        copy.setUid(reference.getUid());
+        return copy;
     }
 
     private CompiledUpstream.CompiledHealthCheck compileHealthCheck(

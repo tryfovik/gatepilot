@@ -177,6 +177,7 @@ const navSections = [
       { path: '/platform/capacity/config-shards', label: '配置分片', kicker: '平台配置 / 容量与隔离 / 配置分片', icon: Settings },
       { path: '/platform/capacity/isolation-groups', label: '隔离组', kicker: '平台配置 / 容量与隔离 / 隔离组', icon: Settings },
       { path: '/platform/capacity/traffic-tiers', label: '流量等级', kicker: '平台配置 / 容量与隔离 / 流量等级', icon: Settings },
+      { path: '/platform/runtime/registry-centers', label: '注册中心', kicker: '平台配置 / 运行参数 / 注册中心', icon: Settings },
       { path: '/platform/runtime/control-plane-settings', label: '动态参数', kicker: '平台配置 / 运行参数 / 动态参数', icon: Settings },
       { path: '/platform/settings/overview', label: '配置总览', kicker: '平台配置 / 设置总览 / 入口', icon: Settings }
     ]

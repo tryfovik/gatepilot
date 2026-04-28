@@ -6,6 +6,7 @@ import com.dt.gatepilot.agent.domain.port.ProxyRuntimeStatusReader;
 import com.dt.gatepilot.agent.infrastructure.config.AgentRuntimeConstants;
 import com.dt.gatepilot.domain.deployment.GatePilotDeploymentModeConstants;
 import com.dt.gatepilot.proxy.domain.port.RuntimeAuditSink;
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
@@ -51,15 +52,18 @@ public class GatePilotEmbeddedAssemblyConfiguration {
     @ConditionalOnGatePilotProxyEnabled
     public ProxyRuntimeStatusReader proxyRuntimeStatusReader(ObjectProvider<ProxyRuntimeState> runtimeStateProvider,
                                                              ObjectProvider<UpstreamEndpointHealthRegistry>
-                                                                     healthRegistryProvider) {
+                                                                     healthRegistryProvider,
+                                                             ObjectProvider<UpstreamDiscoveryRegistry>
+                                                                     discoveryRegistryProvider) {
         // embedded 只把 proxy 本机状态补进 agent 心跳
         ProxyRuntimeState runtimeState = runtimeStateProvider.getIfAvailable();
         UpstreamEndpointHealthRegistry healthRegistry = healthRegistryProvider.getIfAvailable();
-        if (runtimeState == null || healthRegistry == null) {
+        UpstreamDiscoveryRegistry discoveryRegistry = discoveryRegistryProvider.getIfAvailable();
+        if (runtimeState == null || healthRegistry == null || discoveryRegistry == null) {
             return snapshot -> {
             };
         }
-        return new InProcessProxyRuntimeStatusReader(runtimeState, healthRegistry);
+        return new InProcessProxyRuntimeStatusReader(runtimeState, healthRegistry, discoveryRegistry);
     }
 
     /**

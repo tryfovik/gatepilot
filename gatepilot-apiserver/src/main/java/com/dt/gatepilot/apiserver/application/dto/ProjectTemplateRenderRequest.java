@@ -5,12 +5,15 @@ import com.dt.gatepilot.domain.enums.HttpMethod;
 import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
 import com.dt.gatepilot.domain.enums.Protocol;
 import com.dt.gatepilot.domain.enums.ReleaseStrategy;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.Data;
 
 /**
@@ -131,6 +134,41 @@ public class ProjectTemplateRenderRequest {
     public static class UpstreamValues {
 
         /**
+         * 实例发现方式
+         */
+        private UpstreamDiscoveryType discoveryType = UpstreamDiscoveryType.STATIC;
+
+        /**
+         * 注册中心名称
+         */
+        private String registryCenterName;
+
+        /**
+         * 注册中心服务名
+         */
+        private String serviceName;
+
+        /**
+         * 注册中心命名空间覆盖值
+         */
+        private String discoveryNamespace;
+
+        /**
+         * 注册中心分组覆盖值
+         */
+        private String discoveryGroup;
+
+        /**
+         * Nacos 集群列表
+         */
+        private List<String> clusters = new ArrayList<>();
+
+        /**
+         * 实例元数据筛选条件
+         */
+        private Map<String, String> metadataSelector = new LinkedHashMap<>();
+
+        /**
          * 上游主机
          */
         private String host;
@@ -173,6 +211,41 @@ public class ProjectTemplateRenderRequest {
          * 是否启用候选上游
          */
         private Boolean enabled = false;
+
+        /**
+         * 实例发现方式
+         */
+        private UpstreamDiscoveryType discoveryType = UpstreamDiscoveryType.STATIC;
+
+        /**
+         * 注册中心名称
+         */
+        private String registryCenterName;
+
+        /**
+         * 注册中心服务名
+         */
+        private String serviceName;
+
+        /**
+         * 注册中心命名空间覆盖值
+         */
+        private String discoveryNamespace;
+
+        /**
+         * 注册中心分组覆盖值
+         */
+        private String discoveryGroup;
+
+        /**
+         * Nacos 集群列表
+         */
+        private List<String> clusters = new ArrayList<>();
+
+        /**
+         * 实例元数据筛选条件
+         */
+        private Map<String, String> metadataSelector = new LinkedHashMap<>();
 
         /**
          * 候选上游主机

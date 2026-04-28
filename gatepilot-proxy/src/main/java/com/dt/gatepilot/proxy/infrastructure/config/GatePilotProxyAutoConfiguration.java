@@ -5,6 +5,7 @@ import com.dt.gatepilot.proxy.domain.port.RuntimeAuthChecker;
 import com.dt.gatepilot.proxy.domain.port.RuntimeGovernanceRulePublisher;
 import com.dt.gatepilot.proxy.domain.port.RuntimeMetricsSink;
 import com.dt.gatepilot.proxy.domain.port.RuntimeRateLimiter;
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.CircuitBreakerPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyConfigApplier;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
@@ -15,9 +16,11 @@ import com.dt.gatepilot.proxy.domain.runtime.ReleaseUpstreamResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RetryPolicyResolver;
 import com.dt.gatepilot.proxy.domain.runtime.RouteAccessEvaluator;
 import com.dt.gatepilot.proxy.domain.runtime.RouteCircuitBreaker;
+import com.dt.gatepilot.proxy.domain.runtime.StaticUpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.TrafficColorResolver;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
 import com.dt.gatepilot.proxy.infrastructure.auth.GetbootRuntimeAuthChecker;
+import com.dt.gatepilot.proxy.infrastructure.discovery.NacosUpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.infrastructure.health.UpstreamHealthProbe;
 import com.dt.gatepilot.proxy.infrastructure.health.UpstreamHealthProbeScheduler;
 import com.dt.gatepilot.proxy.infrastructure.governance.ProxySentinelConstants;
@@ -86,6 +89,7 @@ public class GatePilotProxyAutoConfiguration {
      * @param compiler PublishedConfig 编译器
      * @param runtimeState proxy 运行态
      * @param governanceRulePublisherProvider 治理规则发布端口提供器
+     * @param upstreamDiscoveryRegistry 上游服务发现注册表
      * @return proxy 配置应用器
      */
     @Bean
@@ -93,11 +97,37 @@ public class GatePilotProxyAutoConfiguration {
     public ProxyConfigApplier proxyConfigApplier(PublishedConfigCompiler compiler,
                                                  ProxyRuntimeState runtimeState,
                                                  ObjectProvider<RuntimeGovernanceRulePublisher>
-                                                         governanceRulePublisherProvider) {
+                                                         governanceRulePublisherProvider,
+                                                 UpstreamDiscoveryRegistry upstreamDiscoveryRegistry) {
         // apply 负责把新配置编译后切到运行态
         return new ProxyConfigApplier(compiler, runtimeState,
                 governanceRulePublisherProvider.getIfAvailable(() -> runtime -> {
-                }));
+                }), upstreamDiscoveryRegistry);
+    }
+
+    /**
+     * 创建 Nacos 上游服务发现注册表。
+     *
+     * @return 上游服务发现注册表
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnClass(name = "com.alibaba.nacos.api.naming.NamingService")
+    public UpstreamDiscoveryRegistry nacosUpstreamDiscoveryRegistry() {
+        // Nacos 是公司主路径，proxy 请求链路只读取本地实例快照
+        return new NacosUpstreamDiscoveryRegistry();
+    }
+
+    /**
+     * 创建固定端点上游服务发现注册表。
+     *
+     * @return 上游服务发现注册表
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public UpstreamDiscoveryRegistry upstreamDiscoveryRegistry() {
+        // 没有 Nacos 依赖时仍然支持固定地址上游
+        return new StaticUpstreamDiscoveryRegistry();
     }
 
     /**
@@ -235,14 +265,17 @@ public class GatePilotProxyAutoConfiguration {
      *
      * @param runtimeState proxy 运行态
      * @param healthRegistry 端点健康状态表
+     * @param upstreamDiscoveryRegistry 上游服务发现注册表
      * @return 上游健康探测器
      */
     @Bean
     @ConditionalOnMissingBean
     public UpstreamHealthProbe upstreamHealthProbe(ProxyRuntimeState runtimeState,
-                                                   UpstreamEndpointHealthRegistry healthRegistry) {
+                                                   UpstreamEndpointHealthRegistry healthRegistry,
+                                                   UpstreamDiscoveryRegistry upstreamDiscoveryRegistry) {
         // 健康探测必须绕开 LoadBalancer，否则 IP 会被当成服务名
-        return new UpstreamHealthProbe(runtimeState, healthRegistry, WebClient.builder().build());
+        return new UpstreamHealthProbe(runtimeState, healthRegistry, upstreamDiscoveryRegistry,
+                WebClient.builder().build());
     }
 
     /**

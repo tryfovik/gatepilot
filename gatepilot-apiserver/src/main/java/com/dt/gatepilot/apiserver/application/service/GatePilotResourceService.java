@@ -145,6 +145,7 @@ public class GatePilotResourceService {
             case CONFIG_SHARD -> requireResourceType(GatePilotResourcePaths.CONFIG_SHARDS);
             case ISOLATION_GROUP -> requireResourceType(GatePilotResourcePaths.ISOLATION_GROUPS);
             case CONTROL_PLANE_SETTING -> requireResourceType(GatePilotResourcePaths.CONTROL_PLANE_SETTINGS);
+            case REGISTRY_CENTER -> requireResourceType(GatePilotResourcePaths.REGISTRY_CENTERS);
             case TRAFFIC_TIER -> requireResourceType(GatePilotResourcePaths.TRAFFIC_TIERS);
             case INGRESS_DOMAIN -> requireResourceType(GatePilotResourcePaths.INGRESS_DOMAINS);
             case GATEWAY_PROJECT -> requireResourceType(GatePilotResourcePaths.PROJECTS);

@@ -1,5 +1,6 @@
 package com.dt.gatepilot.proxy.infrastructure.loadbalancer;
 
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.infrastructure.config.ConditionalOnGatePilotProxyEnabled;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
@@ -23,6 +24,7 @@ public class GatePilotLoadBalancerClientConfiguration {
      * @param environment LoadBalancer 子上下文环境
      * @param runtimeState proxy 当前运行态
      * @param healthRegistry 上游端点健康状态表
+     * @param upstreamDiscoveryRegistry 上游服务发现注册表
      * @return 上游实例列表提供器
      */
     @Bean
@@ -30,12 +32,14 @@ public class GatePilotLoadBalancerClientConfiguration {
     public ServiceInstanceListSupplier gatePilotServiceInstanceListSupplier(
             Environment environment,
             ProxyRuntimeState runtimeState,
-            UpstreamEndpointHealthRegistry healthRegistry) {
+            UpstreamEndpointHealthRegistry healthRegistry,
+            UpstreamDiscoveryRegistry upstreamDiscoveryRegistry) {
         // serviceId 来自 LoadBalancer 子上下文，不从请求里临时解析
         return new GatePilotServiceInstanceListSupplier(
                 LoadBalancerClientFactory.getName(environment),
                 runtimeState,
-                healthRegistry
+                healthRegistry,
+                upstreamDiscoveryRegistry
         );
     }
 

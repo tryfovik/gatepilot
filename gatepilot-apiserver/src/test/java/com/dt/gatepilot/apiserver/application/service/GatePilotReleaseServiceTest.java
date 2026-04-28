@@ -10,9 +10,12 @@ import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryGatePilotResourceStore;
 import com.dt.gatepilot.domain.enums.LoadBalanceStrategy;
+import com.dt.gatepilot.domain.enums.RegistryCenterType;
 import com.dt.gatepilot.domain.enums.ResourceKind;
+import com.dt.gatepilot.domain.enums.UpstreamDiscoveryType;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
+import com.dt.gatepilot.domain.resource.platform.RegistryCenter;
 import com.dt.gatepilot.domain.resource.project.GatewayProject;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.domain.resource.route.GatewayRoute;
@@ -142,6 +145,24 @@ class GatePilotReleaseServiceTest {
     }
 
     @Test
+    void shouldAllowNacosUpstreamWithoutStaticEndpointsOnDryRun() {
+        saveProject("default", "game");
+        saveRegistryCenter();
+        saveNacosUpstream();
+        saveRouteForUpstream("nacos-route", "nacos-upstream");
+        CreateReleaseCommand request = new CreateReleaseCommand();
+        request.setNamespace("default");
+        request.setProjectName("game");
+
+        ReleaseDryRunResult response = releaseService.dryRun(request);
+
+        assertThat(response.isPassed()).isTrue();
+        assertThat(response.getMessages())
+                .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
+                .doesNotContain(GatePilotReleaseConstants.REASON_UPSTREAM_ENDPOINT_MISSING);
+    }
+
+    @Test
     void shouldCreateRollbackEventAndMarkSnapshot() {
         saveProject("default", "game");
         PublishedConfig config = publishedConfig("default", "game", "v1", "shard-a");
@@ -211,6 +232,26 @@ class GatePilotReleaseServiceTest {
         upstream.getSpec().getEndpoints().add(endpoint);
         GatePilotResourceType upstreamType = resourceService.requireResourceType(ResourceKind.UPSTREAM);
         resourceService.save(upstreamType, "default", "hash-upstream", upstream);
+    }
+
+    private void saveNacosUpstream() {
+        Upstream upstream = new Upstream();
+        upstream.getSpec().setProjectRef(projectRef("default", "game"));
+        upstream.getSpec().setLoadBalance(LoadBalanceStrategy.ROUND_ROBIN);
+        upstream.getSpec().getDiscovery().setType(UpstreamDiscoveryType.NACOS);
+        upstream.getSpec().getDiscovery().setRegistryRef(resourceRef(ResourceKind.REGISTRY_CENTER, "system",
+                "nacos-prod"));
+        upstream.getSpec().getDiscovery().setServiceName("order-service");
+        GatePilotResourceType upstreamType = resourceService.requireResourceType(ResourceKind.UPSTREAM);
+        resourceService.save(upstreamType, "default", "nacos-upstream", upstream);
+    }
+
+    private void saveRegistryCenter() {
+        RegistryCenter registryCenter = new RegistryCenter();
+        registryCenter.getSpec().setType(RegistryCenterType.NACOS);
+        registryCenter.getSpec().setServerAddr("nacos.prod:8848");
+        GatePilotResourceType registryType = resourceService.requireResourceType(ResourceKind.REGISTRY_CENTER);
+        resourceService.save(registryType, "system", "nacos-prod", registryCenter);
     }
 
     private void saveValidRoute(int index) {

@@ -36,6 +36,11 @@ public final class GatePilotResourcePaths {
     public static final String CONTROL_PLANE_SETTINGS = "control-plane-settings";
 
     /**
+     * 注册中心资源路径。
+     */
+    public static final String REGISTRY_CENTERS = "registry-centers";
+
+    /**
      * 流量等级资源路径。
      */
     public static final String TRAFFIC_TIERS = "traffic-tiers";

@@ -248,6 +248,56 @@
 
               <template v-else-if="resourceType === 'upstreams'">
                 <label>
+                  <span>实例来源</span>
+                  <select v-model="resourceForm.discoveryType" class="select-input">
+                    <option value="NACOS">Nacos 服务发现</option>
+                    <option value="STATIC">固定地址</option>
+                  </select>
+                </label>
+                <template v-if="resourceForm.discoveryType === 'NACOS'">
+                  <label>
+                    <span>注册中心 <em class="required-star" aria-label="必填">*</em></span>
+                    <select v-model="resourceForm.registryCenterName" class="select-input" required>
+                      <option value="">请选择注册中心</option>
+                      <option v-for="option in relationOptions.registryCenters" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>服务名 <em class="required-star" aria-label="必填">*</em></span>
+                    <input v-model.trim="resourceForm.serviceName" class="search-input" placeholder="例如 order-service" required />
+                  </label>
+                  <label>
+                    <span>Nacos 分组</span>
+                    <input v-model.trim="resourceForm.discoveryGroup" class="search-input" placeholder="默认 DEFAULT_GROUP" />
+                  </label>
+                  <label>
+                    <span>Nacos 命名空间</span>
+                    <input v-model.trim="resourceForm.discoveryNamespace" class="search-input" placeholder="不填使用注册中心默认值" />
+                  </label>
+                  <label>
+                    <span>集群</span>
+                    <input v-model.trim="resourceForm.discoveryClusters" class="search-input" placeholder="多个用英文逗号分隔" />
+                  </label>
+                  <label>
+                    <span>元数据筛选</span>
+                    <input v-model.trim="resourceForm.metadataSelector" class="search-input" placeholder="version=stable,zone=hz" />
+                  </label>
+                </template>
+                <template v-else>
+                  <label>
+                    <span>端点地址 <em class="required-star" aria-label="必填">*</em></span>
+                    <input v-model.trim="resourceForm.endpointHost" class="search-input" required />
+                  </label>
+                  <label>
+                    <span>端点端口 <em class="required-star" aria-label="必填">*</em></span>
+                    <input v-model.number="resourceForm.endpointPort" class="search-input" type="number" min="1" max="65535" required />
+                  </label>
+                  <label>
+                    <span>端点权重</span>
+                    <input v-model.number="resourceForm.endpointWeight" class="search-input" type="number" min="0" />
+                  </label>
+                </template>
+                <label>
                   <span>协议</span>
                   <select v-model="resourceForm.protocol" class="select-input">
                     <option value="HTTP">HTTP</option>
@@ -261,18 +311,6 @@
                     <option value="WEIGHTED_ROUND_ROBIN">加权轮询</option>
                     <option value="RANDOM">随机</option>
                   </select>
-                </label>
-                <label>
-                  <span>端点地址 <em class="required-star" aria-label="必填">*</em></span>
-                  <input v-model.trim="resourceForm.endpointHost" class="search-input" required />
-                </label>
-                <label>
-                  <span>端点端口 <em class="required-star" aria-label="必填">*</em></span>
-                  <input v-model.number="resourceForm.endpointPort" class="search-input" type="number" min="1" max="65535" required />
-                </label>
-                <label>
-                  <span>端点权重</span>
-                  <input v-model.number="resourceForm.endpointWeight" class="search-input" type="number" min="0" />
                 </label>
                 <label class="check-row">
                   <input v-model="resourceForm.healthCheckEnabled" type="checkbox" />
@@ -446,6 +484,17 @@ interface ResourceItem {
       port?: number;
       weight?: number;
     }>;
+    discovery?: {
+      type?: string;
+      registryRef?: {
+        name?: string;
+      };
+      namespace?: string;
+      group?: string;
+      serviceName?: string;
+      clusters?: string[];
+      metadataSelector?: Record<string, string>;
+    };
     path?: {
       value?: string;
       stripPrefix?: boolean;
@@ -546,7 +595,8 @@ const relationOptions = reactive<Record<string, Array<{ label: string; value: st
   teams: [],
   environments: [],
   configShards: [],
-  ingressDomains: []
+  ingressDomains: [],
+  registryCenters: []
 });
 const router = useRouter();
 let unsubscribeNamespace: (() => void) | null = null;
@@ -712,6 +762,13 @@ function startEdit(item: ResourceItem) {
   resourceForm.upstreamName = item.spec?.upstreamRef?.name || '';
   resourceForm.protocol = item.spec?.protocol || 'HTTP';
   resourceForm.loadBalance = item.spec?.loadBalance || 'ROUND_ROBIN';
+  resourceForm.discoveryType = item.spec?.discovery?.type || 'STATIC';
+  resourceForm.registryCenterName = item.spec?.discovery?.registryRef?.name || '';
+  resourceForm.serviceName = item.spec?.discovery?.serviceName || '';
+  resourceForm.discoveryGroup = item.spec?.discovery?.group || '';
+  resourceForm.discoveryNamespace = item.spec?.discovery?.namespace || '';
+  resourceForm.discoveryClusters = (item.spec?.discovery?.clusters || []).join(',');
+  resourceForm.metadataSelector = metadataSelectorText(item.spec?.discovery?.metadataSelector);
   resourceForm.endpointHost = item.spec?.endpoints?.[0]?.host || '';
   resourceForm.endpointPort = item.spec?.endpoints?.[0]?.port || '';
   resourceForm.endpointWeight = item.spec?.endpoints?.[0]?.weight || 100;
@@ -743,10 +800,11 @@ async function saveCurrent() {
   try {
     validateResourceForm();
     saving.value = true;
-    await saveResource(props.resourceType, namespace.value || 'default', String(resourceForm.name), buildResource());
+    const savedName = String(resourceForm.name);
+    await saveResource(props.resourceType, namespace.value || 'default', savedName, buildResource());
     await load();
     closeForm();
-    notifyInfo(`${editableResource.value?.label || '资源'}已保存`, String(resourceForm.name));
+    notifyInfo(`${editableResource.value?.label || '资源'}已保存`, savedName);
   } catch (err) {
     formError.value = err instanceof Error ? err.message : '保存失败';
   } finally {
@@ -761,6 +819,7 @@ function resetResourceForm() {
     projectName: '',
     protocol: 'HTTP',
     loadBalance: 'ROUND_ROBIN',
+    discoveryType: 'NACOS',
     endpointWeight: 100,
     healthCheckEnabled: false,
     rateLimitEnabled: false,
@@ -784,7 +843,12 @@ function validateResourceForm() {
   if (props.resourceType === 'routes' && (!resourceForm.hosts || !resourceForm.path || !resourceForm.upstreamName)) {
     throw new Error('请填写入口域名、路径前缀和默认上游');
   }
-  if (props.resourceType === 'upstreams' && (!resourceForm.endpointHost || !resourceForm.endpointPort)) {
+  if (props.resourceType === 'upstreams' && resourceForm.discoveryType === 'NACOS'
+      && (!resourceForm.registryCenterName || !resourceForm.serviceName)) {
+    throw new Error('请选择注册中心并填写服务名');
+  }
+  if (props.resourceType === 'upstreams' && resourceForm.discoveryType !== 'NACOS'
+      && (!resourceForm.endpointHost || !resourceForm.endpointPort)) {
     throw new Error('请填写上游端点地址和端口');
   }
 }
@@ -829,7 +893,8 @@ function buildSpec() {
       projectRef: refOf('GATEWAY_PROJECT', resourceForm.projectName),
       protocol: resourceForm.protocol || 'HTTP',
       loadBalance: resourceForm.loadBalance || 'ROUND_ROBIN',
-      endpoints: [{
+      discovery: buildUpstreamDiscovery(),
+      endpoints: resourceForm.discoveryType === 'NACOS' ? [] : [{
         host: resourceForm.endpointHost,
         port: Number(resourceForm.endpointPort),
         weight: Number(resourceForm.endpointWeight || 100)
@@ -888,10 +953,29 @@ function buildSpec() {
   return {};
 }
 
-function refOf(kind: string, name: string) {
+function buildUpstreamDiscovery() {
+  if (resourceForm.discoveryType === 'NACOS') {
+    return {
+      type: 'NACOS',
+      registryRef: refOf('REGISTRY_CENTER', resourceForm.registryCenterName, 'system'),
+      namespace: resourceForm.discoveryNamespace || undefined,
+      group: resourceForm.discoveryGroup || undefined,
+      serviceName: resourceForm.serviceName,
+      clusters: splitCsv(resourceForm.discoveryClusters),
+      metadataSelector: parseKeyValuePairs(resourceForm.metadataSelector),
+      healthyOnly: true,
+      enabledOnly: true
+    };
+  }
+  return {
+    type: 'STATIC'
+  };
+}
+
+function refOf(kind: string, name: string, targetNamespace = namespace.value || 'default') {
   return {
     kind,
-    namespace: namespace.value || 'default',
+    namespace: targetNamespace,
     name
   };
 }
@@ -903,18 +987,52 @@ function splitCsv(value: unknown) {
     .filter(Boolean);
 }
 
+function parseKeyValuePairs(value: unknown) {
+  return splitCsv(value).reduce<Record<string, string>>((result, item) => {
+    const index = item.indexOf('=');
+    if (index <= 0) {
+      return result;
+    }
+    const key = item.slice(0, index).trim();
+    const val = item.slice(index + 1).trim();
+    if (key && val) {
+      result[key] = val;
+    }
+    return result;
+  }, {});
+}
+
+function metadataSelectorText(value?: Record<string, string>) {
+  if (!value) {
+    return '';
+  }
+  return Object.entries(value)
+    .map(([key, val]) => `${key}=${val}`)
+    .join(',');
+}
+
 async function loadRelationOptions() {
   if (!editableResource.value) {
     return;
   }
-  const [projectPage, upstreamPage, routePage, teamPage, environmentPage, configShardPage, ingressDomainPage] = await Promise.all([
+  const [
+    projectPage,
+    upstreamPage,
+    routePage,
+    teamPage,
+    environmentPage,
+    configShardPage,
+    ingressDomainPage,
+    registryCenterPage
+  ] = await Promise.all([
     listResources<ResourceItem>('projects', namespace.value, 200).catch(() => ({ items: [] })),
     listResources<ResourceItem>('upstreams', namespace.value, 200).catch(() => ({ items: [] })),
     listResources<ResourceItem>('routes', namespace.value, 200).catch(() => ({ items: [] })),
     listResources<ResourceItem>('teams', 'system', 200).catch(() => ({ items: [] })),
     listResources<ResourceItem>('environments', 'system', 200).catch(() => ({ items: [] })),
     listResources<ResourceItem>('config-shards', 'system', 200).catch(() => ({ items: [] })),
-    listResources<ResourceItem>('ingress-domains', 'system', 200).catch(() => ({ items: [] }))
+    listResources<ResourceItem>('ingress-domains', 'system', 200).catch(() => ({ items: [] })),
+    listResources<ResourceItem>('registry-centers', 'system', 200).catch(() => ({ items: [] }))
   ]);
   relationOptions.projects = relationList(projectPage.items);
   relationOptions.upstreams = relationList(upstreamPage.items);
@@ -923,6 +1041,7 @@ async function loadRelationOptions() {
   relationOptions.environments = relationList(environmentPage.items);
   relationOptions.configShards = relationList(configShardPage.items);
   relationOptions.ingressDomains = relationList(ingressDomainPage.items, 'host');
+  relationOptions.registryCenters = relationList(registryCenterPage.items);
 }
 
 function relationList(resources: ResourceItem[], valueKey: 'name' | 'host' = 'name') {
@@ -988,6 +1107,9 @@ function summaryText(item: ResourceItem) {
     return `认证 ${item.spec.type}`;
   }
   if (item.spec?.loadBalance) {
+    if (item.spec.discovery?.type === 'NACOS') {
+      return `${item.spec.loadBalance} / Nacos ${item.spec.discovery.serviceName || '-'}`;
+    }
     const endpoints = item.spec.endpoints?.map((endpoint) => `${endpoint.host}:${endpoint.port}`).join(', ');
     return `${item.spec.loadBalance} / ${item.spec.endpoints?.length ?? 0} 端点${endpoints ? ` / ${endpoints}` : ''}`;
   }
@@ -1158,11 +1280,22 @@ function loadBalanceLabel(value?: string) {
 }
 
 function endpointSummary(item: ResourceItem) {
+  if (item.spec?.discovery?.type === 'NACOS') {
+    return `Nacos：${item.spec.discovery.serviceName || '-'}`;
+  }
   const count = item.spec?.endpoints?.length || 0;
   return count ? `${count} 个端点` : '暂无端点';
 }
 
 function endpointPreview(item: ResourceItem) {
+  if (item.spec?.discovery?.type === 'NACOS') {
+    const parts = [
+      item.spec.discovery.registryRef?.name,
+      item.spec.discovery.group,
+      item.spec.discovery.clusters?.join(',')
+    ].filter(Boolean);
+    return parts.join(' / ') || '从注册中心动态订阅实例';
+  }
   const endpoints = item.spec?.endpoints || [];
   if (endpoints.length === 0) {
     return '保存上游端点后可转发';

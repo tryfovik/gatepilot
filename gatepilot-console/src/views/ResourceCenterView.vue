@@ -211,7 +211,11 @@ interface PreviewResource {
     defaultIsolationGroup?: string;
     tier?: string;
     strategy?: string;
+    type?: string;
     version?: string;
+    serverAddr?: string;
+    namespace?: string;
+    group?: string;
     projectRef?: {
       name?: string;
     };
@@ -222,6 +226,10 @@ interface PreviewResource {
       name?: string;
     };
     loadBalance?: string;
+    discovery?: {
+      type?: string;
+      serviceName?: string;
+    };
     endpoints?: unknown[];
     routes?: unknown[];
     upstreams?: unknown[];
@@ -250,6 +258,7 @@ const resourceGroups: ResourceGroup[] = [
       { label: '配置分片', kind: 'ConfigShard', resourceType: 'config-shards', group: 'platform', groupLabel: '容量与隔离', description: '大规模配置生成、下发和观察的分片边界' },
       { label: '隔离组', kind: 'IsolationGroup', resourceType: 'isolation-groups', group: 'platform', groupLabel: '容量与隔离', description: '高流量项目可绑定的 agent / proxy 副本池' },
       { label: '流量等级', kind: 'TrafficTier', resourceType: 'traffic-tiers', group: 'platform', groupLabel: '容量与隔离', description: '项目容量等级，用于推荐分片和隔离组' },
+      { label: '注册中心', kind: 'RegistryCenter', resourceType: 'registry-centers', group: 'platform', groupLabel: '运行参数', description: 'Nacos 等服务发现连接信息，上游只引用服务名' },
       { label: '动态参数', kind: 'ControlPlaneSetting', resourceType: 'control-plane-settings', group: 'platform', groupLabel: '运行参数', description: '控制面、agent、proxy 可热生效的运行参数' }
     ]
   },
@@ -478,7 +487,11 @@ function previewSummary(item: PreviewResource) {
     return [spec.path?.value, spec.upstreamRef?.name].filter(Boolean).join(' / ') || '-';
   }
   if (activeResource.value?.resourceType === 'upstreams') {
-    return `${spec.loadBalance || '-'} / ${spec.endpoints?.length ?? 0} 端点`;
+    const discovery = spec.discovery?.type === 'NACOS' ? `Nacos ${spec.discovery.serviceName || '-'}` : `${spec.endpoints?.length ?? 0} 端点`;
+    return `${spec.loadBalance || '-'} / ${discovery}`;
+  }
+  if (activeResource.value?.resourceType === 'registry-centers') {
+    return [spec.type, spec.serverAddr, spec.namespace || 'public', spec.group].filter(Boolean).join(' / ') || '-';
   }
   if (activeResource.value?.resourceType === 'published-configs') {
     return `${spec.routes?.length ?? 0} 路由 / ${spec.upstreams?.length ?? 0} 上游 / ${spec.policies?.length ?? 0} 策略`;

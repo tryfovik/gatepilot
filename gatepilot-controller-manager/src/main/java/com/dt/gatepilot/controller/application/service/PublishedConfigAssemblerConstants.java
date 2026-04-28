@@ -41,6 +41,16 @@ public final class PublishedConfigAssemblerConstants {
     public static final String ERROR_UNSUPPORTED_LOAD_BALANCE_PREFIX = "unsupported load balance strategy: ";
 
     /**
+     * 缺少注册中心引用错误前缀。
+     */
+    public static final String ERROR_REGISTRY_REF_MISSING_PREFIX = "missing registry ref: ";
+
+    /**
+     * 注册中心不存在错误前缀。
+     */
+    public static final String ERROR_REGISTRY_CENTER_MISSING_PREFIX = "registry center not found: ";
+
+    /**
      * 错误详情分隔符。
      */
     public static final String ERROR_DETAIL_SEPARATOR = " -> ";

@@ -115,6 +115,18 @@ const fieldLabels: Record<string, string> = {
   hotReloadable: '热生效',
   applyMode: '生效模式',
   scope: '生效范围',
+  serverAddr: '服务地址',
+  registryRef: '注册中心',
+  registryType: '注册中心类型',
+  authType: '认证方式',
+  username: '用户名',
+  password: '密码',
+  accessKey: 'AccessKey',
+  secretKey: 'SecretKey',
+  serviceName: '服务名',
+  discovery: '服务发现',
+  metadataSelector: '元数据筛选',
+  acceptingUpstreams: '允许新上游',
   nodeId: '节点 ID',
   role: '角色',
   zone: '可用区',
@@ -223,6 +235,9 @@ function formatValue(path: string, key: string, value: unknown): string {
   if (value === undefined || value === null || value === '') {
     return '-';
   }
+  if (sensitiveField(path, key)) {
+    return '******';
+  }
   if (key.endsWith('At') || path.endsWith('At')) {
     return formatTime(value as string | number);
   }
@@ -249,6 +264,10 @@ function formatValue(path: string, key: string, value: unknown): string {
   }
   const record = toRecord(value);
   return record ? summarizeRecord(record) : String(value);
+}
+
+function sensitiveField(path: string, key: string) {
+  return ['password', 'secretKey', 'accessKey'].includes(key) || ['password', 'secretKey', 'accessKey'].includes(path);
 }
 
 function formatArray(values: unknown[]) {

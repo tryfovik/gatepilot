@@ -149,13 +149,37 @@
                 <input v-model="form.route.path" class="search-input" required />
               </label>
               <label>
-                <span>上游地址 <em class="required-star" aria-label="必填">*</em> <i class="help-dot" :data-help="fieldHelp('upstreamHost')" aria-hidden="true">i</i></span>
-                <input v-model="form.upstream.host" class="search-input" required />
+                <span>实例来源 <em class="required-star" aria-label="必填">*</em> <i class="help-dot" :data-help="fieldHelp('discoveryType')" aria-hidden="true">i</i></span>
+                <select v-model="form.upstream.discoveryType" class="select-input" required>
+                  <option value="NACOS">Nacos 服务发现</option>
+                  <option value="STATIC">固定地址</option>
+                </select>
               </label>
-              <label>
-                <span>上游端口 <em class="required-star" aria-label="必填">*</em> <i class="help-dot" :data-help="fieldHelp('upstreamPort')" aria-hidden="true">i</i></span>
-                <input v-model.number="form.upstream.port" class="search-input" type="number" min="1" max="65535" required />
-              </label>
+              <template v-if="form.upstream.discoveryType === 'NACOS'">
+                <label>
+                  <span>注册中心 <em class="required-star" aria-label="必填">*</em> <i class="help-dot" :data-help="fieldHelp('registryCenterName')" aria-hidden="true">i</i></span>
+                  <select v-model="form.upstream.registryCenterName" class="select-input" required>
+                    <option value="">请选择注册中心</option>
+                    <option v-for="item in registryCenterOptions" :key="item.value" :value="item.value" :disabled="item.enabled === false">
+                      {{ item.label }}
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  <span>服务名 <em class="required-star" aria-label="必填">*</em> <i class="help-dot" :data-help="fieldHelp('serviceName')" aria-hidden="true">i</i></span>
+                  <input v-model="form.upstream.serviceName" class="search-input" placeholder="例如 order-service" required />
+                </label>
+              </template>
+              <template v-else>
+                <label>
+                  <span>上游地址 <em class="required-star" aria-label="必填">*</em> <i class="help-dot" :data-help="fieldHelp('upstreamHost')" aria-hidden="true">i</i></span>
+                  <input v-model="form.upstream.host" class="search-input" required />
+                </label>
+                <label>
+                  <span>上游端口 <em class="required-star" aria-label="必填">*</em> <i class="help-dot" :data-help="fieldHelp('upstreamPort')" aria-hidden="true">i</i></span>
+                  <input v-model.number="form.upstream.port" class="search-input" type="number" min="1" max="65535" required />
+                </label>
+              </template>
               <label>
                 <span>协议 <em class="required-star" aria-label="必填">*</em> <i class="help-dot" :data-help="fieldHelp('protocol')" aria-hidden="true">i</i></span>
                 <select v-model="form.upstream.protocol" class="select-input" required>
@@ -185,6 +209,24 @@
                 <span>健康检查路径 <i class="help-dot" :data-help="fieldHelp('healthPath')" aria-hidden="true">i</i></span>
                 <input v-model="form.upstream.healthPath" class="search-input" />
               </label>
+              <template v-if="form.upstream.discoveryType === 'NACOS'">
+                <label>
+                  <span>Nacos 分组 <i class="help-dot" :data-help="fieldHelp('discoveryGroup')" aria-hidden="true">i</i></span>
+                  <input v-model="form.upstream.discoveryGroup" class="search-input" placeholder="默认使用注册中心配置" />
+                </label>
+                <label>
+                  <span>命名空间覆盖 <i class="help-dot" :data-help="fieldHelp('discoveryNamespace')" aria-hidden="true">i</i></span>
+                  <input v-model="form.upstream.discoveryNamespace" class="search-input" placeholder="默认使用注册中心配置" />
+                </label>
+                <label>
+                  <span>集群</span>
+                  <input v-model="stableClustersText" class="search-input" placeholder="多个用英文逗号分隔" />
+                </label>
+                <label>
+                  <span>元数据筛选 <i class="help-dot" :data-help="fieldHelp('metadataSelector')" aria-hidden="true">i</i></span>
+                  <input v-model="stableMetadataText" class="search-input" placeholder="version=stable,zone=hz" />
+                </label>
+              </template>
               <label class="check-row">
                 <input v-model="form.route.stripPrefix" type="checkbox" />
                 <span>转发时去除路径前缀 <i class="help-dot" :data-help="fieldHelp('stripPrefix')" aria-hidden="true">i</i></span>
@@ -275,13 +317,45 @@
             </div>
             <div class="form-grid form-grid--optional">
               <label>
-                <span>候选上游 <i class="help-dot" :data-help="fieldHelp('candidateHost')" aria-hidden="true">i</i></span>
-                <input v-model="form.candidate.host" class="search-input" />
+                <span>实例来源 <i class="help-dot" :data-help="fieldHelp('candidateDiscoveryType')" aria-hidden="true">i</i></span>
+                <select v-model="form.candidate.discoveryType" class="select-input">
+                  <option value="NACOS">Nacos 服务发现</option>
+                  <option value="STATIC">固定地址</option>
+                </select>
               </label>
-              <label>
-                <span>候选端口 <i class="help-dot" :data-help="fieldHelp('candidatePort')" aria-hidden="true">i</i></span>
-                <input v-model.number="form.candidate.port" class="search-input" type="number" min="1" max="65535" />
-              </label>
+              <template v-if="form.candidate.discoveryType === 'NACOS'">
+                <label>
+                  <span>注册中心 <i class="help-dot" :data-help="fieldHelp('registryCenterName')" aria-hidden="true">i</i></span>
+                  <select v-model="form.candidate.registryCenterName" class="select-input">
+                    <option value="">跟随稳定上游</option>
+                    <option v-for="item in registryCenterOptions" :key="item.value" :value="item.value" :disabled="item.enabled === false">
+                      {{ item.label }}
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  <span>候选服务名 <i class="help-dot" :data-help="fieldHelp('candidateServiceName')" aria-hidden="true">i</i></span>
+                  <input v-model="form.candidate.serviceName" class="search-input" placeholder="例如 order-service-green" />
+                </label>
+                <label>
+                  <span>Nacos 分组</span>
+                  <input v-model="form.candidate.discoveryGroup" class="search-input" placeholder="默认跟随稳定上游" />
+                </label>
+                <label>
+                  <span>元数据筛选 <i class="help-dot" :data-help="fieldHelp('metadataSelector')" aria-hidden="true">i</i></span>
+                  <input v-model="candidateMetadataText" class="search-input" placeholder="version=green" />
+                </label>
+              </template>
+              <template v-else>
+                <label>
+                  <span>候选上游 <i class="help-dot" :data-help="fieldHelp('candidateHost')" aria-hidden="true">i</i></span>
+                  <input v-model="form.candidate.host" class="search-input" />
+                </label>
+                <label>
+                  <span>候选端口 <i class="help-dot" :data-help="fieldHelp('candidatePort')" aria-hidden="true">i</i></span>
+                  <input v-model.number="form.candidate.port" class="search-input" type="number" min="1" max="65535" />
+                </label>
+              </template>
             </div>
           </div>
 
@@ -336,7 +410,7 @@
               <p class="resource-subtitle">默认流量会进入稳定上游，稳定版本通常承载线上主流量</p>
               <div class="key-value-grid">
                 <span>上游</span>
-                <strong>{{ form.upstream.host || '-' }}:{{ form.upstream.port || '-' }}</strong>
+                <strong>{{ upstreamSummary(form.upstream) }}</strong>
                 <span>协议</span>
                 <strong>{{ form.upstream.protocol || '-' }}</strong>
               </div>
@@ -348,7 +422,7 @@
                 <span>是否创建</span>
                 <strong>{{ form.candidate.enabled ? '创建候选上游' : '不创建' }}</strong>
                 <span>上游</span>
-                <strong>{{ form.candidate.host || '-' }}:{{ form.candidate.port || '-' }}</strong>
+                <strong>{{ upstreamSummary(form.candidate) }}</strong>
               </div>
             </section>
             <section v-if="form.release.enabled" class="diagnostic-block">
@@ -562,6 +636,7 @@ interface PlatformResource {
     defaultConfigShard?: string;
     defaultIsolationGroup?: string;
     acceptingProjects?: boolean;
+    acceptingUpstreams?: boolean;
     recommendedConfigShard?: string;
     recommendedIsolationGroup?: string;
   };
@@ -586,7 +661,8 @@ const platformResources = reactive({
   configShards: [] as PlatformResource[],
   isolationGroups: [] as PlatformResource[],
   trafficTiers: [] as PlatformResource[],
-  ingressDomains: [] as PlatformResource[]
+  ingressDomains: [] as PlatformResource[],
+  registryCenters: [] as PlatformResource[]
 });
 
 const busy = computed(() => Boolean(loadingAction.value));
@@ -606,6 +682,13 @@ const ingressDomainOptions = computed(() =>
     value: String(item.spec?.host || item.metadata?.name || ''),
     label: item.spec?.displayName ? `${item.spec.displayName} / ${item.spec.host || item.metadata?.name}` : String(item.spec?.host || item.metadata?.name || ''),
     enabled: item.spec?.acceptingProjects !== false
+  })).filter((item) => item.value)
+);
+const registryCenterOptions = computed(() =>
+  platformResources.registryCenters.map((item) => ({
+    value: String(item.metadata?.name || ''),
+    label: item.spec?.displayName ? `${item.spec.displayName} / ${item.metadata?.name}` : String(item.metadata?.name || ''),
+    enabled: item.spec?.acceptingUpstreams !== false
   })).filter((item) => item.value)
 );
 const protocolOptions = computed(() => withFallbackOptions(defaults.value?.protocols, FALLBACK_PROTOCOL_OPTIONS));
@@ -639,6 +722,27 @@ const releaseSummary = computed(() => {
   ];
 });
 
+const stableClustersText = computed({
+  get: () => (form.upstream.clusters || []).join(','),
+  set: (value: string) => {
+    form.upstream.clusters = splitCsv(value);
+  }
+});
+
+const stableMetadataText = computed({
+  get: () => formatKeyValuePairs(form.upstream.metadataSelector),
+  set: (value: string) => {
+    form.upstream.metadataSelector = parseKeyValuePairs(value);
+  }
+});
+
+const candidateMetadataText = computed({
+  get: () => formatKeyValuePairs(form.candidate.metadataSelector),
+  set: (value: string) => {
+    form.candidate.metadataSelector = parseKeyValuePairs(value);
+  }
+});
+
 const onboardingStepKeys = ['project', 'route', 'governance'] as const;
 const activeStepIndex = computed(() => onboardingStepKeys.indexOf(activeStep.value));
 const onboardingSteps = computed(() => [
@@ -654,7 +758,7 @@ const onboardingSteps = computed(() => [
     index: '2',
     title: '路由上游',
     note: form.route.path || '入口域名、路径和后端服务',
-    done: Boolean(form.route.host && form.route.path && form.upstream.host && form.upstream.port && form.upstream.protocol)
+    done: Boolean(form.route.host && form.route.path && stableUpstreamReady() && form.upstream.protocol)
   },
   {
     key: 'governance' as const,
@@ -744,6 +848,27 @@ watch(
 );
 
 watch(
+  () => form.upstream.discoveryType,
+  (discoveryType) => {
+    if (discoveryType === 'NACOS' && !form.upstream.registryCenterName && registryCenterOptions.value.length) {
+      form.upstream.registryCenterName = registryCenterOptions.value[0].value;
+    }
+    if (!form.candidate.discoveryType || form.candidate.discoveryType === 'STATIC') {
+      form.candidate.discoveryType = discoveryType;
+    }
+  }
+);
+
+watch(
+  () => form.upstream.registryCenterName,
+  (registryCenterName) => {
+    if (!form.candidate.registryCenterName) {
+      form.candidate.registryCenterName = registryCenterName;
+    }
+  }
+);
+
+watch(
   () => form.candidate.enabled,
   (enabled) => {
     if (!enabled && form.release.enabled) {
@@ -769,7 +894,8 @@ async function loadPlatformResources() {
     configShards,
     isolationGroups,
     trafficTiers,
-    ingressDomains
+    ingressDomains,
+    registryCenters
   ] = await Promise.all([
     listResources<PlatformResource>('namespaces', 'system', 200),
     listResources<PlatformResource>('teams', 'system', 200),
@@ -777,7 +903,8 @@ async function loadPlatformResources() {
     listResources<PlatformResource>('config-shards', 'system', 200),
     listResources<PlatformResource>('isolation-groups', 'system', 200),
     listResources<PlatformResource>('traffic-tiers', 'system', 200),
-    listResources<PlatformResource>('ingress-domains', 'system', 200)
+    listResources<PlatformResource>('ingress-domains', 'system', 200),
+    listResources<PlatformResource>('registry-centers', 'system', 200)
   ]);
   platformResources.namespaces = namespaces.items;
   platformResources.teams = teams.items;
@@ -786,6 +913,7 @@ async function loadPlatformResources() {
   platformResources.isolationGroups = isolationGroups.items;
   platformResources.trafficTiers = trafficTiers.items;
   platformResources.ingressDomains = ingressDomains.items;
+  platformResources.registryCenters = registryCenters.items;
 }
 
 async function runPreview() {
@@ -861,7 +989,15 @@ function actionTitle(action: string) {
 
 function currentRequest(): ProjectTemplateRenderRequest {
   validateTemplateRequired();
-  return JSON.parse(JSON.stringify(form)) as ProjectTemplateRenderRequest;
+  const request = JSON.parse(JSON.stringify(form)) as ProjectTemplateRenderRequest;
+  if (request.candidate?.discoveryType === 'NACOS') {
+    request.candidate.registryCenterName ||= request.upstream?.registryCenterName;
+    request.candidate.serviceName ||= request.upstream?.serviceName;
+    request.candidate.discoveryNamespace ||= request.upstream?.discoveryNamespace;
+    request.candidate.discoveryGroup ||= request.upstream?.discoveryGroup;
+    request.candidate.clusters = request.candidate.clusters?.length ? request.candidate.clusters : request.upstream?.clusters;
+  }
+  return request;
 }
 
 function validateTemplateRequired() {
@@ -872,13 +1008,67 @@ function validateTemplateRequired() {
     !form.environment ? '环境' : '',
     !form.route.host ? '入口域名' : '',
     !form.route.path ? '路径前缀' : '',
-    !form.upstream.host ? '上游地址' : '',
-    !form.upstream.port ? '上游端口' : '',
+    form.upstream.discoveryType === 'NACOS' && !form.upstream.registryCenterName ? '注册中心' : '',
+    form.upstream.discoveryType === 'NACOS' && !form.upstream.serviceName ? '服务名' : '',
+    form.upstream.discoveryType !== 'NACOS' && !form.upstream.host ? '上游地址' : '',
+    form.upstream.discoveryType !== 'NACOS' && !form.upstream.port ? '上游端口' : '',
+    form.candidate.enabled && form.candidate.discoveryType === 'NACOS' && !candidateServiceName() ? '候选服务名' : '',
+    form.candidate.enabled && form.candidate.discoveryType !== 'NACOS' && !form.candidate.host ? '候选上游地址' : '',
+    form.candidate.enabled && form.candidate.discoveryType !== 'NACOS' && !form.candidate.port ? '候选端口' : '',
     !form.upstream.protocol ? '协议' : ''
   ].filter(Boolean);
   if (missingFields.length) {
     throw new Error(`请先填写必填信息：${missingFields.join('、')}`);
   }
+}
+
+function stableUpstreamReady() {
+  if (form.upstream.discoveryType === 'NACOS') {
+    return Boolean(form.upstream.registryCenterName && form.upstream.serviceName);
+  }
+  return Boolean(form.upstream.host && form.upstream.port);
+}
+
+function candidateServiceName() {
+  return form.candidate.serviceName || form.upstream.serviceName;
+}
+
+function upstreamSummary(value: { discoveryType?: string; registryCenterName?: string; serviceName?: string; host?: string; port?: number }) {
+  if (value.discoveryType === 'NACOS') {
+    return `Nacos ${value.registryCenterName || form.upstream.registryCenterName || '-'} / ${value.serviceName || form.upstream.serviceName || '-'}`;
+  }
+  return `${value.host || '-'}:${value.port || '-'}`;
+}
+
+function splitCsv(value: unknown) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseKeyValuePairs(value: unknown) {
+  return splitCsv(value).reduce<Record<string, string>>((result, item) => {
+    const index = item.indexOf('=');
+    if (index <= 0) {
+      return result;
+    }
+    const key = item.slice(0, index).trim();
+    const val = item.slice(index + 1).trim();
+    if (key && val) {
+      result[key] = val;
+    }
+    return result;
+  }, {});
+}
+
+function formatKeyValuePairs(value?: Record<string, string>) {
+  if (!value) {
+    return '';
+  }
+  return Object.entries(value)
+    .map(([key, val]) => `${key}=${val}`)
+    .join(',');
 }
 
 function replaceForm(values: ProjectTemplateRenderRequest) {
@@ -906,6 +1096,20 @@ function applyFallbackOptions() {
   }
   if (!form.route.host && ingressDomainOptions.value.length) {
     form.route.host = ingressDomainOptions.value[0].value;
+  }
+  if (registryCenterOptions.value.length) {
+    if (!form.upstream.discoveryType || form.upstream.discoveryType === 'STATIC') {
+      form.upstream.discoveryType = 'NACOS';
+    }
+    if (!form.upstream.registryCenterName) {
+      form.upstream.registryCenterName = registryCenterOptions.value[0].value;
+    }
+    if (!form.candidate.discoveryType || form.candidate.discoveryType === 'STATIC') {
+      form.candidate.discoveryType = form.upstream.discoveryType;
+    }
+    if (!form.candidate.registryCenterName) {
+      form.candidate.registryCenterName = form.upstream.registryCenterName;
+    }
   }
 }
 
@@ -972,6 +1176,13 @@ function emptyForm(): TemplateForm {
       methods: []
     },
     upstream: {
+      discoveryType: 'STATIC',
+      registryCenterName: '',
+      serviceName: '',
+      discoveryNamespace: '',
+      discoveryGroup: '',
+      clusters: [],
+      metadataSelector: {},
       host: '',
       protocol: 'HTTP',
       loadBalance: 'ROUND_ROBIN',
@@ -980,6 +1191,13 @@ function emptyForm(): TemplateForm {
     },
     candidate: {
       enabled: false,
+      discoveryType: 'STATIC',
+      registryCenterName: '',
+      serviceName: '',
+      discoveryNamespace: '',
+      discoveryGroup: '',
+      clusters: [],
+      metadataSelector: {},
       host: ''
     },
     governance: {
@@ -1025,6 +1243,12 @@ function fieldHelp(key: string) {
     trafficTier: '流量等级用于容量推荐，例如普通、高流量、核心链路，会辅助带出推荐分片和隔离组',
     routeHost: '入口域名是客户端请求进入网关时携带的 Host，建议从已授权域名中选择',
     routePath: '路径前缀用于匹配请求路径，例如 /api/order，命中后转发到上游服务',
+    discoveryType: '推荐使用 Nacos 服务发现，网关会订阅服务实例并交给 Spring LoadBalancer 转发，不需要维护一长串 IP',
+    registryCenterName: '注册中心来自平台配置，统一保存 Nacos 地址和认证信息，上游只引用它和服务名',
+    serviceName: 'Nacos 服务名，业务服务扩缩容后实例列表由注册中心动态维护',
+    discoveryGroup: 'Nacos 分组，不填时使用注册中心默认分组',
+    discoveryNamespace: '仅在需要覆盖注册中心默认命名空间时填写',
+    metadataSelector: '用于按 Nacos 实例元数据筛选稳定或候选实例，例如 version=stable',
     upstreamHost: '稳定版本上游地址，可以是 IP、域名或服务名，网关会把命中的请求转发过去',
     upstreamPort: '稳定版本上游端口，必须是 1-65535',
     protocol: '网关转发到上游时使用的协议，通常 HTTP 即可，需要 TLS 时选择 HTTPS',
@@ -1036,6 +1260,8 @@ function fieldHelp(key: string) {
     retryEnabled: '开启后对可重试请求进行失败重试，只建议用于幂等接口',
     releaseEnabled: '开启后生成灰度或蓝绿发布策略，支持权重和染色切流',
     candidateEnabled: '开启后生成候选版本上游，用于绿环境、灰度实例或新版本服务',
+    candidateDiscoveryType: '候选版本可以和稳定版本共用 Nacos 服务，也可以指向单独的候选服务',
+    candidateServiceName: '候选版本 Nacos 服务名，不填时跟随稳定服务名，常配合元数据筛选区分版本',
     anonymousAllowed: '开启后允许请求不带身份信息直接访问，生产环境请谨慎使用',
     requestsPerSecond: '单路由每秒允许的请求量，用于保护上游，超过后按限流策略处理',
     burstCapacity: '突发容量允许短时间请求超过稳定 QPS，适合吸收瞬时尖峰',

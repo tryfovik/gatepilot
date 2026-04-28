@@ -2,6 +2,7 @@ package com.dt.gatepilot.proxy.infrastructure.loadbalancer;
 
 import com.dt.gatepilot.domain.enums.Protocol;
 import com.dt.gatepilot.proxy.domain.runtime.CompiledUpstream;
+import com.dt.gatepilot.proxy.domain.port.UpstreamDiscoveryRegistry;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyLoadBalanceConstants;
 import com.dt.gatepilot.proxy.domain.runtime.ProxyRuntimeState;
 import com.dt.gatepilot.proxy.domain.runtime.UpstreamEndpointHealthRegistry;
@@ -37,18 +38,26 @@ public class GatePilotServiceInstanceListSupplier implements ServiceInstanceList
     private final UpstreamEndpointHealthRegistry healthRegistry;
 
     /**
+     * 上游服务发现注册表
+     */
+    private final UpstreamDiscoveryRegistry upstreamDiscoveryRegistry;
+
+    /**
      * 创建 GatePilot 上游实例列表提供器
      *
      * @param serviceId LoadBalancer serviceId
      * @param runtimeState proxy 当前运行态
      * @param healthRegistry 上游端点健康状态表
+     * @param upstreamDiscoveryRegistry 上游服务发现注册表
      */
     public GatePilotServiceInstanceListSupplier(String serviceId,
                                                 ProxyRuntimeState runtimeState,
-                                                UpstreamEndpointHealthRegistry healthRegistry) {
+                                                UpstreamEndpointHealthRegistry healthRegistry,
+                                                UpstreamDiscoveryRegistry upstreamDiscoveryRegistry) {
         this.serviceId = serviceId;
         this.runtimeState = runtimeState;
         this.healthRegistry = healthRegistry;
+        this.upstreamDiscoveryRegistry = upstreamDiscoveryRegistry;
     }
 
     /**
@@ -111,11 +120,12 @@ public class GatePilotServiceInstanceListSupplier implements ServiceInstanceList
      * @return 可选端点列表
      */
     private List<CompiledUpstream.CompiledEndpoint> selectableEndpoints(CompiledUpstream upstream) {
-        List<CompiledUpstream.CompiledEndpoint> endpoints = upstream.getEndpoints().stream()
+        List<CompiledUpstream.CompiledEndpoint> discoveredEndpoints = upstreamDiscoveryRegistry.instances(upstream);
+        List<CompiledUpstream.CompiledEndpoint> endpoints = discoveredEndpoints.stream()
                 .filter(endpoint -> healthRegistry.selectable(upstream.getName(), endpoint))
                 .toList();
         // 全部摘除时失败开放，让真实请求继续暴露端点状态
-        return endpoints.isEmpty() ? upstream.getEndpoints() : endpoints;
+        return endpoints.isEmpty() ? discoveredEndpoints : endpoints;
     }
 
     /**
