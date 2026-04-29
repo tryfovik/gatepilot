@@ -2,9 +2,9 @@
 
 <div align="center">
 
-**面向平台团队的云原生网关控制系统**
+**平台级网关控制面与数据面系统**
 
-把项目接入、路由转发、流量治理、蓝绿灰度、配置发布、运行诊断和审计追踪收敛到一个统一平台里。
+面向平台、网关和 SRE 团队，统一管理项目接入、路由转发、流量治理、蓝绿灰度、配置发布、节点同步和运行诊断。少一些临场发挥，多一些可验证的发布闭环。
 
 [![GatePilot CI](https://github.com/tryfovik/gatepilot/actions/workflows/ci.yml/badge.svg)](https://github.com/tryfovik/gatepilot/actions/workflows/ci.yml)
 [![Java 17](https://img.shields.io/badge/Java-17-007396?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/17/)
@@ -13,55 +13,51 @@
 [![Nacos](https://img.shields.io/badge/Nacos-Service%20Discovery-2f7de1)](https://nacos.io/)
 [![License](https://img.shields.io/github/license/tryfovik/gatepilot)](LICENSE)
 
-[快速开始](docs/QUICKSTART.md) · [架构说明](docs/ARCHITECTURE.md) · [Kubernetes 部署](deploy/kubernetes/README.md) · [Console](gatepilot-console/README.md) · [路线图](docs/ROADMAP.md) · [贡献指南](CONTRIBUTING.md)
+[在线演示](http://81.71.128.146/index.html) · [快速开始](docs/QUICKSTART.md) · [架构说明](docs/ARCHITECTURE.md) · [Kubernetes 部署](deploy/kubernetes/README.md) · [Console](gatepilot-console/README.md) · [路线图](docs/ROADMAP.md)
 
 </div>
 
 ![GatePilot Console Preview](docs/assets/gatepilot-console-preview.svg)
 
-GatePilot 是给平台工程团队、网关团队和 SRE 团队使用的平台级网关控制系统。它不是一个只会转发请求的代理，也不是把配置字段铺满页面的后台，而是一套接近 Kubernetes 控制面 / 数据面思想的网关平台：控制面管理期望状态和发布闭环，数据面专注承载业务流量，Console 让接入、发布和排障都能被看见、被操作、被追踪。
+在项目数量不多时，网关配置通常还能靠少量文件和人工约定维持秩序。规模上来之后，路由、上游、认证、限流、重试、熔断、染色、蓝绿、灰度、发布、回滚和审计会迅速分散到不同系统和不同人的经验里。真正出问题时，团队最需要的不是再多一份配置，而是能立刻回答几个问题：这个请求命中了哪条路由，去了哪个上游，为什么被治理策略拦住，哪些节点已经应用了新版本。
 
-## 为什么需要 GatePilot
+GatePilot 的设计目标，就是把这些网关运行时和管理侧问题收敛成一套有边界、有状态、有流程的系统。控制面负责管理和发布，数据面负责承载流量，agent 负责节点同步，Console 负责让人看得懂、查得到、改得稳。
 
-当公司接入的项目越来越多时，网关最先变复杂：
+## 适合谁
 
-- 路由、上游、认证、限流、重试、熔断、染色、蓝绿和灰度配置散在各处
-- 发布一次网关配置不知道影响哪些项目，失败后不知道哪些节点应用成功
-- 下游服务实例很多，IP 会变化，让用户手工维护上游地址很容易失控
-- 节点扩容后配置同步不可见，出了问题很难确认当前版本、last-good 和上游健康
-- 审计、诊断、TraceId、运行事件缺少统一入口，排障依赖人工翻日志
-
-GatePilot 希望把这些能力做成一个长期可维护的平台：项目按资源接入，配置可校验可发布，策略在数据面本地执行，运行状态持续上报，出现问题时能从 Console 直接定位到路由、上游、节点和版本。
+- **平台工程团队**：希望把项目接入、配置治理和发布流程做成标准平台能力
+- **网关 / 中间件团队**：需要支撑多项目、高并发、多副本数据面和统一管理入口
+- **SRE / 运维团队**：关注发布回滚、节点同步、故障定位、审计追踪和运行状态
+- **业务研发团队**：希望通过控制台完成接入和发布，把注意力留给业务本身
 
 ## 核心能力
 
-| 能力 | GatePilot 怎么做 |
+| 场景 | GatePilot 的处理方式 |
 | --- | --- |
-| 项目接入 | 通过中文 Console 创建项目、命名空间、团队、环境、入口域名、路由、上游和策略 |
-| 路由转发 | 复用 Spring Cloud Gateway 的成熟转发能力，避免手写低层 HTTP 转发 |
-| 服务发现 | 支持 Nacos 注册中心，上游引用服务名，实例扩缩容不需要维护 IP 清单 |
-| 负载均衡 | 运行时使用 Spring Cloud LoadBalancer 做实例选择，固定端点只作为兜底模式 |
-| 流量治理 | 支持限流、重试、熔断、fallback、HTTP 方法控制、染色和治理策略组合 |
+| 项目接入 | 使用中文 Console 创建项目、命名空间、团队、环境、入口域名、路由、上游和策略 |
+| 路由转发 | 基于 Spring Cloud Gateway 承接成熟转发能力，避免重复维护底层 HTTP 转发逻辑 |
+| 上游发现 | 支持 Nacos，生产环境按注册中心服务名接入，避免人工维护大规模 IP 清单 |
+| 负载均衡 | 运行时交给 Spring Cloud LoadBalancer 选择实例，固定端点用于 demo、兜底和特殊网络场景 |
+| 流量治理 | 支持限流、重试、熔断、fallback、HTTP 方法控制、染色和策略组合 |
 | 蓝绿灰度 | 支持稳定上游、候选上游、权重分流、染色命中和切换发布 |
-| 配置发布 | 支持 dry-run、发布请求、PublishedConfig、配置快照、节点应用结果和版本回滚 |
-| 节点同步 | agent 负责节点注册、心跳、配置拉取、staged / last-good 和 apply 结果上报 |
-| 运行诊断 | 提供类 Postman 的请求诊断工作台，解释路由命中、认证、染色、上游和治理结果 |
-| 审计追踪 | 主链路轻量采集，异步批量上报，避免审计能力拖慢转发链路 |
-| 多形态部署 | 支持一体化 jar，也支持 apiserver、controller-manager、agent、proxy、console 分服务部署 |
+| 配置发布 | 支持 dry-run、发布请求、PublishedConfig、配置快照、节点应用结果和回滚 |
+| 节点同步 | agent 负责注册、心跳、配置拉取、staged / last-good 和 apply 结果上报 |
+| 运行诊断 | 提供类 Postman 的请求诊断工作台，解释路由、认证、染色、治理和上游命中结果 |
+| 审计追踪 | 主链路轻量采集，异步批量上报；审计要帮助排障，不能成为新的性能问题 |
 
 ## Console 体验
 
-GatePilot Console 默认中文优先，按照企业后台管理系统的使用习惯组织页面：
+GatePilot Console 默认中文优先，采用企业后台管理系统的交互方式：信息密度适中，操作路径清楚，关键结果可追踪。它不追求炫技，也不把复杂字段直接推给用户。
 
-- **工作台**：查看项目、路由、节点、发布和审计概况
+- **工作台**：项目、路由、节点、发布和审计概况
 - **接入管理**：通过向导创建项目、路由、上游、治理和发布资源
 - **流量配置**：管理路由目录、上游服务、流量策略、认证策略和发布策略
-- **发布管理**：选择待发布项目执行 dry-run、发布、回滚并查看节点应用结果
+- **发布管理**：选择待发布项目，执行 dry-run、发布、回滚并查看节点应用结果
 - **运行观测**：查看 PublishedConfig、节点副本、心跳、last-good、上游健康和运行审计
 - **平台配置**：管理命名空间、团队、环境、配置分片、隔离组、流量等级、入口域名、注册中心和动态参数
-- **帮助文档**：内置培训手册，减少业务团队接入成本
+- **帮助文档**：内置培训手册，降低业务团队第一次接入的理解成本
 
-复杂字段不会直接让用户看 JSON。Console 会把声明式资源拆成业务化表单、列表、抽屉、弹窗和向导，默认值尽量替用户填好，高级参数再展开配置。
+复杂配置会尽量用表单、选择器、向导和预览来表达。能提供默认值的字段先默认，确实需要控制的参数再展开。能选择已有资源的地方不鼓励临时手填，毕竟“临时”这个词在配置系统里通常不太临时。
 
 ## 架构概览
 
@@ -82,18 +78,19 @@ flowchart LR
     agent --> api
 ```
 
-核心原则很简单：
+模块边界先固定，系统后续才不容易膨胀成一个“什么都能放”的包：
 
-- **业务请求只进数据面**：proxy 热路径不查数据库，不依赖 Console，不临时访问控制面
-- **控制面只管管理**：资源存储、校验、版本、发布、回滚、权限和审计查询都属于控制面
-- **agent 跟随数据面**：负责配置同步、last-good 缓存、节点心跳和 apply 结果
-- **合包只做装配**：一体化 jar 可以同时启动所有能力，但 `gatepilot-app` 不写业务实现
+- **控制面管配置**：资源存储、查看、校验、版本、发布、回滚、权限和审计查询
+- **数据面管流量**：路由、转发、限流、熔断、重试、染色、蓝绿 / 灰度执行和审计采集
+- **agent 管同步**：节点注册、心跳、配置拉取、last-good、apply 状态和健康上报
+- **Console 管体验**：项目如何接入，配置如何发布，问题如何定位
+- **app 只做装配**：一体化 jar 可以同时启动所有能力，但不承载业务实现
 
-更多设计细节见 [架构说明](docs/ARCHITECTURE.md)。
+更多细节见 [架构说明](docs/ARCHITECTURE.md)。
 
 ## 快速开始
 
-GatePilot 依赖 GetBoot 的公共能力。第一次本地构建时，先安装 GetBoot，再构建 GatePilot：
+GatePilot 复用 GetBoot 的公共能力。第一次本地构建时，先安装 GetBoot，再构建 GatePilot：
 
 ```bash
 git clone https://github.com/tryfovik/getboot.git
@@ -120,7 +117,17 @@ npm run dev
 http://127.0.0.1:5174
 ```
 
-Console 默认把 `/api/gatepilot` 代理到 `http://127.0.0.1:18080`。完整本地体验请参考 [快速开始](docs/QUICKSTART.md)。
+Console 默认把 `/api/gatepilot` 代理到 `http://127.0.0.1:18080`。完整本地体验见 [快速开始](docs/QUICKSTART.md)。
+
+## 在线演示
+
+当前演示地址：
+
+```text
+http://81.71.128.146/index.html
+```
+
+该地址用于查看 Console 和基础链路。根路径目前由网关接管，访问页面请使用上面的 `index.html`。
 
 ## Demo 上游
 
@@ -156,30 +163,15 @@ java -jar gatepilot-demo-upstream/target/gatepilot-demo-upstream.jar --spring.pr
 - Nacos 作为默认服务发现来源，下游服务扩缩容由注册中心维护
 - proxy 按流量水平横向扩副本，agent 跟随 proxy 部署
 - controller-manager 多副本部署时使用 GetBoot 分布式锁，避免重复推进发布
-- 限流、熔断、审计、TraceId 等公共能力优先接入 GetBoot，不在 GatePilot 里重复造轮子
+- 限流、熔断、审计、TraceId 等公共能力优先接入 GetBoot，不在 GatePilot 里重复实现
 - Kubernetes 环境推荐入口链路：`Client -> VIP / Nginx -> Kubernetes Service -> gatepilot-proxy -> Upstream`
-
-## GitHub Topics
-
-建议仓库保持这些 Topics，方便别人搜索到：
-
-`api-gateway` `spring-cloud-gateway` `gateway` `nacos` `blue-green-deployment` `canary-release` `traffic-governance` `kubernetes` `vue` `platform-engineering`
-
-## 工程约定
-
-- 公共能力优先复用 GetBoot，缺公共能力先补 GetBoot，再让 GatePilot 接入
-- 后端按 DDD 分层：`interfaces / application / domain / infrastructure`
-- 数据面热路径不能访问控制面和数据库
-- Console 只调用 apiserver API，不直连数据库、agent 或 proxy
-- 一体化启动包只做装配，不写业务实现
-- Java 文件统一 Apache License Header，使用 Maven license 插件校验
 
 ## 参与项目
 
-欢迎提交 Issue、Discussion 或 Pull Request。开始前建议先阅读：
+欢迎提交 Issue、Discussion 或 Pull Request。开始前建议先看：
 
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [路线图](docs/ROADMAP.md)
 
-GatePilot 的目标是成为团队可以长期依赖的网关平台：接入项目更轻，发布更稳，扩容更自然，排障更从容。
+GatePilot 的目标很朴素：让项目接入更标准，让配置发布更可控，让线上排障少一点猜测。
