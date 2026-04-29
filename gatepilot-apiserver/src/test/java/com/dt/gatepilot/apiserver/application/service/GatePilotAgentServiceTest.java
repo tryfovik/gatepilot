@@ -18,9 +18,9 @@ package com.dt.gatepilot.apiserver.application.service;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.node.GatewayNodeStatus;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
-import com.dt.gatepilot.apiserver.application.command.AgentHeartbeatCommand;
-import com.dt.gatepilot.apiserver.application.command.PullAgentConfigCommand;
-import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResult;
+import com.dt.gatepilot.apiserver.application.dto.AgentHeartbeatRequest;
+import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullRequest;
+import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResponse;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
@@ -49,7 +49,7 @@ class GatePilotAgentServiceTest {
 
     @Test
     void shouldPersistHealthMetricsAndUpstreamHealthFromHeartbeat() {
-        AgentHeartbeatCommand request = new AgentHeartbeatCommand();
+        AgentHeartbeatRequest request = new AgentHeartbeatRequest();
         request.setNamespace("default");
         request.setNodeId("node-1");
         GatewayNodeStatus.NodeHealth health = new GatewayNodeStatus.NodeHealth();
@@ -90,12 +90,12 @@ class GatePilotAgentServiceTest {
             resourceService.save(resourceType, "default", name, publishedConfig("old-" + index, index, "shard-a"));
         }
         resourceService.save(resourceType, "default", "z-target", publishedConfig("v-target", 1000L, "shard-a"));
-        PullAgentConfigCommand request = new PullAgentConfigCommand();
+        AgentConfigPullRequest request = new AgentConfigPullRequest();
         request.setNamespace("default");
         request.setNodeId("node-1");
         request.getConfigShards().add("shard-a");
 
-        AgentConfigPullResult result = agentService.pullConfig(request);
+        AgentConfigPullResponse result = agentService.pullConfig(request);
 
         assertThat(result.isChanged()).isTrue();
         assertThat(result.getPublishedConfig().getSpec().getVersion()).isEqualTo("v-target");

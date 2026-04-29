@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dt.gatepilot.apiserver.application.command;
+package com.dt.gatepilot.apiserver.application.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -23,10 +23,10 @@ import java.util.List;
 import lombok.Data;
 
 /**
- * agent 上报运行审计命令。
+ * agent 上报运行审计请求。
  */
 @Data
-public class ReportRuntimeAuditCommand {
+public class RuntimeAuditReportRequest {
 
     /**
      * 命名空间。

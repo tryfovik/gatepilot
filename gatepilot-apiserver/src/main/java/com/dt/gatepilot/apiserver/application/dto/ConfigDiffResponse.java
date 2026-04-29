@@ -23,7 +23,7 @@ import lombok.Data;
  * 配置版本 diff 响应。
  */
 @Data
-public class ConfigDiffResult {
+public class ConfigDiffResponse {
 
     /**
      * 命名空间。

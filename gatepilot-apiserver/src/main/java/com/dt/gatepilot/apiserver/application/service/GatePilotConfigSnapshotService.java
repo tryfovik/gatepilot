@@ -21,7 +21,7 @@ import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.apiserver.application.dto.ConfigSnapshotSummaryResponse;
-import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResult;
+import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResponse;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.repository.ResourceStoreConstants;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
@@ -207,14 +207,14 @@ public class GatePilotConfigSnapshotService {
      * @param configShard 配置分片
      * @return diff 响应
      */
-    public ConfigDiffResult diff(String namespace, String baseVersion, String targetVersion, String configShard) {
+    public ConfigDiffResponse diff(String namespace, String baseVersion, String targetVersion, String configShard) {
         GatewayConfigSnapshot base = findSnapshot(namespace, baseVersion, configShard)
                 .orElseThrow(() -> notFound("基线配置快照不存在: " + baseVersion));
         GatewayConfigSnapshot target = findSnapshot(namespace, targetVersion, configShard)
                 .orElseThrow(() -> notFound("目标配置快照不存在: " + targetVersion));
         PublishedConfig baseConfig = base.getSpec().getPublishedConfig();
         PublishedConfig targetConfig = target.getSpec().getPublishedConfig();
-        ConfigDiffResult response = new ConfigDiffResult();
+        ConfigDiffResponse response = new ConfigDiffResponse();
         // diff 只比较快照中的 PublishedConfig 内容
         response.setNamespace(namespace);
         response.setBaseVersion(baseVersion);
@@ -248,7 +248,7 @@ public class GatePilotConfigSnapshotService {
         return response;
     }
 
-    private <T> DiffStats appendDiffItems(ConfigDiffResult response,
+    private <T> DiffStats appendDiffItems(ConfigDiffResponse response,
                                           String resourceType,
                                           List<T> baseItems,
                                           List<T> targetItems,
@@ -296,12 +296,12 @@ public class GatePilotConfigSnapshotService {
         return index;
     }
 
-    private ConfigDiffResult.ConfigDiffItem diffItem(String resourceType,
+    private ConfigDiffResponse.ConfigDiffItem diffItem(String resourceType,
                                                        String name,
                                                        String changeType,
                                                        String baseHash,
                                                        String targetHash) {
-        ConfigDiffResult.ConfigDiffItem item = new ConfigDiffResult.ConfigDiffItem();
+        ConfigDiffResponse.ConfigDiffItem item = new ConfigDiffResponse.ConfigDiffItem();
         // diff item 只保留摘要，详情后续按需再查询快照
         item.setResourceType(resourceType);
         item.setName(name);

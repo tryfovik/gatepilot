@@ -15,37 +15,27 @@
  */
 package com.dt.gatepilot.apiserver.application.dto;
 
-import java.time.Instant;
+import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import lombok.Data;
 
 /**
- * 发布请求响应。
+ * agent 拉取已发布配置响应。
  */
 @Data
-public class ReleaseResult {
+public class AgentConfigPullResponse {
 
     /**
-     * 发布请求标识。
+     * 是否存在新配置。
      */
-    private String releaseId;
+    private boolean changed;
 
     /**
-     * 目标发布版本。
+     * 最新已发布配置。
      */
-    private String version;
+    private PublishedConfig publishedConfig;
 
     /**
-     * 发布状态。
+     * 控制面提示信息。
      */
-    private String phase;
-
-    /**
-     * 配置分片键。
-     */
-    private String configShard;
-
-    /**
-     * 创建时间。
-     */
-    private Instant createdAt;
+    private String message;
 }

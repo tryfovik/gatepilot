@@ -15,7 +15,7 @@
  */
 package com.dt.gatepilot.apiserver.interfaces.rest;
 
-import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResult;
+import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResponse;
 import com.dt.gatepilot.apiserver.application.dto.ConfigSnapshotSummaryResponse;
 import com.dt.gatepilot.apiserver.application.service.GatePilotConfigSnapshotService;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
@@ -78,7 +78,7 @@ public class GatePilotConfigSnapshotController {
      * @return diff 响应
      */
     @GetMapping(GatePilotApiPaths.CONFIG_SNAPSHOT_DIFF)
-    public Mono<ApiResponse<ConfigDiffResult>> diff(@RequestParam String namespace,
+    public Mono<ApiResponse<ConfigDiffResponse>> diff(@RequestParam String namespace,
                                                       @RequestParam String baseVersion,
                                                       @RequestParam String targetVersion,
                                                       @RequestParam(required = false) String configShard) {

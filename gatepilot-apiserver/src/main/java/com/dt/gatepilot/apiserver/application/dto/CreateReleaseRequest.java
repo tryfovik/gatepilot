@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dt.gatepilot.apiserver.application.command;
+package com.dt.gatepilot.apiserver.application.dto;
 
 import com.dt.gatepilot.domain.resource.meta.LabelSelector;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
@@ -26,7 +26,7 @@ import lombok.Data;
  * 控制面发布请求。
  */
 @Data
-public class CreateReleaseCommand {
+public class CreateReleaseRequest {
 
     /**
      * 命名空间。

@@ -573,7 +573,7 @@ import {
   ProjectTemplatePreviewResponse,
   ProjectTemplateRenderedResource,
   ProjectTemplateRenderRequest,
-  ReleaseResult,
+  ReleaseResponse,
   applyProjectTemplate,
   createRelease,
   dryRunProjectTemplate,
@@ -652,7 +652,7 @@ const defaults = ref<ProjectTemplateDefaultsResponse | null>(null);
 const preview = ref<ProjectTemplatePreviewResponse | null>(null);
 const dryRun = ref<ProjectTemplateDryRunResponse | null>(null);
 const applyResult = ref<ProjectTemplateApplyResponse | null>(null);
-const releaseResult = ref<ReleaseResult | null>(null);
+const releaseResult = ref<ReleaseResponse | null>(null);
 const selectedResource = ref<ProjectTemplateRenderedResource | null>(null);
 const platformResources = reactive({
   namespaces: [] as PlatformResource[],

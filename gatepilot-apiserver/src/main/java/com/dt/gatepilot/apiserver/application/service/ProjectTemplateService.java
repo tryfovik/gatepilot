@@ -15,13 +15,13 @@
  */
 package com.dt.gatepilot.apiserver.application.service;
 
-import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
+import com.dt.gatepilot.apiserver.application.dto.CreateReleaseRequest;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateApplyResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDefaultsResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDryRunResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplatePreviewResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateRenderRequest;
-import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResponse;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.domain.enums.AuthType;
@@ -195,7 +195,7 @@ public class ProjectTemplateService {
     }
 
     private void addMessage(ProjectTemplateDryRunResponse response, String reason, String message) {
-        ReleaseDryRunResult.DryRunMessage dryRunMessage = new ReleaseDryRunResult.DryRunMessage();
+        ReleaseDryRunResponse.DryRunMessage dryRunMessage = new ReleaseDryRunResponse.DryRunMessage();
         // 模板 dry-run 消息直接给 Console 展示
         dryRunMessage.setLevel(ProjectTemplateConstants.DRY_RUN_LEVEL_ERROR);
         dryRunMessage.setReason(reason);
@@ -338,17 +338,17 @@ public class ProjectTemplateService {
         diff.setChanged(diff.getCreateCount() > 0 || diff.getUpdateCount() > 0);
     }
 
-    private CreateReleaseCommand releaseRequest(TemplateValues values, List<ResourceEnvelope> envelopes) {
-        CreateReleaseCommand command = new CreateReleaseCommand();
-        command.setNamespace(values.namespace());
-        command.setProjectName(values.projectName());
-        command.setConfigShard(values.configShard());
-        command.setDescription(ProjectTemplateConstants.DEFAULT_RELEASE_DESCRIPTION);
-        command.setCreatedBy(ProjectTemplateConstants.DEFAULT_CREATED_BY);
-        command.setResourceRefs(envelopes.stream()
+    private CreateReleaseRequest releaseRequest(TemplateValues values, List<ResourceEnvelope> envelopes) {
+        CreateReleaseRequest request = new CreateReleaseRequest();
+        request.setNamespace(values.namespace());
+        request.setProjectName(values.projectName());
+        request.setConfigShard(values.configShard());
+        request.setDescription(ProjectTemplateConstants.DEFAULT_RELEASE_DESCRIPTION);
+        request.setCreatedBy(ProjectTemplateConstants.DEFAULT_CREATED_BY);
+        request.setResourceRefs(envelopes.stream()
                 .map(envelope -> ref(envelope.kind(), envelope.namespace(), envelope.name()))
                 .toList());
-        return command;
+        return request;
     }
 
     private List<ResourceEnvelope> render(TemplateValues values) {

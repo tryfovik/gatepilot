@@ -13,19 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dt.gatepilot.apiserver.application.command;
+package com.dt.gatepilot.apiserver.application.dto;
 
-import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import jakarta.validation.constraints.NotBlank;
-import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Data;
 
 /**
- * agent 上报配置应用结果请求。
+ * agent 拉取已发布配置请求。
  */
 @Data
-public class ReportAgentApplyResultCommand {
+public class AgentConfigPullRequest {
 
     /**
      * 节点命名空间。
@@ -39,38 +39,27 @@ public class ReportAgentApplyResultCommand {
     private String nodeId;
 
     /**
-     * 发布版本。
+     * 节点所在可用区或机房。
      */
-    @NotBlank
-    private String version;
+    private String zone;
 
     /**
-     * 配置内容哈希。
+     * 节点隔离组。
      */
-    private String configHash;
+    private String isolationGroup;
 
     /**
-     * 应用状态。
+     * 节点负责的配置分片。
      */
-    private ConfigApplyState state;
+    private List<String> configShards = new ArrayList<>();
 
     /**
-     * 开始应用时间。
+     * 节点当前配置版本。
      */
-    private Instant startedAt;
+    private String currentVersion;
 
     /**
-     * 完成应用时间。
+     * 节点当前配置序号。
      */
-    private Instant finishedAt;
-
-    /**
-     * 失败原因码。
-     */
-    private String reason;
-
-    /**
-     * 失败或结果说明。
-     */
-    private String message;
+    private Long currentSequence;
 }

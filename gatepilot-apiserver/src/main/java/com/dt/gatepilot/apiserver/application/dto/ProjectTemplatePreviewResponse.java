@@ -15,7 +15,7 @@
  */
 package com.dt.gatepilot.apiserver.application.dto;
 
-import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
+import com.dt.gatepilot.apiserver.application.dto.CreateReleaseRequest;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
@@ -49,7 +49,7 @@ public class ProjectTemplatePreviewResponse {
     /**
      * 发布请求预览
      */
-    private CreateReleaseCommand releaseRequest;
+    private CreateReleaseRequest releaseRequest;
 
     /**
      * 资源差异摘要

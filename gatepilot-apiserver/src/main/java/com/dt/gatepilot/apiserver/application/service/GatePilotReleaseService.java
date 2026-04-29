@@ -15,10 +15,10 @@
  */
 package com.dt.gatepilot.apiserver.application.service;
 
-import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
-import com.dt.gatepilot.apiserver.application.command.CreateRollbackCommand;
-import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
-import com.dt.gatepilot.apiserver.application.dto.ReleaseResult;
+import com.dt.gatepilot.apiserver.application.dto.CreateReleaseRequest;
+import com.dt.gatepilot.apiserver.application.dto.CreateRollbackRequest;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResponse;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseResponse;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
@@ -83,7 +83,7 @@ public class GatePilotReleaseService {
      * @param request 发布请求
      * @return 发布响应
      */
-    public ReleaseResult createRelease(CreateReleaseCommand request) {
+    public ReleaseResponse createRelease(CreateReleaseRequest request) {
         Instant now = Instant.now();
         String releaseId = identityGenerator.nextReleaseId();
         String version = identityGenerator.releaseVersion(request.getProjectName(), releaseId);
@@ -92,7 +92,7 @@ public class GatePilotReleaseService {
         // 发布入口只保存事件，具体推进由 controller-manager 异步处理
         resourceService.save(eventType, request.getNamespace(), releaseId, event);
 
-        ReleaseResult response = new ReleaseResult();
+        ReleaseResponse response = new ReleaseResponse();
         response.setReleaseId(releaseId);
         response.setVersion(version);
         response.setPhase(GatePilotReleaseConstants.PHASE_PENDING);
@@ -107,9 +107,9 @@ public class GatePilotReleaseService {
      * @param request 发布请求
      * @return dry-run 结果
      */
-    public ReleaseDryRunResult dryRun(CreateReleaseCommand request) {
+    public ReleaseDryRunResponse dryRun(CreateReleaseRequest request) {
         Instant now = Instant.now();
-        ReleaseDryRunResult response = new ReleaseDryRunResult();
+        ReleaseDryRunResponse response = new ReleaseDryRunResponse();
         response.setNamespace(request.getNamespace());
         response.setProjectName(request.getProjectName());
         response.setVersion(identityGenerator.dryRunVersion(request.getProjectName()));
@@ -152,7 +152,7 @@ public class GatePilotReleaseService {
      * @param request 回滚请求
      * @return 发布响应
      */
-    public ReleaseResult createRollback(CreateRollbackCommand request) {
+    public ReleaseResponse createRollback(CreateRollbackRequest request) {
         Instant now = Instant.now();
         GatewayConfigSnapshot snapshot = snapshotService.findSnapshot(
                         request.getNamespace(),
@@ -172,7 +172,7 @@ public class GatePilotReleaseService {
         GatePilotResourceType snapshotType = resourceService.requireResourceType(ResourceKind.CONFIG_SNAPSHOT);
         resourceService.save(snapshotType, request.getNamespace(), snapshot.getMetadata().getName(), snapshot);
 
-        ReleaseResult response = new ReleaseResult();
+        ReleaseResponse response = new ReleaseResponse();
         response.setReleaseId(releaseId);
         response.setVersion(version);
         response.setPhase(GatePilotReleaseConstants.PHASE_PENDING);
@@ -181,7 +181,7 @@ public class GatePilotReleaseService {
         return response;
     }
 
-    private GatewayEvent buildReleaseEvent(CreateReleaseCommand request, String releaseId, String version, Instant now) {
+    private GatewayEvent buildReleaseEvent(CreateReleaseRequest request, String releaseId, String version, Instant now) {
         GatewayEvent event = new GatewayEvent();
         ResourceMetadata metadata = event.getMetadata();
         metadata.setName(releaseId);
@@ -216,7 +216,7 @@ public class GatePilotReleaseService {
         return event;
     }
 
-    private GatewayEvent buildRollbackEvent(CreateRollbackCommand request,
+    private GatewayEvent buildRollbackEvent(CreateRollbackRequest request,
                                             GatewayConfigSnapshot snapshot,
                                             String releaseId,
                                             String version,
@@ -269,7 +269,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private List<GatewayRoute> projectRoutes(CreateReleaseCommand request) {
+    private List<GatewayRoute> projectRoutes(CreateReleaseRequest request) {
         return listAll(GatePilotResourcePaths.ROUTES, request.getNamespace(), GatewayRoute.class).stream()
                 .filter(route -> projectMatches(route.getSpec().getProjectRef(),
                         route.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
@@ -277,7 +277,7 @@ public class GatePilotReleaseService {
                 .toList();
     }
 
-    private List<Upstream> projectUpstreams(CreateReleaseCommand request) {
+    private List<Upstream> projectUpstreams(CreateReleaseRequest request) {
         return listAll(GatePilotResourcePaths.UPSTREAMS, request.getNamespace(), Upstream.class).stream()
                 .filter(upstream -> projectMatches(upstream.getSpec().getProjectRef(),
                         upstream.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
@@ -285,7 +285,7 @@ public class GatePilotReleaseService {
                 .toList();
     }
 
-    private List<TrafficPolicy> projectTrafficPolicies(CreateReleaseCommand request) {
+    private List<TrafficPolicy> projectTrafficPolicies(CreateReleaseRequest request) {
         return listAll(GatePilotResourcePaths.TRAFFIC_POLICIES, request.getNamespace(), TrafficPolicy.class).stream()
                 .filter(policy -> projectMatches(policy.getSpec().getProjectRef(),
                         policy.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
@@ -293,7 +293,7 @@ public class GatePilotReleaseService {
                 .toList();
     }
 
-    private List<ReleasePolicy> projectReleasePolicies(CreateReleaseCommand request) {
+    private List<ReleasePolicy> projectReleasePolicies(CreateReleaseRequest request) {
         return listAll(GatePilotResourcePaths.RELEASE_POLICIES, request.getNamespace(), ReleasePolicy.class).stream()
                 .filter(policy -> projectMatches(policy.getSpec().getProjectRef(),
                         policy.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
@@ -301,7 +301,7 @@ public class GatePilotReleaseService {
                 .toList();
     }
 
-    private List<AuthPolicy> projectAuthPolicies(CreateReleaseCommand request) {
+    private List<AuthPolicy> projectAuthPolicies(CreateReleaseRequest request) {
         return listAll(GatePilotResourcePaths.AUTH_POLICIES, request.getNamespace(), AuthPolicy.class).stream()
                 .filter(policy -> projectMatches(policy.getSpec().getProjectRef(),
                         policy.getMetadata().getLabels().get(ResourceMetadataConstants.LABEL_PROJECT),
@@ -309,7 +309,7 @@ public class GatePilotReleaseService {
                 .toList();
     }
 
-    private boolean projectMatches(ResourceReference projectRef, String projectLabel, CreateReleaseCommand request) {
+    private boolean projectMatches(ResourceReference projectRef, String projectLabel, CreateReleaseRequest request) {
         if (projectRef != null && StringUtils.hasText(projectRef.getName())) {
             // projectRef 是主判断依据，label 只做兼容
             return Objects.equals(projectRef.getName(), request.getProjectName())
@@ -319,7 +319,7 @@ public class GatePilotReleaseService {
         return Objects.equals(projectLabel, request.getProjectName());
     }
 
-    private void validateRoutes(ReleaseDryRunResult response,
+    private void validateRoutes(ReleaseDryRunResponse response,
                                 List<GatewayRoute> routes,
                                 List<Upstream> upstreams,
                                 List<TrafficPolicy> trafficPolicies,
@@ -335,7 +335,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateRoutePath(ReleaseDryRunResult response, GatewayRoute route) {
+    private void validateRoutePath(ReleaseDryRunResponse response, GatewayRoute route) {
         String path = route.getSpec().getPath() == null ? null : route.getSpec().getPath().getValue();
         if (!StringUtils.hasText(path)) {
             addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_ERROR,
@@ -344,7 +344,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateRouteHosts(ReleaseDryRunResult response, GatewayRoute route) {
+    private void validateRouteHosts(ReleaseDryRunResponse response, GatewayRoute route) {
         if (route.getSpec().getHosts().isEmpty()) {
             addDryRunMessage(response, GatePilotReleaseConstants.DRY_RUN_LEVEL_WARN,
                     GatePilotReleaseConstants.REASON_ROUTE_HOST_MISSING,
@@ -352,7 +352,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateRouteUpstream(ReleaseDryRunResult response, GatewayRoute route, Set<String> upstreamNames) {
+    private void validateRouteUpstream(ReleaseDryRunResponse response, GatewayRoute route, Set<String> upstreamNames) {
         ResourceReference upstreamRef = route.getSpec().getUpstreamRef();
         String upstreamName = upstreamRef == null ? null : upstreamRef.getName();
         if (!StringUtils.hasText(upstreamName) || !upstreamNames.contains(upstreamName)) {
@@ -365,7 +365,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateRoutePolicies(ReleaseDryRunResult response, GatewayRoute route, Set<String> policyNames) {
+    private void validateRoutePolicies(ReleaseDryRunResponse response, GatewayRoute route, Set<String> policyNames) {
         for (ResourceReference policyRef : route.getSpec().getPolicyRefs()) {
             if (policyRef != null && StringUtils.hasText(policyRef.getName())
                     && !policyNames.contains(policyRef.getName())) {
@@ -379,7 +379,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateUpstreams(ReleaseDryRunResult response,
+    private void validateUpstreams(ReleaseDryRunResponse response,
                                    List<Upstream> upstreams,
                                    List<RegistryCenter> registryCenters) {
         Set<String> registryNames = registryNames(registryCenters);
@@ -400,7 +400,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateNacosDiscovery(ReleaseDryRunResult response,
+    private void validateNacosDiscovery(ReleaseDryRunResponse response,
                                         Upstream upstream,
                                         Upstream.UpstreamDiscoverySpec discovery,
                                         Set<String> registryNames) {
@@ -422,7 +422,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateUpstreamLoadBalance(ReleaseDryRunResult response, Upstream upstream) {
+    private void validateUpstreamLoadBalance(ReleaseDryRunResponse response, Upstream upstream) {
         LoadBalanceStrategy strategy = upstream.getSpec().getLoadBalance();
         if (strategy != null && !strategy.isSupported()) {
             // 未被成熟组件承接的策略必须在发布前阻断
@@ -435,7 +435,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateReleasePolicies(ReleaseDryRunResult response,
+    private void validateReleasePolicies(ReleaseDryRunResponse response,
                                          List<ReleasePolicy> releasePolicies,
                                          List<Upstream> upstreams) {
         Set<String> upstreamNames = names(upstreams);
@@ -448,7 +448,7 @@ public class GatePilotReleaseService {
         }
     }
 
-    private void validateReleaseUpstreamRef(ReleaseDryRunResult response,
+    private void validateReleaseUpstreamRef(ReleaseDryRunResponse response,
                                             ReleasePolicy policy,
                                             Set<String> upstreamNames,
                                             ResourceReference upstreamRef) {
@@ -505,8 +505,8 @@ public class GatePilotReleaseService {
         return names;
     }
 
-    private void addDryRunMessage(ReleaseDryRunResult response, String level, String reason, String message) {
-        ReleaseDryRunResult.DryRunMessage dryRunMessage = new ReleaseDryRunResult.DryRunMessage();
+    private void addDryRunMessage(ReleaseDryRunResponse response, String level, String reason, String message) {
+        ReleaseDryRunResponse.DryRunMessage dryRunMessage = new ReleaseDryRunResponse.DryRunMessage();
         // dry-run 信息面向控制台展示，保留明确的 level 和 reason
         dryRunMessage.setLevel(level);
         dryRunMessage.setReason(reason);

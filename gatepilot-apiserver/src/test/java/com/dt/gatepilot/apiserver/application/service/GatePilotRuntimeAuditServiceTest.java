@@ -15,8 +15,8 @@
  */
 package com.dt.gatepilot.apiserver.application.service;
 
-import com.dt.gatepilot.apiserver.application.command.ReportRuntimeAuditCommand;
-import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportResult;
+import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportRequest;
+import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportResponse;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditQuery;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditRecord;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
@@ -36,20 +36,20 @@ class GatePilotRuntimeAuditServiceTest {
     @Test
     void shouldReportAndListRuntimeAudits() {
         GatePilotRuntimeAuditService service = new GatePilotRuntimeAuditService(new InMemoryRuntimeAuditStore());
-        ReportRuntimeAuditCommand command = new ReportRuntimeAuditCommand();
+        RuntimeAuditReportRequest request = new RuntimeAuditReportRequest();
         Instant baseTime = Instant.parse("2026-04-27T00:00:00Z");
-        command.setNamespace("default");
-        command.setNodeId("node-1");
-        command.getEvents().add(item("trace-1", "project-a", "route-a", "SUCCESS", baseTime.plusSeconds(10)));
-        command.getEvents().add(item("trace-2", "project-b", "route-a", "LIMITED", baseTime.plusSeconds(120)));
+        request.setNamespace("default");
+        request.setNodeId("node-1");
+        request.getEvents().add(item("trace-1", "project-a", "route-a", "SUCCESS", baseTime.plusSeconds(10)));
+        request.getEvents().add(item("trace-2", "project-b", "route-a", "LIMITED", baseTime.plusSeconds(120)));
 
-        RuntimeAuditReportResult result = service.report(command);
+        RuntimeAuditReportResponse response = service.report(request);
         RuntimeAuditQuery query = query("default", "route-a", 10);
         query.setProjectName("project-a");
         query.setEndedAt(toLocalDateTime(baseTime.plusSeconds(30)));
         CursorPage<RuntimeAuditRecord> page = service.list(query);
 
-        assertThat(result.getAcceptedCount()).isEqualTo(2);
+        assertThat(response.getAcceptedCount()).isEqualTo(2);
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getItems()).hasSize(1);
         assertThat(page.getItems().get(0).getTraceId()).isEqualTo("trace-1");
@@ -57,12 +57,12 @@ class GatePilotRuntimeAuditServiceTest {
         assertThat(page.getItems().get(0).getNodeId()).isEqualTo("node-1");
     }
 
-    private ReportRuntimeAuditCommand.RuntimeAuditItem item(String traceId,
+    private RuntimeAuditReportRequest.RuntimeAuditItem item(String traceId,
                                                            String projectName,
                                                            String routeId,
                                                            String outcome,
                                                            Instant occurredAt) {
-        ReportRuntimeAuditCommand.RuntimeAuditItem item = new ReportRuntimeAuditCommand.RuntimeAuditItem();
+        RuntimeAuditReportRequest.RuntimeAuditItem item = new RuntimeAuditReportRequest.RuntimeAuditItem();
         // 测试只填查询链路会使用的字段
         item.setTraceId(traceId);
         item.setProjectName(projectName);

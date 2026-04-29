@@ -16,11 +16,11 @@
 package com.dt.gatepilot.apiserver.interfaces.rest;
 
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
-import com.dt.gatepilot.apiserver.application.command.ReportAgentApplyResultCommand;
-import com.dt.gatepilot.apiserver.application.command.PullAgentConfigCommand;
-import com.dt.gatepilot.apiserver.application.command.AgentHeartbeatCommand;
-import com.dt.gatepilot.apiserver.application.command.RegisterAgentCommand;
-import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResult;
+import com.dt.gatepilot.apiserver.application.dto.AgentApplyResultReportRequest;
+import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullRequest;
+import com.dt.gatepilot.apiserver.application.dto.AgentHeartbeatRequest;
+import com.dt.gatepilot.apiserver.application.dto.RegisterAgentRequest;
+import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResponse;
 import com.dt.gatepilot.apiserver.application.service.GatePilotAgentService;
 import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.getboot.web.api.response.ApiResponse;
@@ -57,7 +57,7 @@ public class GatePilotAgentController {
      * @return 节点资源
      */
     @PostMapping(GatePilotApiPaths.AGENT_REGISTER)
-    public Mono<ApiResponse<GatewayNode>> register(@Valid @RequestBody RegisterAgentCommand request) {
+    public Mono<ApiResponse<GatewayNode>> register(@Valid @RequestBody RegisterAgentRequest request) {
         // 注册只落节点资源，发布策略不在这里决策
         return Mono.just(ApiResponse.success(agentService.register(request), "节点注册成功"));
     }
@@ -69,7 +69,7 @@ public class GatePilotAgentController {
      * @return 节点资源
      */
     @PostMapping(GatePilotApiPaths.AGENT_HEARTBEAT)
-    public Mono<ApiResponse<GatewayNode>> heartbeat(@Valid @RequestBody AgentHeartbeatCommand request) {
+    public Mono<ApiResponse<GatewayNode>> heartbeat(@Valid @RequestBody AgentHeartbeatRequest request) {
         // 心跳只更新节点状态，保持接口轻量
         return Mono.just(ApiResponse.success(agentService.heartbeat(request), "心跳已接收"));
     }
@@ -81,7 +81,7 @@ public class GatePilotAgentController {
      * @return 已发布配置
      */
     @PostMapping(GatePilotApiPaths.AGENT_CONFIG_PULL)
-    public Mono<ApiResponse<AgentConfigPullResult>> pullConfig(@Valid @RequestBody PullAgentConfigCommand request) {
+    public Mono<ApiResponse<AgentConfigPullResponse>> pullConfig(@Valid @RequestBody AgentConfigPullRequest request) {
         // agent 只拉已发布配置，不接触草稿资源
         return Mono.just(ApiResponse.success(agentService.pullConfig(request)));
     }
@@ -94,7 +94,7 @@ public class GatePilotAgentController {
      */
     @PostMapping(GatePilotApiPaths.AGENT_APPLY_RESULTS)
     public Mono<ApiResponse<GatewayNode>> reportApplyResult(
-            @Valid @RequestBody ReportAgentApplyResultCommand request) {
+            @Valid @RequestBody AgentApplyResultReportRequest request) {
         // apply 结果最终沉淀到节点状态
         return Mono.just(ApiResponse.success(agentService.reportApplyResult(request), "应用结果已接收"));
     }

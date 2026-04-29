@@ -13,34 +13,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dt.gatepilot.apiserver.application.command;
+package com.dt.gatepilot.apiserver.application.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import java.time.Instant;
 import lombok.Data;
 
 /**
- * 控制面回滚请求。
+ * 发布请求响应。
  */
 @Data
-public class CreateRollbackCommand {
+public class ReleaseResponse {
 
     /**
-     * 命名空间。
+     * 发布请求标识。
      */
-    @NotBlank
-    private String namespace;
+    private String releaseId;
 
     /**
-     * 项目名称。
+     * 目标发布版本。
      */
-    @NotBlank
-    private String projectName;
+    private String version;
 
     /**
-     * 要回滚到的目标版本。
+     * 发布状态。
      */
-    @NotBlank
-    private String targetVersion;
+    private String phase;
 
     /**
      * 配置分片键。
@@ -48,12 +45,7 @@ public class CreateRollbackCommand {
     private String configShard;
 
     /**
-     * 回滚说明。
+     * 创建时间。
      */
-    private String description;
-
-    /**
-     * 操作人。
-     */
-    private String createdBy;
+    private Instant createdAt;
 }

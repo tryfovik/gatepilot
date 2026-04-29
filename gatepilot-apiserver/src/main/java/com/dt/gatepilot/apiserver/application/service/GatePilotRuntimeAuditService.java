@@ -15,8 +15,8 @@
  */
 package com.dt.gatepilot.apiserver.application.service;
 
-import com.dt.gatepilot.apiserver.application.command.ReportRuntimeAuditCommand;
-import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportResult;
+import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportRequest;
+import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportResponse;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditQuery;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditRecord;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditStore;
@@ -51,19 +51,19 @@ public class GatePilotRuntimeAuditService {
     /**
      * 接收 agent 上报的运行审计。
      *
-     * @param command 上报命令
-     * @return 上报结果
+     * @param request 上报请求
+     * @return 上报响应
      */
-    public RuntimeAuditReportResult report(ReportRuntimeAuditCommand command) {
-        List<RuntimeAuditRecord> records = Objects.requireNonNullElse(command.getEvents(),
-                        List.<ReportRuntimeAuditCommand.RuntimeAuditItem>of())
+    public RuntimeAuditReportResponse report(RuntimeAuditReportRequest request) {
+        List<RuntimeAuditRecord> records = Objects.requireNonNullElse(request.getEvents(),
+                        List.<RuntimeAuditReportRequest.RuntimeAuditItem>of())
                 .stream()
-                .map(item -> record(command, item))
+                .map(item -> record(request, item))
                 .toList();
         runtimeAuditStore.saveBatch(records);
-        RuntimeAuditReportResult result = new RuntimeAuditReportResult();
-        result.setAcceptedCount(records.size());
-        return result;
+        RuntimeAuditReportResponse response = new RuntimeAuditReportResponse();
+        response.setAcceptedCount(records.size());
+        return response;
     }
 
     /**
@@ -79,16 +79,16 @@ public class GatePilotRuntimeAuditService {
     /**
      * 转换运行审计记录。
      *
-     * @param command 上报命令
+     * @param request 上报请求
      * @param item 审计事件
      * @return 审计记录
      */
-    private RuntimeAuditRecord record(ReportRuntimeAuditCommand command,
-                                      ReportRuntimeAuditCommand.RuntimeAuditItem item) {
+    private RuntimeAuditRecord record(RuntimeAuditReportRequest request,
+                                      RuntimeAuditReportRequest.RuntimeAuditItem item) {
         RuntimeAuditRecord record = new RuntimeAuditRecord();
         // 命名空间和节点由 agent 上报外层统一赋值
-        record.setNamespace(command.getNamespace());
-        record.setNodeId(command.getNodeId());
+        record.setNamespace(request.getNamespace());
+        record.setNodeId(request.getNodeId());
         record.setTraceId(item.getTraceId());
         record.setClientIp(item.getClientIp());
         record.setMethod(item.getMethod());

@@ -304,7 +304,7 @@ export interface DryRunMessage {
   message: string;
 }
 
-export interface ReleaseDryRunResult {
+export interface ReleaseDryRunResponse {
   namespace: string;
   projectName: string;
   version: string;
@@ -343,7 +343,7 @@ export interface CreateReleaseRequest {
   targetNodeSelector?: unknown;
 }
 
-export interface ReleaseResult {
+export interface ReleaseResponse {
   releaseId: string;
   version: string;
   phase: string;
@@ -629,16 +629,16 @@ export async function applyProjectTemplate(
   return postJson<ProjectTemplateApplyResponse>('/templates/projects/apply', request);
 }
 
-export async function createRelease(request: CreateReleaseRequest): Promise<ReleaseResult> {
-  return postJson<ReleaseResult>('/releases', request);
+export async function createRelease(request: CreateReleaseRequest): Promise<ReleaseResponse> {
+  return postJson<ReleaseResponse>('/releases', request);
 }
 
-export async function dryRunRelease(request: CreateReleaseRequest): Promise<ReleaseDryRunResult> {
-  return postJson<ReleaseDryRunResult>('/releases/dry-run', request);
+export async function dryRunRelease(request: CreateReleaseRequest): Promise<ReleaseDryRunResponse> {
+  return postJson<ReleaseDryRunResponse>('/releases/dry-run', request);
 }
 
-export async function createRollback(request: CreateRollbackRequest): Promise<ReleaseResult> {
-  return postJson<ReleaseResult>('/releases/rollback', request);
+export async function createRollback(request: CreateRollbackRequest): Promise<ReleaseResponse> {
+  return postJson<ReleaseResponse>('/releases/rollback', request);
 }
 
 export async function listRuntimeAudits(params: {

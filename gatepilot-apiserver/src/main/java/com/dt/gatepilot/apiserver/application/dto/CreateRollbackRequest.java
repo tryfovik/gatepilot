@@ -15,16 +15,45 @@
  */
 package com.dt.gatepilot.apiserver.application.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * 运行审计上报结果。
+ * 控制面回滚请求。
  */
 @Data
-public class RuntimeAuditReportResult {
+public class CreateRollbackRequest {
 
     /**
-     * 接收条数。
+     * 命名空间。
      */
-    private int acceptedCount;
+    @NotBlank
+    private String namespace;
+
+    /**
+     * 项目名称。
+     */
+    @NotBlank
+    private String projectName;
+
+    /**
+     * 要回滚到的目标版本。
+     */
+    @NotBlank
+    private String targetVersion;
+
+    /**
+     * 配置分片键。
+     */
+    private String configShard;
+
+    /**
+     * 回滚说明。
+     */
+    private String description;
+
+    /**
+     * 操作人。
+     */
+    private String createdBy;
 }
