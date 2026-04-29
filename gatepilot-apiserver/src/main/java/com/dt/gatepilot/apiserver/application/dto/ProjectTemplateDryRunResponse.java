@@ -38,5 +38,5 @@ public class ProjectTemplateDryRunResponse {
     /**
      * 校验消息
      */
-    private List<ReleaseDryRunResult.DryRunMessage> messages = new ArrayList<>();
+    private List<ReleaseDryRunResponse.DryRunMessage> messages = new ArrayList<>();
 }

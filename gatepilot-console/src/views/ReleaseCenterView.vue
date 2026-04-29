@@ -239,8 +239,8 @@ import {
   ConfigSnapshotSummaryResponse,
   CreateReleaseRequest,
   CreateRollbackRequest,
-  ReleaseDryRunResult,
-  ReleaseResult,
+  ReleaseDryRunResponse,
+  ReleaseResponse,
   RouteCatalogResponse,
   createRelease,
   createRollback,
@@ -283,8 +283,8 @@ const loading = ref(false);
 const busy = ref(false);
 const error = ref('');
 const notice = ref('');
-const dryRun = ref<ReleaseDryRunResult | null>(null);
-const releaseResult = ref<ReleaseResult | null>(null);
+const dryRun = ref<ReleaseDryRunResponse | null>(null);
+const releaseResult = ref<ReleaseResponse | null>(null);
 const projects = ref<GatewayProject[]>([]);
 const namespaces = ref<NamespaceResource[]>([]);
 const versions = ref<ConfigSnapshotSummaryResponse[]>([]);

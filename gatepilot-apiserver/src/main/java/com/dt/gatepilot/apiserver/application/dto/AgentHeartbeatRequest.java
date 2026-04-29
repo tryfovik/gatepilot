@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dt.gatepilot.apiserver.application.command;
+package com.dt.gatepilot.apiserver.application.dto;
 
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.NodePhase;
@@ -30,7 +30,7 @@ import lombok.Data;
  * agent 心跳请求。
  */
 @Data
-public class AgentHeartbeatCommand {
+public class AgentHeartbeatRequest {
 
     /**
      * 节点命名空间。

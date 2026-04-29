@@ -13,23 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dt.gatepilot.apiserver.application.command;
+package com.dt.gatepilot.apiserver.application.dto;
 
-import com.dt.gatepilot.domain.enums.NodeRole;
-import com.dt.gatepilot.domain.resource.meta.LabelSelector;
+import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import jakarta.validation.constraints.NotBlank;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.Instant;
 import lombok.Data;
 
 /**
- * agent 节点注册请求。
+ * agent 上报配置应用结果请求。
  */
 @Data
-public class RegisterAgentCommand {
+public class AgentApplyResultReportRequest {
 
     /**
      * 节点命名空间。
@@ -43,47 +39,38 @@ public class RegisterAgentCommand {
     private String nodeId;
 
     /**
-     * 节点角色。
+     * 发布版本。
      */
-    private NodeRole role = NodeRole.COMBINED;
+    @NotBlank
+    private String version;
 
     /**
-     * 可用区或机房。
+     * 配置内容哈希。
      */
-    private String zone;
+    private String configHash;
 
     /**
-     * 隔离组。
+     * 应用状态。
      */
-    private String isolationGroup;
+    private ConfigApplyState state;
 
     /**
-     * 节点地址。
+     * 开始应用时间。
      */
-    private String address;
+    private Instant startedAt;
 
     /**
-     * agent 版本。
+     * 完成应用时间。
      */
-    private String agentVersion;
+    private Instant finishedAt;
 
     /**
-     * proxy 版本。
+     * 失败原因码。
      */
-    private String proxyVersion;
+    private String reason;
 
     /**
-     * 节点负责消费的配置分片。
+     * 失败或结果说明。
      */
-    private List<String> configShards = new ArrayList<>();
-
-    /**
-     * 节点可服务的项目选择器。
-     */
-    private LabelSelector projectSelector;
-
-    /**
-     * 节点能力。
-     */
-    private Map<String, String> capabilities = new LinkedHashMap<>();
+    private String message;
 }

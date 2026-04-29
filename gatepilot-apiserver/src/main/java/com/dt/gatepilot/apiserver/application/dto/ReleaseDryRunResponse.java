@@ -24,7 +24,7 @@ import lombok.Data;
  * 发布 dry-run 校验响应。
  */
 @Data
-public class ReleaseDryRunResult {
+public class ReleaseDryRunResponse {
 
     /**
      * 命名空间。

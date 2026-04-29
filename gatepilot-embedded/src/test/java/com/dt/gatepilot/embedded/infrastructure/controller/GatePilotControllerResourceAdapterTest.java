@@ -36,14 +36,14 @@ import com.dt.gatepilot.domain.resource.project.GatewayProject;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import com.dt.gatepilot.domain.resource.route.GatewayRoute;
 import com.dt.gatepilot.domain.resource.upstream.Upstream;
-import com.dt.gatepilot.apiserver.application.command.ReportAgentApplyResultCommand;
-import com.dt.gatepilot.apiserver.application.command.PullAgentConfigCommand;
-import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
-import com.dt.gatepilot.apiserver.application.command.CreateRollbackCommand;
-import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResult;
+import com.dt.gatepilot.apiserver.application.dto.AgentApplyResultReportRequest;
+import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullRequest;
+import com.dt.gatepilot.apiserver.application.dto.CreateReleaseRequest;
+import com.dt.gatepilot.apiserver.application.dto.CreateRollbackRequest;
+import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResponse;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
-import com.dt.gatepilot.apiserver.application.dto.ReleaseResult;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseResponse;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
@@ -130,20 +130,20 @@ class GatePilotControllerResourceAdapterTest {
         saveUpstream();
         saveRoute("/game");
         saveNode();
-        CreateReleaseCommand request = new CreateReleaseCommand();
+        CreateReleaseRequest request = new CreateReleaseRequest();
         request.setNamespace("default");
         request.setProjectName("game");
         request.setConfigShard("shard-a");
         request.setCreatedBy("operator");
         request.setDescription("发布 game 项目");
 
-        ReleaseResult release = releaseService.createRelease(request);
+        ReleaseResponse release = releaseService.createRelease(request);
         int processed = reconcileController.reconcileBatch(10);
-        PullAgentConfigCommand pullRequest = new PullAgentConfigCommand();
+        AgentConfigPullRequest pullRequest = new AgentConfigPullRequest();
         pullRequest.setNamespace("default");
         pullRequest.setNodeId("node-1");
         pullRequest.getConfigShards().add("shard-a");
-        AgentConfigPullResult pullResponse = agentService.pullConfig(pullRequest);
+        AgentConfigPullResponse pullResponse = agentService.pullConfig(pullRequest);
         CursorPage<Object> snapshots = resourceService.list("config-snapshots", "default", null, 50);
         CursorPage<Object> events = resourceService.list("events", "default", null, 50);
 
@@ -169,25 +169,25 @@ class GatePilotControllerResourceAdapterTest {
         saveUpstream();
         saveRoute("/game");
         saveNode();
-        ReleaseResult firstRelease = releaseService.createRelease(releaseCommand("operator", "发布 v1"));
+        ReleaseResponse firstRelease = releaseService.createRelease(releaseCommand("operator", "发布 v1"));
         reconcileController.reconcileBatch(10);
         saveRoute("/game-v2");
-        ReleaseResult secondRelease = releaseService.createRelease(releaseCommand("operator", "发布 v2"));
+        ReleaseResponse secondRelease = releaseService.createRelease(releaseCommand("operator", "发布 v2"));
         reconcileController.reconcileBatch(10);
-        CreateRollbackCommand rollbackCommand = new CreateRollbackCommand();
+        CreateRollbackRequest rollbackCommand = new CreateRollbackRequest();
         rollbackCommand.setNamespace("default");
         rollbackCommand.setProjectName("game");
         rollbackCommand.setTargetVersion(firstRelease.getVersion());
         rollbackCommand.setConfigShard("shard-a");
         rollbackCommand.setCreatedBy("operator");
 
-        ReleaseResult rollback = releaseService.createRollback(rollbackCommand);
+        ReleaseResponse rollback = releaseService.createRollback(rollbackCommand);
         int processed = reconcileController.reconcileBatch(10);
-        PullAgentConfigCommand pullRequest = new PullAgentConfigCommand();
+        AgentConfigPullRequest pullRequest = new AgentConfigPullRequest();
         pullRequest.setNamespace("default");
         pullRequest.setNodeId("node-1");
         pullRequest.getConfigShards().add("shard-a");
-        AgentConfigPullResult pullResponse = agentService.pullConfig(pullRequest);
+        AgentConfigPullResponse pullResponse = agentService.pullConfig(pullRequest);
         CursorPage<Object> events = resourceService.list("events", "default", null, 50);
 
         assertThat(secondRelease.getVersion()).isNotEqualTo(firstRelease.getVersion());
@@ -210,10 +210,10 @@ class GatePilotControllerResourceAdapterTest {
         saveRoute("/game");
         saveNode("node-1", "shard-a", "game-high", "az-a");
         saveNode("node-2", "shard-a", "game-high", "az-b");
-        ReleaseResult firstRelease = releaseService.createRelease(releaseCommand("operator", "发布 v1"));
+        ReleaseResponse firstRelease = releaseService.createRelease(releaseCommand("operator", "发布 v1"));
         reconcileController.reconcileBatch(10);
-        AgentConfigPullResult node1Pull = pullConfig("node-1", "shard-a", "game-high", null, null);
-        AgentConfigPullResult node2Pull = pullConfig("node-2", "shard-a", "game-high", null, null);
+        AgentConfigPullResponse node1Pull = pullConfig("node-1", "shard-a", "game-high", null, null);
+        AgentConfigPullResponse node2Pull = pullConfig("node-2", "shard-a", "game-high", null, null);
         PublishedConfig firstConfig = node1Pull.getPublishedConfig();
 
         reportApply("node-1", firstRelease.getVersion(), firstConfig.getSpec().getConfigHash(),
@@ -224,12 +224,12 @@ class GatePilotControllerResourceAdapterTest {
         PublishedConfig refreshedConfig = storedPublishedConfig(firstConfig);
         saveNode("node-3", "shard-a", "game-high", "az-c");
         saveNode("node-4", "shard-a", "other-high", "az-d");
-        AgentConfigPullResult scaledNodePull = pullConfig("node-3", "shard-a", "game-high", null, null);
-        AgentConfigPullResult otherGroupPull = pullConfig("node-4", "shard-a", "other-high", null, null);
+        AgentConfigPullResponse scaledNodePull = pullConfig("node-3", "shard-a", "game-high", null, null);
+        AgentConfigPullResponse otherGroupPull = pullConfig("node-4", "shard-a", "other-high", null, null);
         saveRoute("/game-v2");
-        ReleaseResult secondRelease = releaseService.createRelease(releaseCommand("operator", "发布 v2"));
+        ReleaseResponse secondRelease = releaseService.createRelease(releaseCommand("operator", "发布 v2"));
         reconcileController.reconcileBatch(10);
-        AgentConfigPullResult secondPull = pullConfig("node-1", "shard-a", "game-high",
+        AgentConfigPullResponse secondPull = pullConfig("node-1", "shard-a", "game-high",
                 firstRelease.getVersion(), 1L);
 
         assertThat(node2Pull.isChanged()).isTrue();
@@ -266,7 +266,7 @@ class GatePilotControllerResourceAdapterTest {
                 new InProcessProxyApplyClient(new ProxyConfigApplier(new PublishedConfigCompiler(), runtimeState))
         );
 
-        ReleaseResult release = releaseService.createRelease(releaseCommand("operator", "端到端发布"));
+        ReleaseResponse release = releaseService.createRelease(releaseCommand("operator", "端到端发布"));
         int processed = reconcileController.reconcileBatch(10);
         Optional<AgentApplyResult> applyResult = coordinator.pullAndApply();
         int refreshed = statusController.refreshBatch(10);
@@ -306,10 +306,10 @@ class GatePilotControllerResourceAdapterTest {
             String targetProjectName = scaleProjectName(SCALE_PROJECT_COUNT - 1);
 
             // 发布最后一个项目，逼着 adapter 跨页读取路由和上游
-            ReleaseResult release = releaseService.createRelease(releaseCommand(targetProjectName,
+            ReleaseResponse release = releaseService.createRelease(releaseCommand(targetProjectName,
                     TEST_OPERATOR, "千项目发布压测"));
             int processed = reconcileController.reconcileBatch(10);
-            AgentConfigPullResult pullResponse = pullConfig(DEFAULT_NODE_ID, DEFAULT_CONFIG_SHARD, null, null, null);
+            AgentConfigPullResponse pullResponse = pullConfig(DEFAULT_NODE_ID, DEFAULT_CONFIG_SHARD, null, null, null);
             PublishedConfig publishedConfig = pullResponse.getPublishedConfig();
 
             assertThat(processed).isEqualTo(1);
@@ -358,8 +358,8 @@ class GatePilotControllerResourceAdapterTest {
                 .containsExactly("game-service");
     }
 
-    private CreateReleaseCommand releaseCommand(String createdBy, String description) {
-        CreateReleaseCommand request = new CreateReleaseCommand();
+    private CreateReleaseRequest releaseCommand(String createdBy, String description) {
+        CreateReleaseRequest request = new CreateReleaseRequest();
         request.setNamespace("default");
         request.setProjectName("game");
         request.setConfigShard("shard-a");
@@ -368,8 +368,8 @@ class GatePilotControllerResourceAdapterTest {
         return request;
     }
 
-    private CreateReleaseCommand releaseCommand(String projectName, String createdBy, String description) {
-        CreateReleaseCommand request = releaseCommand(createdBy, description);
+    private CreateReleaseRequest releaseCommand(String projectName, String createdBy, String description) {
+        CreateReleaseRequest request = releaseCommand(createdBy, description);
         request.setProjectName(projectName);
         return request;
     }
@@ -440,12 +440,12 @@ class GatePilotControllerResourceAdapterTest {
         resourceService.save(resourceType, "default", nodeId, node);
     }
 
-    private AgentConfigPullResult pullConfig(String nodeId,
+    private AgentConfigPullResponse pullConfig(String nodeId,
                                              String configShard,
                                              String isolationGroup,
                                              String currentVersion,
                                              Long currentSequence) {
-        PullAgentConfigCommand request = new PullAgentConfigCommand();
+        AgentConfigPullRequest request = new AgentConfigPullRequest();
         request.setNamespace("default");
         request.setNodeId(nodeId);
         request.setIsolationGroup(isolationGroup);
@@ -456,7 +456,7 @@ class GatePilotControllerResourceAdapterTest {
     }
 
     private void reportApply(String nodeId, String version, String configHash, ConfigApplyState state, String message) {
-        ReportAgentApplyResultCommand request = new ReportAgentApplyResultCommand();
+        AgentApplyResultReportRequest request = new AgentApplyResultReportRequest();
         request.setNamespace("default");
         request.setNodeId(nodeId);
         request.setVersion(version);
@@ -559,7 +559,7 @@ class GatePilotControllerResourceAdapterTest {
 
         @Override
         public Optional<PublishedConfig> pullConfig(AgentConfigCursor cursor) {
-            PullAgentConfigCommand request = new PullAgentConfigCommand();
+            AgentConfigPullRequest request = new AgentConfigPullRequest();
             request.setNamespace(cursor.getNamespace());
             request.setNodeId(cursor.getNodeId());
             request.setZone(cursor.getZone());

@@ -15,10 +15,10 @@
  */
 package com.dt.gatepilot.apiserver.application.service;
 
-import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
-import com.dt.gatepilot.apiserver.application.command.CreateRollbackCommand;
-import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
-import com.dt.gatepilot.apiserver.application.dto.ReleaseResult;
+import com.dt.gatepilot.apiserver.application.dto.CreateReleaseRequest;
+import com.dt.gatepilot.apiserver.application.dto.CreateRollbackRequest;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResponse;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseResponse;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
@@ -67,16 +67,16 @@ class GatePilotReleaseServiceTest {
 
     @Test
     void shouldDryRunReleaseWithoutWritingReleaseEvent() {
-        CreateReleaseCommand request = new CreateReleaseCommand();
+        CreateReleaseRequest request = new CreateReleaseRequest();
         request.setNamespace("default");
         request.setProjectName("missing");
 
-        ReleaseDryRunResult response = releaseService.dryRun(request);
+        ReleaseDryRunResponse response = releaseService.dryRun(request);
         CursorPage<Object> events = resourceService.list("events", "default", null, 50);
 
         assertThat(response.isPassed()).isFalse();
         assertThat(response.getMessages())
-                .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
+                .extracting(ReleaseDryRunResponse.DryRunMessage::getReason)
                 .contains("ProjectNotFound");
         assertThat(response.getVersion()).matches(DRY_RUN_VERSION_PATTERN);
         assertThat(response.getVersion()).doesNotContain(String.valueOf(response.getCheckedAt().toEpochMilli()));
@@ -86,13 +86,13 @@ class GatePilotReleaseServiceTest {
     @Test
     void shouldCreateUniqueReleaseVersionsForBackToBackRequests() {
         saveProject("default", "game");
-        CreateReleaseCommand request = new CreateReleaseCommand();
+        CreateReleaseRequest request = new CreateReleaseRequest();
         request.setNamespace("default");
         request.setProjectName("game");
         request.setCreatedBy("operator");
 
-        ReleaseResult first = releaseService.createRelease(request);
-        ReleaseResult second = releaseService.createRelease(request);
+        ReleaseResponse first = releaseService.createRelease(request);
+        ReleaseResponse second = releaseService.createRelease(request);
 
         assertThat(first.getVersion()).isNotEqualTo(second.getVersion());
         assertThat(first.getVersion()).matches(RELEASE_VERSION_PATTERN);
@@ -105,17 +105,17 @@ class GatePilotReleaseServiceTest {
         saveProject("default", "game");
         saveRouteWithMissingRefs();
         saveEmptyUpstream();
-        CreateReleaseCommand request = new CreateReleaseCommand();
+        CreateReleaseRequest request = new CreateReleaseRequest();
         request.setNamespace("default");
         request.setProjectName("game");
 
-        ReleaseDryRunResult response = releaseService.dryRun(request);
+        ReleaseDryRunResponse response = releaseService.dryRun(request);
 
         assertThat(response.isPassed()).isFalse();
         assertThat(response.getRouteCount()).isEqualTo(1);
         assertThat(response.getUpstreamCount()).isEqualTo(1);
         assertThat(response.getMessages())
-                .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
+                .extracting(ReleaseDryRunResponse.DryRunMessage::getReason)
                 .contains(
                         GatePilotReleaseConstants.REASON_ROUTE_HOST_MISSING,
                         GatePilotReleaseConstants.REASON_ROUTE_UPSTREAM_MISSING,
@@ -131,11 +131,11 @@ class GatePilotReleaseServiceTest {
         for (int index = 0; index <= GatePilotReleaseConstants.DRY_RUN_LOOKUP_LIMIT; index++) {
             saveValidRoute(index);
         }
-        CreateReleaseCommand request = new CreateReleaseCommand();
+        CreateReleaseRequest request = new CreateReleaseRequest();
         request.setNamespace("default");
         request.setProjectName("game");
 
-        ReleaseDryRunResult response = releaseService.dryRun(request);
+        ReleaseDryRunResponse response = releaseService.dryRun(request);
 
         assertThat(response.isPassed()).isTrue();
         assertThat(response.getRouteCount()).isEqualTo(GatePilotReleaseConstants.DRY_RUN_LOOKUP_LIMIT + 1);
@@ -147,15 +147,15 @@ class GatePilotReleaseServiceTest {
         saveProject("default", "game");
         saveUnsupportedLoadBalanceUpstream();
         saveRouteForUpstream("hash-route", "hash-upstream");
-        CreateReleaseCommand request = new CreateReleaseCommand();
+        CreateReleaseRequest request = new CreateReleaseRequest();
         request.setNamespace("default");
         request.setProjectName("game");
 
-        ReleaseDryRunResult response = releaseService.dryRun(request);
+        ReleaseDryRunResponse response = releaseService.dryRun(request);
 
         assertThat(response.isPassed()).isFalse();
         assertThat(response.getMessages())
-                .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
+                .extracting(ReleaseDryRunResponse.DryRunMessage::getReason)
                 .contains(GatePilotReleaseConstants.REASON_UPSTREAM_LOAD_BALANCE_UNSUPPORTED);
     }
 
@@ -165,15 +165,15 @@ class GatePilotReleaseServiceTest {
         saveRegistryCenter();
         saveNacosUpstream();
         saveRouteForUpstream("nacos-route", "nacos-upstream");
-        CreateReleaseCommand request = new CreateReleaseCommand();
+        CreateReleaseRequest request = new CreateReleaseRequest();
         request.setNamespace("default");
         request.setProjectName("game");
 
-        ReleaseDryRunResult response = releaseService.dryRun(request);
+        ReleaseDryRunResponse response = releaseService.dryRun(request);
 
         assertThat(response.isPassed()).isTrue();
         assertThat(response.getMessages())
-                .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
+                .extracting(ReleaseDryRunResponse.DryRunMessage::getReason)
                 .doesNotContain(GatePilotReleaseConstants.REASON_UPSTREAM_ENDPOINT_MISSING);
     }
 
@@ -182,14 +182,14 @@ class GatePilotReleaseServiceTest {
         saveProject("default", "game");
         PublishedConfig config = publishedConfig("default", "game", "v1", "shard-a");
         GatewayConfigSnapshot snapshot = snapshotService.saveSnapshot(config, "rel-1", "tester", "stable");
-        CreateRollbackCommand request = new CreateRollbackCommand();
+        CreateRollbackRequest request = new CreateRollbackRequest();
         request.setNamespace("default");
         request.setProjectName("game");
         request.setTargetVersion("v1");
         request.setConfigShard("shard-a");
         request.setCreatedBy("operator");
 
-        ReleaseResult response = releaseService.createRollback(request);
+        ReleaseResponse response = releaseService.createRollback(request);
         GatewayConfigSnapshot updatedSnapshot = snapshotService.findSnapshot("default", "game", "v1", "shard-a")
                 .orElseThrow();
         CursorPage<Object> events = resourceService.list("events", "default", null, 50);

@@ -13,19 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dt.gatepilot.apiserver.application.command;
+package com.dt.gatepilot.apiserver.application.dto;
 
+import com.dt.gatepilot.domain.enums.NodeRole;
+import com.dt.gatepilot.domain.resource.meta.LabelSelector;
 import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import jakarta.validation.constraints.NotBlank;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.Data;
 
 /**
- * agent 拉取已发布配置请求。
+ * agent 节点注册请求。
  */
 @Data
-public class PullAgentConfigCommand {
+public class RegisterAgentRequest {
 
     /**
      * 节点命名空间。
@@ -39,27 +43,47 @@ public class PullAgentConfigCommand {
     private String nodeId;
 
     /**
-     * 节点所在可用区或机房。
+     * 节点角色。
+     */
+    private NodeRole role = NodeRole.COMBINED;
+
+    /**
+     * 可用区或机房。
      */
     private String zone;
 
     /**
-     * 节点隔离组。
+     * 隔离组。
      */
     private String isolationGroup;
 
     /**
-     * 节点负责的配置分片。
+     * 节点地址。
+     */
+    private String address;
+
+    /**
+     * agent 版本。
+     */
+    private String agentVersion;
+
+    /**
+     * proxy 版本。
+     */
+    private String proxyVersion;
+
+    /**
+     * 节点负责消费的配置分片。
      */
     private List<String> configShards = new ArrayList<>();
 
     /**
-     * 节点当前配置版本。
+     * 节点可服务的项目选择器。
      */
-    private String currentVersion;
+    private LabelSelector projectSelector;
 
     /**
-     * 节点当前配置序号。
+     * 节点能力。
      */
-    private Long currentSequence;
+    private Map<String, String> capabilities = new LinkedHashMap<>();
 }

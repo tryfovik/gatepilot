@@ -15,6 +15,15 @@
  */
 package com.dt.gatepilot.apiserver.application.service;
 
+import com.dt.gatepilot.apiserver.application.dto.AgentApplyResultReportRequest;
+import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullRequest;
+import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResponse;
+import com.dt.gatepilot.apiserver.application.dto.AgentHeartbeatRequest;
+import com.dt.gatepilot.apiserver.application.dto.RegisterAgentRequest;
+import com.dt.gatepilot.apiserver.domain.model.CursorPage;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
+import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
+import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import com.dt.gatepilot.domain.enums.ConfigApplyState;
 import com.dt.gatepilot.domain.enums.NodePhase;
 import com.dt.gatepilot.domain.enums.ResourceKind;
@@ -22,15 +31,6 @@ import com.dt.gatepilot.domain.resource.meta.ResourceMetadataConstants;
 import com.dt.gatepilot.domain.resource.node.GatewayNode;
 import com.dt.gatepilot.domain.resource.node.GatewayNodeStatus;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
-import com.dt.gatepilot.apiserver.application.command.ReportAgentApplyResultCommand;
-import com.dt.gatepilot.apiserver.application.command.PullAgentConfigCommand;
-import com.dt.gatepilot.apiserver.application.command.AgentHeartbeatCommand;
-import com.dt.gatepilot.apiserver.application.command.RegisterAgentCommand;
-import com.dt.gatepilot.apiserver.application.dto.AgentConfigPullResult;
-import com.dt.gatepilot.apiserver.domain.model.CursorPage;
-import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourcePaths;
-import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceType;
-import com.dt.gatepilot.apiserver.infrastructure.config.ConditionalOnGatePilotApiserverEnabled;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -63,7 +63,7 @@ public class GatePilotAgentService {
      * @param request 注册请求
      * @return 节点资源
      */
-    public GatewayNode register(RegisterAgentCommand request) {
+    public GatewayNode register(RegisterAgentRequest request) {
         GatewayNode node = new GatewayNode();
         // 节点资源名和 nodeId 保持一致，便于控制台排查
         node.getMetadata().setName(request.getNodeId());
@@ -92,7 +92,7 @@ public class GatePilotAgentService {
      * @param request 心跳请求
      * @return 节点资源
      */
-    public GatewayNode heartbeat(AgentHeartbeatCommand request) {
+    public GatewayNode heartbeat(AgentHeartbeatRequest request) {
         GatewayNode node = loadOrCreateNode(request.getNamespace(), request.getNodeId());
         GatewayNodeStatus status = node.getStatus();
         // 心跳以最新快照覆盖节点状态
@@ -123,7 +123,7 @@ public class GatePilotAgentService {
      * @param request 拉取请求
      * @return 拉取响应
      */
-    public AgentConfigPullResult pullConfig(PullAgentConfigCommand request) {
+    public AgentConfigPullResponse pullConfig(AgentConfigPullRequest request) {
         PublishedConfig latest = listPublishedConfigs(request.getNamespace())
                 .stream()
                 .filter(config -> request.getConfigShards().isEmpty()
@@ -131,7 +131,7 @@ public class GatePilotAgentService {
                 .filter(config -> isolationGroupMatches(config, request))
                 .max(Comparator.comparing(config -> Objects.requireNonNullElse(config.getSpec().getSequence(), 0L)))
                 .orElse(null);
-        AgentConfigPullResult response = new AgentConfigPullResult();
+        AgentConfigPullResponse response = new AgentConfigPullResponse();
         if (latest == null) {
             // 没有目标配置时让 agent 保持当前 last-good
             response.setChanged(false);
@@ -155,7 +155,7 @@ public class GatePilotAgentService {
      * @param request 上报请求
      * @return 节点资源
      */
-    public GatewayNode reportApplyResult(ReportAgentApplyResultCommand request) {
+    public GatewayNode reportApplyResult(AgentApplyResultReportRequest request) {
         GatewayNode node = loadOrCreateNode(request.getNamespace(), request.getNodeId());
         GatewayNodeStatus status = node.getStatus();
         // agent 上报的 apply 结果是节点状态的事实来源
@@ -194,7 +194,7 @@ public class GatePilotAgentService {
         return configs;
     }
 
-    private boolean isolationGroupMatches(PublishedConfig config, PullAgentConfigCommand request) {
+    private boolean isolationGroupMatches(PublishedConfig config, AgentConfigPullRequest request) {
         String targetIsolationGroup = config.getSpec().getIsolationGroup();
         return !StringUtils.hasText(targetIsolationGroup)
                 || Objects.equals(targetIsolationGroup, request.getIsolationGroup());
@@ -205,7 +205,7 @@ public class GatePilotAgentService {
             return (GatewayNode) resourceService.get(GatePilotResourcePaths.NODES, namespace, nodeId);
         } catch (RuntimeException exception) {
             // 心跳先到时自动补节点，避免部署顺序影响状态上报
-            RegisterAgentCommand request = new RegisterAgentCommand();
+            RegisterAgentRequest request = new RegisterAgentRequest();
             request.setNamespace(namespace);
             request.setNodeId(nodeId);
             return register(request);

@@ -15,13 +15,13 @@
  */
 package com.dt.gatepilot.apiserver.application.service;
 
-import com.dt.gatepilot.apiserver.application.command.CreateReleaseCommand;
+import com.dt.gatepilot.apiserver.application.dto.CreateReleaseRequest;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateApplyResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDefaultsResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateDryRunResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplatePreviewResponse;
 import com.dt.gatepilot.apiserver.application.dto.ProjectTemplateRenderRequest;
-import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResult;
+import com.dt.gatepilot.apiserver.application.dto.ReleaseDryRunResponse;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
 import com.dt.gatepilot.apiserver.domain.resource.ResourceMetadataSupport;
 import com.dt.gatepilot.apiserver.infrastructure.persistence.memory.InMemoryGatePilotResourceStore;
@@ -65,7 +65,7 @@ class ProjectTemplateServiceTest {
         ProjectTemplateApplyResponse apply = templateService.apply(request);
         ProjectTemplatePreviewResponse previewAfterApply = templateService.preview(request);
         ProjectTemplateApplyResponse secondApply = templateService.apply(request);
-        ReleaseDryRunResult releaseDryRun = releaseService.dryRun(releaseRequest());
+        ReleaseDryRunResponse releaseDryRun = releaseService.dryRun(releaseRequest());
 
         assertThat(dryRun.isPassed()).isTrue();
         assertThat(apply.getSavedResourceCount()).isEqualTo(6);
@@ -89,7 +89,7 @@ class ProjectTemplateServiceTest {
 
         assertThat(dryRun.isPassed()).isFalse();
         assertThat(dryRun.getMessages())
-                .extracting(ReleaseDryRunResult.DryRunMessage::getReason)
+                .extracting(ReleaseDryRunResponse.DryRunMessage::getReason)
                 .contains(ProjectTemplateConstants.REASON_TEMPLATE_INVALID);
     }
 
@@ -175,10 +175,10 @@ class ProjectTemplateServiceTest {
         return request;
     }
 
-    private CreateReleaseCommand releaseRequest() {
-        CreateReleaseCommand command = new CreateReleaseCommand();
-        command.setNamespace("default");
-        command.setProjectName("game");
-        return command;
+    private CreateReleaseRequest releaseRequest() {
+        CreateReleaseRequest request = new CreateReleaseRequest();
+        request.setNamespace("default");
+        request.setProjectName("game");
+        return request;
     }
 }

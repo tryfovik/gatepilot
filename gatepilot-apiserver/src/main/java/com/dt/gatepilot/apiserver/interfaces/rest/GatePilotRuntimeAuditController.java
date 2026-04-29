@@ -15,8 +15,8 @@
  */
 package com.dt.gatepilot.apiserver.interfaces.rest;
 
-import com.dt.gatepilot.apiserver.application.command.ReportRuntimeAuditCommand;
-import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportResult;
+import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportRequest;
+import com.dt.gatepilot.apiserver.application.dto.RuntimeAuditReportResponse;
 import com.dt.gatepilot.apiserver.application.service.GatePilotRuntimeAuditService;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditConstants;
 import com.dt.gatepilot.apiserver.domain.audit.RuntimeAuditQuery;
@@ -65,7 +65,7 @@ public class GatePilotRuntimeAuditController {
      * @return 上报结果
      */
     @PostMapping(GatePilotApiPaths.AGENTS + GatePilotApiPaths.AGENT_AUDITS)
-    public Mono<ApiResponse<RuntimeAuditReportResult>> report(@Valid @RequestBody ReportRuntimeAuditCommand request) {
+    public Mono<ApiResponse<RuntimeAuditReportResponse>> report(@Valid @RequestBody RuntimeAuditReportRequest request) {
         // agent 只负责上报，查询由 apiserver 统一提供
         return Mono.just(ApiResponse.success(runtimeAuditService.report(request),
                 RuntimeAuditConstants.MESSAGE_AUDIT_ACCEPTED));

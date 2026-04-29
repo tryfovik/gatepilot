@@ -19,7 +19,7 @@ import com.dt.gatepilot.domain.enums.Protocol;
 import com.dt.gatepilot.domain.resource.meta.ResourceReference;
 import com.dt.gatepilot.domain.resource.config.GatewayConfigSnapshot;
 import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
-import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResult;
+import com.dt.gatepilot.apiserver.application.dto.ConfigDiffResponse;
 import com.dt.gatepilot.apiserver.application.dto.ConfigSnapshotSummaryResponse;
 import com.dt.gatepilot.apiserver.domain.model.CursorPage;
 import com.dt.gatepilot.apiserver.domain.resource.GatePilotResourceRegistry;
@@ -59,7 +59,7 @@ class GatePilotConfigSnapshotServiceTest {
         target.getSpec().getUpstreams().add(upstream("upstream-b", "10.0.0.2"));
         GatewayConfigSnapshot targetSnapshot = snapshotService.saveSnapshot(target, "rel-2", "tester", "target");
 
-        ConfigDiffResult diff = snapshotService.diff("default", "v1", "v2", "shard-a");
+        ConfigDiffResponse diff = snapshotService.diff("default", "v1", "v2", "shard-a");
 
         assertThat(targetSnapshot.getMetadata().getName()).isEqualTo("v2-shard-a");
         assertThat(diff.isChanged()).isTrue();
@@ -68,7 +68,7 @@ class GatePilotConfigSnapshotServiceTest {
         assertThat(diff.getRemovedUpstreams()).isEqualTo(1);
         assertThat(diff.getAddedUpstreams()).isEqualTo(1);
         assertThat(diff.getItems())
-                .extracting(ConfigDiffResult.ConfigDiffItem::getChangeType)
+                .extracting(ConfigDiffResponse.ConfigDiffItem::getChangeType)
                 .contains("ADDED", "CHANGED", "REMOVED");
     }
 

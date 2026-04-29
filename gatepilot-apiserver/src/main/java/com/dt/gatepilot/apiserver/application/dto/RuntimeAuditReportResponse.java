@@ -15,27 +15,16 @@
  */
 package com.dt.gatepilot.apiserver.application.dto;
 
-import com.dt.gatepilot.domain.resource.publish.PublishedConfig;
 import lombok.Data;
 
 /**
- * agent 拉取已发布配置响应。
+ * 运行审计上报响应。
  */
 @Data
-public class AgentConfigPullResult {
+public class RuntimeAuditReportResponse {
 
     /**
-     * 是否存在新配置。
+     * 接收条数。
      */
-    private boolean changed;
-
-    /**
-     * 最新已发布配置。
-     */
-    private PublishedConfig publishedConfig;
-
-    /**
-     * 控制面提示信息。
-     */
-    private String message;
+    private int acceptedCount;
 }
