@@ -10,7 +10,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 4174"
   },
   "dependencies": {
-    "@vitejs/plugin-vue": "^5.2.1",
+    "@vitejs/plugin-vue": "^6.0.6",
     "vite": "^6.0.7",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
