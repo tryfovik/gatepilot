@@ -36,4 +36,32 @@
         <module>gatepilot-app</module>
         <module>gatepilot-demo-upstream</module>
     </modules>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <configuration>
+                    <licenseSets>
+                        <licenseSet>
+                            <header>${maven.multiModuleProjectDirectory}/.license/apache-header.ftl</header>
+                            <includes>
+                                <include>**/*.java</include>
+                                <include>**/*.kt</include>
+                            </includes>
+                            <excludes>
+                                <exclude>**/target/**</exclude>
+                                <exclude>**/generated-sources/**</exclude>
+                                <exclude>**/generated-test-sources/**</exclude>
+                                <exclude>**/node_modules/**</exclude>
+                            </excludes>
+                        </licenseSet>
+                    </licenseSets>
+                    <skipExistingHeaders>true</skipExistingHeaders>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

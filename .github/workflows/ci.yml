@@ -1,0 +1,55 @@
+name: GatePilot CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout GatePilot
+        uses: actions/checkout@v4
+        with:
+          path: gatepilot
+
+      - name: Checkout GetBoot
+        uses: actions/checkout@v4
+        with:
+          repository: tryfovik/getboot
+          path: getboot
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: gatepilot/gatepilot-console/package-lock.json
+
+      - name: Install GetBoot
+        run: mvn -B -q -DskipTests install
+        working-directory: getboot
+
+      - name: Build Console
+        run: |
+          npm ci
+          npm run build
+        working-directory: gatepilot/gatepilot-console
+
+      - name: Test GatePilot
+        run: mvn -B test
+        working-directory: gatepilot

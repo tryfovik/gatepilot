@@ -1,0 +1,49 @@
+name: Bug 报告
+description: 反馈 GatePilot 的运行异常、页面问题或发布问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量提供可以复现的信息，尤其是资源配置、发布版本和节点状态。
+  - type: input
+    id: version
+    attributes:
+      label: GatePilot 版本
+      placeholder: 例如 1.0.0-SNAPSHOT 或 commit id
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题区域
+      options:
+        - Console
+        - Apiserver
+        - Controller Manager
+        - Agent
+        - Proxy
+        - Demo / Deploy
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 发生了什么，期望是什么
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 创建项目 ...
+        2. 发起发布 ...
+        3. 查看节点 ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: 关键日志或截图
+      render: text

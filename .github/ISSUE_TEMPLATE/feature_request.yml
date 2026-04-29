@@ -1,0 +1,33 @@
+name: 功能建议
+description: 提出新的网关治理、发布、观测或控制台能力
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 业务场景
+      description: 你希望 GatePilot 解决什么具体问题
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望方案
+      description: 希望页面、API 或运行态如何表现
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响区域
+      options:
+        - 接入管理
+        - 路由 / 上游
+        - 流量治理
+        - 发布 / 回滚
+        - 节点 / 观测
+        - 诊断 / 审计
+        - 部署 / 运维
+        - 其他

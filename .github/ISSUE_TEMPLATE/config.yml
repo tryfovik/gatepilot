@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用问题
+    url: https://github.com/tryfovik/gatepilot/discussions
+    about: 使用咨询、方案讨论和接入建议请放到 Discussions
