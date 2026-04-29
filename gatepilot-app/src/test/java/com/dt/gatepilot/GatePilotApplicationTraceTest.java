@@ -34,6 +34,7 @@ class GatePilotApplicationTraceTest {
                 .expectHeader().valueEquals("X-Trace-Id", "trace-gatepilot-test")
                 .expectBody()
                 .jsonPath("$.status").isEqualTo("success")
-                .jsonPath("$.code").isEqualTo(200);
+                .jsonPath("$.code").isEqualTo(200)
+                .jsonPath("$.meta.traceId").isEqualTo("trace-gatepilot-test");
     }
 }
